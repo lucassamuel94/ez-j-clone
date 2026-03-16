@@ -1,0 +1,1 @@
+ALTER TABLE public.meetings ADD COLUMN meet_link TEXT;

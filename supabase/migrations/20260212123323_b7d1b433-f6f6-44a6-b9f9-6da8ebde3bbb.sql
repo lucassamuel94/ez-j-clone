@@ -1,0 +1,1 @@
+ALTER TABLE public.import_jobs ADD COLUMN IF NOT EXISTS status_mappings jsonb DEFAULT NULL;

@@ -1,0 +1,1 @@
+ALTER TABLE public.automatic_messages ADD COLUMN IF NOT EXISTS webhook_urls text[] DEFAULT '{}'::text[];

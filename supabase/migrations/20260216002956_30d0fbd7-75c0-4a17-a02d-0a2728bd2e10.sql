@@ -1,0 +1,1 @@
+ALTER TABLE public.forms ADD COLUMN assigned_sdr_ids uuid[] DEFAULT NULL;

@@ -1,0 +1,1 @@
+ALTER TABLE public.call_analyses ADD COLUMN original_filename text;

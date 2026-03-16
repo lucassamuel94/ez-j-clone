@@ -1,0 +1,12 @@
+-- Add new company and contact fields to leads table
+ALTER TABLE public.leads
+ADD COLUMN IF NOT EXISTS cnpj TEXT,
+ADD COLUMN IF NOT EXISTS razao_social TEXT,
+ADD COLUMN IF NOT EXISTS nome_fantasia TEXT,
+ADD COLUMN IF NOT EXISTS employee_count TEXT,
+ADD COLUMN IF NOT EXISTS revenue_range TEXT,
+ADD COLUMN IF NOT EXISTS city TEXT,
+ADD COLUMN IF NOT EXISTS state TEXT,
+ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'Brasil',
+ADD COLUMN IF NOT EXISTS website TEXT,
+ADD COLUMN IF NOT EXISTS phone_2 TEXT;

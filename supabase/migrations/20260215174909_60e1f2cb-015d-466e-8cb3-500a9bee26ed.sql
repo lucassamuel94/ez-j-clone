@@ -1,0 +1,1 @@
+ALTER TABLE public.forms ADD COLUMN consent_url text DEFAULT NULL;

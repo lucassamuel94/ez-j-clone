@@ -1,0 +1,1 @@
+ALTER TABLE public.forms ADD COLUMN show_consent boolean NOT NULL DEFAULT false;

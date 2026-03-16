@@ -1,0 +1,1 @@
+ALTER TABLE public.projects ADD COLUMN coexistence_quantity integer NULL DEFAULT NULL;

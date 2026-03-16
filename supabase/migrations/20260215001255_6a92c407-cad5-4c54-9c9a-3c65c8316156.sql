@@ -1,0 +1,1 @@
+ALTER TABLE public.leads ADD COLUMN ai_insights_generated_at timestamp with time zone DEFAULT NULL;

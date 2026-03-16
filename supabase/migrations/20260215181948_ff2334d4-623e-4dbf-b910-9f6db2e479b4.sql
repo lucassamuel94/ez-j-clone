@@ -1,0 +1,1 @@
+ALTER TABLE public.forms ADD COLUMN field_bg_color text NOT NULL DEFAULT '#ffffff';

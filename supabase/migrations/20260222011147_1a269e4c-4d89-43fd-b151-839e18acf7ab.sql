@@ -1,0 +1,1 @@
+ALTER TABLE public.project_deliveries ADD COLUMN dev_responsible text NULL;

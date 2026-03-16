@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN notify_overdue_sound boolean NOT NULL DEFAULT true;

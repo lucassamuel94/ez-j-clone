@@ -1,0 +1,6 @@
+UPDATE products SET description = 'Ideal para negócios começando com automação' WHERE name = 'Starter' AND category = 'ez_chat' AND (description IS NOT NULL);
+UPDATE products SET description = 'Para empresas em crescimento que precisam de mais volume e recursos' WHERE name = 'Basic' AND category = 'ez_chat' AND description IS NULL;
+UPDATE products SET description = 'Mais capacidade para operações em expansão com integrações avançadas' WHERE name = 'Plus' AND category = 'ez_chat' AND description IS NULL;
+UPDATE products SET description = 'Solução robusta para operações de médio porte com alto volume de atendimento' WHERE name = 'Business' AND category = 'ez_chat' AND description IS NULL;
+UPDATE products SET description = 'Para grandes operações que exigem performance, escala e personalização' WHERE name = 'Advanced' AND category = 'ez_chat' AND description IS NULL;
+UPDATE products SET description = 'Plano completo e sob medida para grandes corporações com necessidades específicas' WHERE name = 'Enterprise' AND category = 'ez_chat' AND description IS NULL;

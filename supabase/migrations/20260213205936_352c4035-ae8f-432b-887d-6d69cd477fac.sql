@@ -1,0 +1,1 @@
+ALTER TABLE public.forms ADD COLUMN webhook_urls text[] DEFAULT '{}'::text[];

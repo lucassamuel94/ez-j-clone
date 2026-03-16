@@ -1,0 +1,1 @@
+ALTER TABLE public.forms ADD COLUMN fields_schema jsonb DEFAULT NULL;

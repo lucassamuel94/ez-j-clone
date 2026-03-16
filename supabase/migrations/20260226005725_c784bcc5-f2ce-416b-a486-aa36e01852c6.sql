@@ -1,0 +1,1 @@
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS ativacao_user_id UUID REFERENCES public.profiles(id);

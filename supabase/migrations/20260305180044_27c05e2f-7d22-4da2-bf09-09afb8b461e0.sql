@@ -1,0 +1,1 @@
+ALTER TABLE public.active_clients ADD COLUMN status text NOT NULL DEFAULT 'ativo';

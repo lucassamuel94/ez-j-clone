@@ -1,0 +1,1 @@
+ALTER TABLE public.automatic_messages ADD COLUMN IF NOT EXISTS dynamic_recipients text[] DEFAULT '{}'::text[];
