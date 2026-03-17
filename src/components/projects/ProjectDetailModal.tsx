@@ -34,16 +34,18 @@ import { ProjectActivitySidebar } from "./ProjectActivitySidebar";
 import { ProjectAttachments } from "./ProjectAttachments";
 import { ProjectPhaseOwners } from "./ProjectPhaseOwners";
 import { useProjectPhases, useProjectTransitions, useUpdatePhaseStatus, useForcePhaseMove, useSoftDeleteProject } from "@/hooks/useProjects";
+import { PauseReasonDialog, type TransitionType } from "./PauseReasonDialog";
 import {
   PROJECT_TYPE_LABELS,
   PHASE_LABELS,
   PRIORITY_LABELS,
   PHASE_STATUSES,
   PHASES_BY_TYPE,
+  ALL_PHASES,
   ProjectType,
 } from "@/types/project";
 import { usePhaseStatuses } from "@/hooks/usePhaseStatuses";
-import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { formatDateBR } from "@/utils/dateFormat";
 import { updateProjectFields } from "@/services/projectTaskService";
@@ -195,9 +197,9 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
   const { data: transitions, isLoading: loadingTransitions } = useProjectTransitions(project?.id || null);
   const updatePhaseStatus = useUpdatePhaseStatus();
   const forcePhaseMove = useForcePhaseMove();
-  const { isAdmin, isManager, isProjectRole } = useUserRole();
-  const canEditAdmin = isAdmin || isManager;
-  const canEditProject = canEditAdmin || isProjectRole;
+  const { hasPermission } = usePermissions();
+  const canEditAdmin = hasPermission('access_admin');
+  const canEditProject = canEditAdmin || hasPermission('view_projects');
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
@@ -343,9 +345,31 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
     [project, updateProjectCache],
   );
 
+  const [pauseReasonOpen, setPauseReasonOpen] = useState(false);
+  const [pauseReasonType, setPauseReasonType] = useState<TransitionType>("pause");
+  const [pendingPauseParams, setPendingPauseParams] = useState<{
+    phaseId: string; phaseName: string; newStatus: string; oldStatus: string;
+  } | null>(null);
+
   const handleStatusChange = useCallback(
     (phaseId: string, phaseName: string, newStatus: string, oldStatus: string) => {
       if (!project) return;
+
+      // Intercept pause/cancel to require reason
+      const upper = newStatus.toUpperCase();
+      if (["PAUSADO", "EM PAUSA"].includes(upper)) {
+        setPendingPauseParams({ phaseId, phaseName, newStatus, oldStatus });
+        setPauseReasonType("pause");
+        setPauseReasonOpen(true);
+        return;
+      }
+      if (upper === "CANCELADO") {
+        setPendingPauseParams({ phaseId, phaseName, newStatus, oldStatus });
+        setPauseReasonType("cancel");
+        setPauseReasonOpen(true);
+        return;
+      }
+
       if (newStatus === "CONCLUÍDO") {
         const projectType = project.project_type as ProjectType;
         const allPhases = PHASES_BY_TYPE[projectType];
@@ -363,6 +387,28 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
     },
     [project, updatePhaseStatus],
   );
+
+  const handlePauseReasonConfirm = useCallback(
+    (reason: string) => {
+      if (!project || !pendingPauseParams) return;
+      setPauseReasonOpen(false);
+      updatePhaseStatus.mutate({
+        phaseId: pendingPauseParams.phaseId,
+        projectId: project.id,
+        phaseName: pendingPauseParams.phaseName,
+        newStatus: pendingPauseParams.newStatus,
+        oldStatus: pendingPauseParams.oldStatus,
+        reason,
+      });
+      setPendingPauseParams(null);
+    },
+    [project, pendingPauseParams, updatePhaseStatus],
+  );
+
+  const handlePauseReasonCancel = useCallback(() => {
+    setPauseReasonOpen(false);
+    setPendingPauseParams(null);
+  }, []);
 
   const handleDeliveryCompleted = useCallback(() => {
     if (!project || !pendingDeliveryPhase) return;
@@ -857,7 +903,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
                   PROJ-{String(project.project_number).padStart(4, "0")}
                 </span>
                 <div className="w-px h-3.5 bg-border/30 mx-0.5 hidden sm:block" />
-                {canEditAdmin || isProjectRole ? (
+                {canEditProject ? (
                   <Select
                     value={project.project_type}
                     onValueChange={(v) => handleInlineStatusChange("project_type", v)}
@@ -1201,6 +1247,13 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
         />
       )}
 
+      <PauseReasonDialog
+        open={pauseReasonOpen}
+        type={pauseReasonType}
+        onConfirm={handlePauseReasonConfirm}
+        onCancel={handlePauseReasonCancel}
+      />
+
     </>
   );
 }
@@ -1479,7 +1532,9 @@ function ForcePhaseMovePicker({
 }) {
   const [open, setOpen] = useState(false);
   const [confirmPhase, setConfirmPhase] = useState<string | null>(null);
-  const allPhases = PHASES_BY_TYPE[projectType] || [];
+  const typePhases = PHASES_BY_TYPE[projectType] || [];
+  const extraPhases = (ALL_PHASES as readonly string[]).filter((p) => !typePhases.includes(p));
+  const allPhases = [...typePhases, ...extraPhases];
 
   if (allPhases.length <= 1) return null;
 

@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { ChecklistData, PHASES_BY_TYPE, PHASE_LABELS, PROJECT_TYPE_LABELS, ProjectType } from '@/types/project';
+import { ChecklistData, PHASES_BY_TYPE, ALL_PHASES, PHASE_LABELS, PROJECT_TYPE_LABELS, ProjectType } from '@/types/project';
 
 import { resolveAutoAssignments } from '@/services/projectAssignmentService';
 
@@ -25,6 +25,103 @@ const addBusinessDays = (startDate: Date, days: number): Date => {
     }
   }
   return result;
+};
+
+/** Auto-create a companion api_oficial project with verificacao_bm phase */
+const createCompanionBMProject = async (params: {
+  cnpj: string;
+  companyName: string;
+  contactName: string;
+  contactPhone: string;
+  contactEmail: string;
+  website: string;
+  version: string;
+  broker: string;
+  userId: string;
+  parentProjectId: string;
+}): Promise<string> => {
+  const now = new Date();
+  const dueDate = addBusinessDays(now, 10);
+
+  const { data: project, error: projectError } = await supabase
+    .from('projects')
+    .insert({
+      project_type: 'api_oficial',
+      created_by_user_id: params.userId,
+      overall_status: 'ativo',
+      priority: 'media',
+      company_name: params.companyName,
+      cnpj: params.cnpj,
+      contact_name: params.contactName,
+      contact_phone: params.contactPhone,
+      contact_email: params.contactEmail,
+      website: params.website || null,
+      version: params.version,
+      broker: params.broker,
+      api_type: 'Oficial',
+      head_user_id: params.userId,
+      current_phase: 'verificacao_bm',
+      start_date: now.toISOString().split('T')[0],
+      due_date: dueDate.toISOString().split('T')[0],
+      checklist_data: {
+        type: 'api_oficial',
+        cnpj: params.cnpj,
+        versao: params.version,
+        responsavel_nome: params.contactName,
+        responsavel_telefone: params.contactPhone,
+        responsavel_email: params.contactEmail,
+        broker: params.broker,
+        tera_coexistencia: false,
+        numero_api_oficial: '',
+        auto_created_from: params.parentProjectId,
+      },
+    } as any)
+    .select('id')
+    .single();
+
+  if (projectError) throw projectError;
+  const bmProjectId = project.id;
+
+  // Create verificacao_bm phase + transition + activity log in parallel
+  await Promise.all([
+    supabase.from('project_phases').insert({
+      project_id: bmProjectId,
+      phase_name: 'verificacao_bm',
+      status: 'BACKLOG',
+      sort_order: 0,
+      is_active: true,
+      bm_data: {
+        cnpj: params.cnpj,
+        razao_social: params.companyName,
+        responsavel: params.contactName,
+        telefone: params.contactPhone,
+        email: params.contactEmail,
+        site: params.website,
+        versao_plataforma: params.version,
+        auto_created_from: params.parentProjectId,
+      },
+    } as any),
+    supabase.from('project_status_transitions').insert({
+      project_id: bmProjectId,
+      phase_name: 'verificacao_bm',
+      status: 'BACKLOG',
+      entered_at: new Date().toISOString(),
+      changed_by_user_id: params.userId,
+    } as any),
+    supabase.from('project_activity_logs').insert({
+      project_id: bmProjectId,
+      user_id: params.userId,
+      action_type: 'project_created',
+      description: `Verificação de BM criada automaticamente (projeto de venda #${params.parentProjectId.slice(0, 8)})`,
+    } as any),
+  ]);
+
+  // Trigger automatic messages (fire-and-forget)
+  supabase.functions.invoke('trigger-automatic-message', {
+    body: { trigger_key: 'bm_created', project_id: bmProjectId },
+  }).catch(console.error);
+
+  return bmProjectId;
 };
 
 export const createProjectFromChecklist = async (input: CreateProjectInput): Promise<string> => {
@@ -180,6 +277,34 @@ export const createProjectFromChecklist = async (input: CreateProjectInput): Pro
     await supabase.from('notifications').insert(notifications);
   }
 
+  // Auto-create BM verification project when venda has API Oficial
+  if (
+    input.project_type === 'venda' &&
+    checklist.type !== 'api_oficial'
+  ) {
+    const apiType = (projectData.api_type as string || '').toLowerCase();
+    const needsBM = apiType === 'oficial' || apiType === 'extra e oficial' || apiType === 'oficial_e_extra';
+    if (needsBM) {
+      try {
+        await createCompanionBMProject({
+          cnpj: (projectData.cnpj as string) || '',
+          companyName: (projectData.company_name as string) || '',
+          contactName: (projectData.contact_name as string) || '',
+          contactPhone: (projectData.contact_phone as string) || '',
+          contactEmail: (projectData.contact_email as string) || '',
+          website: (projectData.website as string) || '',
+          version: (projectData.version as string) || 'VP',
+          broker: (projectData.broker as string) || 'EZ',
+          userId: user.id,
+          parentProjectId: projectId,
+        });
+      } catch (bmErr) {
+        console.error('Erro ao criar verificação de BM automática:', bmErr);
+        // Non-blocking: the main project was already created successfully
+      }
+    }
+  }
+
   return projectId;
 };
 
@@ -299,7 +424,8 @@ export const updatePhaseStatus = async (
   projectId: string,
   phaseName: string,
   newStatus: string,
-  oldStatus: string
+  oldStatus: string,
+  reason?: string
 ): Promise<void> => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuário não autenticado');
@@ -365,24 +491,46 @@ export const updatePhaseStatus = async (
   const oldStatusUpper = oldStatus.toUpperCase();
 
   if (PAUSE_STATUSES.includes(newStatusUpper)) {
-    await supabase
+    const { error: pauseErr } = await supabase
       .from('projects')
       .update({ overall_status: 'em_pausa' } as any)
       .eq('id', projectId);
+    if (pauseErr) console.error('Failed to update project to em_pausa:', pauseErr);
   } else if (CANCEL_STATUSES.includes(newStatusUpper)) {
-    await supabase
+    const { error: cancelErr } = await supabase
       .from('projects')
       .update({ overall_status: 'cancelado' } as any)
       .eq('id', projectId);
+    if (cancelErr) console.error('Failed to update project to cancelado:', cancelErr);
   } else if (
     (PAUSE_STATUSES.includes(oldStatusUpper) || CANCEL_STATUSES.includes(oldStatusUpper)) &&
     !TERMINAL_STATUSES.includes(newStatusUpper)
   ) {
     // Returning from pause/cancel to an active status → reactivate project
-    await supabase
+    const { error: reactivateErr } = await supabase
       .from('projects')
       .update({ overall_status: 'ativo' } as any)
       .eq('id', projectId);
+    if (reactivateErr) console.error('Failed to reactivate project:', reactivateErr);
+  }
+
+  // Save reason to the most recent project_status_history record (created by trigger)
+  if (reason && (PAUSE_STATUSES.includes(newStatusUpper) || CANCEL_STATUSES.includes(newStatusUpper))) {
+    // Small delay to ensure the trigger has fired
+    const { data: latestHistory } = await supabase
+      .from('project_status_history')
+      .select('id')
+      .eq('project_id', projectId)
+      .order('changed_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (latestHistory) {
+      await supabase
+        .from('project_status_history')
+        .update({ reason } as any)
+        .eq('id', latestHistory.id);
+    }
   }
 
   // Log activity
@@ -446,7 +594,7 @@ export const updatePhaseStatus = async (
           const headFallback = (projectData as Record<string, unknown>)?.head_user_id as string | null;
           const goLiveAssignee = headFallback || null;
 
-          await supabase.from('project_phases').insert({
+          const { error: phaseInsertError } = await supabase.from('project_phases').insert({
             project_id: projectId,
             phase_name: 'go_live_assistido',
             status: 'BACKLOG',
@@ -454,6 +602,9 @@ export const updatePhaseStatus = async (
             is_active: true,
             assigned_user_id: goLiveAssignee,
           } as any);
+          if (phaseInsertError) {
+            throw new Error(`Falha ao criar fase go_live_assistido: ${phaseInsertError.message}`);
+          }
 
           await supabase.from('projects')
             .update({ current_phase: 'go_live_assistido' } as any)
@@ -622,10 +773,12 @@ export const forceMovePhaseTo = async (
   if (projErr || !projectData) throw new Error('Projeto não encontrado');
 
   const projectType = projectData.project_type as ProjectType;
-  const allPhases = PHASES_BY_TYPE[projectType];
-  if (!allPhases || !allPhases.includes(targetPhaseName)) {
+  const typePhases = PHASES_BY_TYPE[projectType] || [];
+  // Admin force-move accepts any known phase, not just the type's default phases
+  if (!typePhases.includes(targetPhaseName) && !(ALL_PHASES as readonly string[]).includes(targetPhaseName)) {
     throw new Error('Fase inválida para este tipo de projeto');
   }
+  const allPhases = [...typePhases, ...(ALL_PHASES as readonly string[]).filter(p => !typePhases.includes(p))];
 
   const oldPhase = projectData.current_phase || '(nenhuma)';
 
@@ -660,7 +813,7 @@ export const forceMovePhaseTo = async (
       verificacao_bm: headFallback,
     };
 
-    await supabase.from('project_phases').insert({
+    const { error: forcePhaseError } = await supabase.from('project_phases').insert({
       project_id: projectId,
       phase_name: targetPhaseName,
       status: 'BACKLOG',
@@ -668,6 +821,9 @@ export const forceMovePhaseTo = async (
       is_active: true,
       assigned_user_id: phaseUserMap[targetPhaseName] ?? null,
     } as any);
+    if (forcePhaseError) {
+      throw new Error(`Falha ao criar fase ${targetPhaseName}: ${forcePhaseError.message}`);
+    }
 
     // Create initial transition
     await supabase.from('project_status_transitions').insert({
@@ -765,7 +921,7 @@ export const advanceEvolutionToAICuration = async (
   dueDate.setDate(dueDate.getDate() + days);
   const dueDateStr = dueDate.toISOString().split('T')[0];
 
-  await supabase.from('project_phases').insert({
+  const { error: curadoriaPhaseError } = await supabase.from('project_phases').insert({
     project_id: projectId,
     phase_name: 'curadoria_ia',
     status: 'BACKLOG',
@@ -774,6 +930,9 @@ export const advanceEvolutionToAICuration = async (
     assigned_user_id: curadoriaAssignee,
     due_date: dueDateStr,
   } as any);
+  if (curadoriaPhaseError) {
+    throw new Error(`Falha ao criar fase curadoria_ia: ${curadoriaPhaseError.message}`);
+  }
 
   await supabase
     .from('projects')

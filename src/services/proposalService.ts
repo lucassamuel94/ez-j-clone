@@ -14,6 +14,7 @@ export interface ProposalLeadResult {
 export interface ProposalData {
   id: string;
   company_name: string;
+  razao_social: string | null;
   cnpj: string | null;
   contact_name: string | null;
   contact_email: string | null;
@@ -36,6 +37,8 @@ export interface ProposalData {
   status: string;
   notes: string | null;
   project_objective: string | null;
+  show_meta_costs: boolean;
+  product_type: string | null;
   created_at: string;
 }
 
@@ -46,7 +49,7 @@ export interface ProposalSavePayload {
   estimated_messages: number;
   meta_cost: number;
   total_monthly: number;
-  setup_total: number;
+  // setup_total is always computed from integrations — not accepted as input
   setup_payment_method: string;
   setup_installments: number;
   contract_months: number;
@@ -76,10 +79,11 @@ export async function searchLeadsForProposal(query: string): Promise<ProposalLea
 export async function linkClientToProposal(
   proposalId: string,
   lead: ProposalLeadResult,
-): Promise<{ company_name: string; cnpj: string | null; contact_name: string | null; contact_email: string | null; contact_phone: string | null }> {
+): Promise<{ company_name: string; razao_social: string | null; cnpj: string | null; contact_name: string | null; contact_email: string | null; contact_phone: string | null }> {
   const displayName = lead.razao_social || lead.nome_fantasia || lead.company;
   const updateData = {
     company_name: displayName,
+    razao_social: lead.razao_social || null,
     cnpj: lead.cnpj || null,
     contact_name: lead.name || null,
     contact_email: lead.email || null,
@@ -104,18 +108,21 @@ export async function fetchProposalById(id: string): Promise<ProposalData> {
   return data as unknown as ProposalData;
 }
 
-/** Save proposal updates and set status to 'sent' */
+/** Save proposal updates. Upgrades 'draft' to 'sent'; preserves any other existing status. */
 export async function saveProposal(
   id: string,
   payload: ProposalSavePayload,
   computedSetupTotal: number,
+  currentStatus?: string,
 ): Promise<void> {
   const { integrations, ...rest } = payload;
+  // Only set to 'sent' when transitioning from draft — never downgrade viewed/accepted/rejected
+  const newStatus = !currentStatus || currentStatus === 'draft' ? 'sent' : currentStatus;
   const saveData: Record<string, unknown> = {
     ...rest,
     setup_total: computedSetupTotal,
     integrations: integrations,
-    status: 'sent',
+    status: newStatus,
   };
 
   const { error } = await supabase

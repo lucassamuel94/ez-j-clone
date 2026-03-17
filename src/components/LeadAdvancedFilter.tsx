@@ -11,7 +11,7 @@ const SDR_STAGES: { value: LeadStatus; label: string }[] = [
   { value: 'Novo', label: 'Novo/Sem contato' },
   { value: 'Devolvido pelo Closer', label: 'Devolvido pelo Closer' },
   { value: 'Lead Quente', label: 'Lead Quente' },
-  { value: 'Reunião Agendada', label: 'Reunião Agendada' },
+  { value: 'Reunião agendada', label: 'Reunião Agendada' },
   { value: 'Reunião Confirmada', label: 'Reunião Confirmada' },
   { value: 'Oportunidade criada', label: 'Reunião Realizada' },
   { value: 'Oportunidade Futura', label: 'Oportunidade Futura' },
@@ -22,7 +22,7 @@ const SDR_STAGES: { value: LeadStatus; label: string }[] = [
 const SDR_STATUSES: { value: LeadStatus; label: string }[] = [
   { value: 'Ocupado', label: 'Ocupado' },
   { value: 'Sem retorno', label: 'Sem retorno' },
-  { value: 'Agendar Retorno', label: 'Agendar Retorno' },
+  { value: 'Agendar retorno', label: 'Agendar Retorno' },
   { value: 'Em contato', label: 'Em contato' },
 ];
 

@@ -379,7 +379,7 @@ async function saveCheckpoint(
   const allLogs = [...existingLogs, ...batchLogs];
   const trimmedLogs = allLogs.length > 500 ? allLogs.slice(-500) : allLogs;
 
-  await supabase.from('enrichment_jobs').update({
+  const { error: checkpointError } = await supabase.from('enrichment_jobs').update({
     processed: (job.processed || 0) + counters.updated,
     cnpja_success: (job.cnpja_success || 0) + counters.cnpjaFound,
     perplexity_success: (job.perplexity_success || 0) + counters.perplexityFound,
@@ -391,6 +391,9 @@ async function saveCheckpoint(
     ...(statusOverride ? { status: statusOverride } : {}),
     updated_at: new Date().toISOString(),
   }).eq('id', jobId);
+  if (checkpointError) {
+    console.error(`Checkpoint save failed for job ${jobId}:`, checkpointError.message);
+  }
 }
 
 Deno.serve(async (req) => {

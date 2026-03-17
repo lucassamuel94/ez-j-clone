@@ -23,12 +23,12 @@ interface LeadModalHeaderProps {
   leadId?: string;
   ownerUserId?: string | null;
   currentUserId?: string | null;
-  isManager?: boolean;
+  canManage?: boolean;
   closerName?: string | null;
 }
 
-export const LeadModalHeader = ({ lead, leadId, ownerUserId, ownerName, currentUserId, isManager = false, closerName }: LeadModalHeaderProps) => {
-  const canEditOwner = isManager || (!!currentUserId && ownerUserId === currentUserId);
+export const LeadModalHeader = ({ lead, leadId, ownerUserId, ownerName, currentUserId, canManage = false, closerName }: LeadModalHeaderProps) => {
+  const canEditOwner = canManage || (!!currentUserId && ownerUserId === currentUserId);
   const queryClient = useQueryClient();
   const { score, temp, bScore, variation, isScorePending } = useMemo(() => {
     const s = calculateQualificationScore(lead);
@@ -213,7 +213,7 @@ export const LeadModalHeader = ({ lead, leadId, ownerUserId, ownerName, currentU
                 currentOwnerId={ownerUserId ?? null}
                 currentOwnerName={ownerName ?? lead.owner_name ?? null}
                 disabled={!canEditOwner}
-                sdrOnly={!isManager}
+                sdrOnly={!canManage}
               />
             </div>
           </div>

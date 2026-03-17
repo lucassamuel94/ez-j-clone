@@ -64,6 +64,25 @@ if (import.meta.main) {
       // Fix: use SUPABASE_URL (not VITE_SUPABASE_URL which doesn't exist in Edge Functions)
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+
+      // Verify caller is authenticated
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: corsHeaders,
+        });
+      }
+      const authClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user }, error: authError } = await authClient.auth.getUser();
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: corsHeaders,
+        });
+      }
+
       const supabase = createClient(supabaseUrl, supabaseKey);
 
       const { leadId, enrich_brasilapi, enrich_perplexity } = await req.json();

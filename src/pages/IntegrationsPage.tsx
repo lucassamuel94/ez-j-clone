@@ -15,7 +15,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useIntegrations } from '@/hooks/useIntegrations';
-import { Plug, Search, ChevronRight, Building2 } from 'lucide-react';
+import { Plug, Search, ChevronRight, Building2, ChevronLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+const PAGE_SIZE = 20;
 import { cn } from '@/lib/utils';
 
 export default function IntegrationsPage() {
@@ -23,12 +26,18 @@ export default function IntegrationsPage() {
   const [search, setSearch] = useState('');
   const [onlyNew, setOnlyNew] = useState(false);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
 
   const filtered = (integrations || []).filter((i) => {
     if (onlyNew && !i.is_new) return false;
     if (search && !i.integration_name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+
+  // Reset page when filters change
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const paginated = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
   const totalSystems = new Set((integrations || []).map((i) => i.integration_name.toLowerCase())).size;
 
@@ -47,12 +56,12 @@ export default function IntegrationsPage() {
             <Input
               placeholder="Buscar sistema..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(0); }}
               className="h-9 pl-9 text-sm"
             />
           </div>
           <div className="flex items-center gap-2">
-            <Switch id="only-new" checked={onlyNew} onCheckedChange={setOnlyNew} />
+            <Switch id="only-new" checked={onlyNew} onCheckedChange={(v) => { setOnlyNew(v); setPage(0); }} />
             <Label htmlFor="only-new" className="text-sm text-muted-foreground cursor-pointer">
               Apenas novas
             </Label>
@@ -86,7 +95,7 @@ export default function IntegrationsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((item) => {
+                {paginated.map((item) => {
                   const key = item.integration_name.toLowerCase();
                   const isExpanded = expandedRow === key;
                   return (
@@ -153,6 +162,24 @@ export default function IntegrationsPage() {
             </div>
           )}
         </div>
+
+        {/* Pagination */}
+        {filtered.length > PAGE_SIZE && (
+          <div className="flex items-center justify-between pt-1">
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} de {filtered.length}
+            </p>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon" className="h-8 w-8" disabled={safePage === 0} onClick={() => setPage(p => p - 1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs text-muted-foreground px-2 tabular-nums">{safePage + 1}/{totalPages}</span>
+              <Button variant="outline" size="icon" className="h-8 w-8" disabled={safePage >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </AppLayout>
   );

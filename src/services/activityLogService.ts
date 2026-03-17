@@ -80,7 +80,7 @@ export const createActivityLog = async (log: {
       description: log.description,
     })
     .select('id, lead_id, user_id, action_type, field_name, old_value, new_value, description, created_at')
-    .maybeSingle();
+    .single();
 
   if (error) {
     console.error('Error creating activity log:', error);

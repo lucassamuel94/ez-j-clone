@@ -109,16 +109,17 @@ serve(async (req) => {
     }
 
     let alerts: any[] = [];
+    let parseError = false;
     try {
       const cleaned = content.replace(/```json?\s*/g, '').replace(/```/g, '').trim();
       alerts = JSON.parse(cleaned);
       if (!Array.isArray(alerts)) alerts = [];
     } catch {
       console.error("Failed to parse Perplexity response:", content);
-      alerts = [];
+      parseError = true;
     }
 
-    return new Response(JSON.stringify({ alerts }), {
+    return new Response(JSON.stringify({ alerts, ai_failed: parseError }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

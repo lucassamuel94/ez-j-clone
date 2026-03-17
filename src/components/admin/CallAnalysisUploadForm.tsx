@@ -6,20 +6,16 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Upload, Loader2, FileAudio, FileVideo, Zap, X, Phone, Video } from 'lucide-react';
+import { Upload, Loader2, FileAudio, Zap, X, Phone, Video } from 'lucide-react';
 import { useUploadCallAnalysis } from '@/hooks/useCallAnalyses';
-import { useSystemUsers } from '@/hooks/useSystemUsers';
+import { useSDRUsers } from '@/hooks/useSDRUsers';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { compressAudio, validateFileSize, shouldCompress, type CompressionProgress } from '@/utils/audioCompressor';
 import { toast } from 'sonner';
 import { EZCallImportTab } from './EZCallImportTab';
-
-const MAX_VIDEO_SIZE_WARN_GB = 1; // acima disso avisa (mas não bloqueia)
-
+import { VideoUploadTab } from './VideoUploadTab';
 const AUDIO_FORMATS = '.mp3,.wav,.m4a,.webm,.ogg';
-const VIDEO_FORMATS = '.mp4,.webm,.mov,.avi,.mpeg';
-const MAX_VIDEO_SIZE_GB = 2;
 
 
 type UploadPhase = 'idle' | 'compressing' | 'uploading' | 'done';
@@ -34,16 +30,9 @@ export const CallAnalysisUploadForm = () => {
   const [compressionPhaseLabel, setCompressionPhaseLabel] = useState('');
   const abortRef = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const videoFileRef = useRef<HTMLInputElement>(null);
 
-  // Video-specific state
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [closerUserId, setCloserUserId] = useState('');
-  const [videoLeadSearch, setVideoLeadSearch] = useState('');
-  const [selectedVideoLeadId, setSelectedVideoLeadId] = useState('');
-  const [videoPhase, setVideoPhase] = useState<UploadPhase>('idle');
   const upload = useUploadCallAnalysis();
-  const { data: sdrs = [] } = useSystemUsers();
+  const { data: sdrs = [] } = useSDRUsers();
 
   const { data: leads = [] } = useQuery({
     queryKey: ['leads-search-call', leadSearch],
@@ -59,19 +48,7 @@ export const CallAnalysisUploadForm = () => {
     enabled: leadSearch.length >= 2,
   });
 
-  const { data: videoLeads = [] } = useQuery({
-    queryKey: ['leads-search-video', videoLeadSearch],
-    queryFn: async () => {
-      if (!videoLeadSearch || videoLeadSearch.length < 2) return [];
-      const { data } = await supabase
-        .from('leads')
-        .select('id, name, company')
-        .or(`name.ilike.%${videoLeadSearch}%,company.ilike.%${videoLeadSearch}%`)
-        .limit(10);
-      return data || [];
-    },
-    enabled: videoLeadSearch.length >= 2,
-  });
+
 
   const handleCancel = useCallback(() => {
     abortRef.current?.abort();
@@ -138,47 +115,7 @@ export const CallAnalysisUploadForm = () => {
     );
   };
 
-  const handleVideoSubmit = async () => {
-    if (!videoFile || !closerUserId) return;
-
-    const sizeError = validateFileSize(videoFile);
-    if (sizeError) {
-      toast.error(sizeError);
-      return;
-    }
-
-    // Aviso para arquivos muito grandes (não bloqueia)
-    if (videoFile.size > MAX_VIDEO_SIZE_WARN_GB * 1024 * 1024 * 1024) {
-      toast.warning(`Arquivo grande (${(videoFile.size / 1024 / 1024 / 1024).toFixed(1)}GB). O upload pode demorar alguns minutos.`);
-    }
-
-    setVideoPhase('uploading');
-
-    upload.mutate(
-      {
-        file: videoFile,
-        sdr_user_id: closerUserId,
-        lead_id: selectedVideoLeadId || undefined,
-        media_type: 'video',
-        analysis_context: 'demo_closer',
-      },
-      {
-        onSuccess: () => {
-          setVideoFile(null);
-          setVideoLeadSearch('');
-          setSelectedVideoLeadId('');
-          setVideoPhase('idle');
-          if (videoFileRef.current) videoFileRef.current.value = '';
-        },
-        onError: () => {
-          setVideoPhase('idle');
-        },
-      }
-    );
-  };
-
   const isProcessing = phase !== 'idle';
-  const isVideoProcessing = videoPhase !== 'idle';
 
   return (
     <Card>
@@ -330,111 +267,8 @@ export const CallAnalysisUploadForm = () => {
             </Button>
           </TabsContent>
 
-          <TabsContent value="video" className="space-y-4 mt-0">
-            <div className="flex items-center gap-2 p-3 rounded-lg border border-primary/20 bg-primary/5">
-              <Zap className="h-4 w-4 text-primary shrink-0" />
-              <p className="text-xs text-muted-foreground">
-                O vídeo será enviado diretamente e a transcrição é feita pelo ElevenLabs (suporta MP4 nativamente). Vídeos de até <strong>{MAX_VIDEO_SIZE_GB}GB</strong> são suportados.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Video File */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Vídeo da Demonstração</Label>
-                <Input
-                  ref={videoFileRef}
-                  type="file"
-                  accept={VIDEO_FORMATS}
-                  onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-                  className="text-xs"
-                  disabled={isVideoProcessing}
-                />
-                {videoFile && (
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <FileVideo className="h-3.5 w-3.5" />
-                    {videoFile.name} ({(videoFile.size / 1024 / 1024).toFixed(1)} MB)
-                  </div>
-                )}
-              </div>
-
-              {/* Closer */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Closer</Label>
-                <Select value={closerUserId} onValueChange={setCloserUserId} disabled={isVideoProcessing}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Selecione o Closer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sdrs.map((u: { id: string; name: string }) => (
-                      <SelectItem key={u.id} value={u.id} className="text-xs">
-                        {u.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Lead */}
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Lead / Oportunidade (opcional)</Label>
-                <Input
-                  placeholder="Buscar por nome ou empresa..."
-                  value={videoLeadSearch}
-                  onChange={(e) => {
-                    setVideoLeadSearch(e.target.value);
-                    setSelectedVideoLeadId('');
-                  }}
-                  className="h-9 text-xs"
-                  disabled={isVideoProcessing}
-                />
-                {videoLeads.length > 0 && !selectedVideoLeadId && (
-                  <div className="border rounded-md bg-background shadow-sm max-h-32 overflow-y-auto">
-                    {videoLeads.map((l: { id: string; name: string; company: string }) => (
-                      <button
-                        key={l.id}
-                        className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
-                        onClick={() => {
-                          setSelectedVideoLeadId(l.id);
-                          setVideoLeadSearch(`${l.name} — ${l.company}`);
-                        }}
-                      >
-                        <span className="font-medium">{l.name}</span>
-                        <span className="text-muted-foreground"> — {l.company}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Video Upload Progress */}
-            {isVideoProcessing && (
-              <div className="space-y-2 p-3 rounded-lg border bg-muted/30">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
-                  <span className="text-xs font-medium">Enviando vídeo...</span>
-                </div>
-              </div>
-            )}
-
-            <Button
-              onClick={handleVideoSubmit}
-              disabled={!videoFile || !closerUserId || isVideoProcessing}
-              className="w-full md:w-auto"
-            >
-              {isVideoProcessing ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Enviando...
-                </>
-              ) : (
-                <>
-                  <Video className="h-4 w-4 mr-2" />
-                  Upload de Vídeo
-                </>
-              )}
-            </Button>
+          <TabsContent value="video" className="mt-0">
+            <VideoUploadTab />
           </TabsContent>
 
           <TabsContent value="ezcall" className="mt-0">

@@ -1,0 +1,1 @@
+UPDATE call_analyses SET sdr_user_id = '5becedc4-0a5d-4057-97b1-26abbbd550da' WHERE id = '37b8fb86-738f-4365-b344-b5bd67bef6a0';

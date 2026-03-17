@@ -12,11 +12,60 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Building2, Search, Loader2, MapPin, Check, Briefcase } from 'lucide-react';
-import { useActiveClients } from '@/hooks/useActiveClients';
+import { ActiveClient } from '@/hooks/useActiveClients';
 import { createDealFromActiveClient, OpportunityType, countActiveEvolutionsByCnpj, MAX_EVOLUTIONS_BEFORE_WARNING } from '@/services/closerService';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { AlertTriangle } from 'lucide-react';
+
+/** Search all accounts via SECURITY DEFINER RPC so any authenticated user can find companies */
+function useAllAccounts(search: string) {
+  return useQuery<ActiveClient[]>({
+    queryKey: ['all-accounts-search', search],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('search_accounts_for_deal', {
+        search_term: search,
+        result_limit: 100,
+      });
+      if (error) throw error;
+
+      return (data || []).map((row: Record<string, unknown>): ActiveClient => ({
+        id: row.id as string,
+        company: row.company_name as string,
+        cnpj: row.cnpj as string | null,
+        contact_name: row.contact_name as string | null,
+        email: row.email as string | null,
+        phone: row.phone as string | null,
+        segment: row.company_segment as string | null,
+        razao_social: row.razao_social as string | null,
+        nome_fantasia: row.nome_fantasia as string | null,
+        cnae_fiscal: row.cnae_fiscal as number | null,
+        cnae_fiscal_descricao: row.cnae_fiscal_descricao as string | null,
+        cnaes_secundarios: row.cnaes_secundarios as string | null,
+        porte: row.porte as string | null,
+        employee_count: row.employee_count as string | null,
+        revenue_range: row.revenue_range as string | null,
+        capital_social: row.capital_social as number | null,
+        city: row.city as string | null,
+        state: row.state as string | null,
+        cep: row.cep as string | null,
+        website: row.website as string | null,
+        situacao_cadastral: row.situacao_cadastral as string | null,
+        data_inicio_atividade: row.data_inicio_atividade as string | null,
+        ai_enrichment_data: row.ai_enrichment_data,
+        enriched_at: null,
+        imported_by: null,
+        notes: row.notes as string | null,
+        created_at: row.created_at as string,
+        account_owner_id: row.account_owner_id as string | null,
+        account_owner_name: row.account_owner_name as string | null,
+        status: (row.status as string) || (row.lifecycle_stage as string) || 'active',
+      }));
+    },
+    enabled: search.trim().length >= 2,
+  });
+}
 
 interface NewDealFromClientDialogProps {
   open: boolean;
@@ -55,7 +104,7 @@ export function NewDealFromClientDialog({
     }
   }, [onOpenChange]);
 
-  const { data: clients = [], isLoading } = useActiveClients(debouncedSearch);
+  const { data: clients = [], isLoading } = useAllAccounts(debouncedSearch);
 
   // Count active evolutions for selected client
   const selectedCnpj = useMemo(() => {

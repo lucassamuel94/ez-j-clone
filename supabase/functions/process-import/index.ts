@@ -396,8 +396,8 @@ Deno.serve(async (req) => {
             }
             // Fire notes and opportunities in parallel
             const promises: Promise<any>[] = []
-            if (notesBatch.length > 0) promises.push(adminClient.from('lead_notes').insert(notesBatch).then())
-            if (opportunitiesBatch.length > 0) promises.push(adminClient.from('opportunities').insert(opportunitiesBatch).then())
+            if (notesBatch.length > 0) promises.push((adminClient.from('lead_notes') as any).insert(notesBatch))
+            if (opportunitiesBatch.length > 0) promises.push((adminClient.from('opportunities') as any).insert(opportunitiesBatch))
             if (promises.length > 0) await Promise.all(promises)
           }
         }

@@ -1,0 +1,1 @@
+ALTER TABLE public.leads ADD COLUMN enriched_at timestamptz DEFAULT NULL;

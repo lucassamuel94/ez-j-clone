@@ -79,6 +79,8 @@ async function callGoogleAPI(
   path: string,
   body?: unknown
 ) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
   const res = await fetch(`${CALENDAR_BASE}${path}`, {
     method,
     headers: {
@@ -86,7 +88,9 @@ async function callGoogleAPI(
       "Content-Type": "application/json",
     },
     body: body ? JSON.stringify(body) : undefined,
+    signal: controller.signal,
   });
+  clearTimeout(timeoutId);
 
   // Handle 401 - token might be revoked
   if (res.status === 401) {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AppLayout } from '@/components/AppLayout';
+import { usePermissions } from '@/hooks/usePermissions';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +24,8 @@ const STATUS_MAP: Record<string, { label: string; className: string }> = {
 };
 
 export default function ApiAnalysisPage() {
-  const { requests, isLoading, createRequest, updateRequest, deleteRequest, uploadFile, currentUserId, role } = useApiAnalysis();
+  const { requests, isLoading, createRequest, updateRequest, deleteRequest, uploadFile, currentUserId } = useApiAnalysis();
+  const { hasPermission } = usePermissions();
   
   const [searchParams, setSearchParams] = useSearchParams();
   const [createOpen, setCreateOpen] = useState(false);
@@ -204,7 +206,7 @@ export default function ApiAnalysisPage() {
         onUpdate={handleUpdate}
         onDelete={handleDelete}
         currentUserId={currentUserId}
-        isAdminOrHead={role === 'admin' || role === 'head_pos_venda' || role === 'manager'}
+        isAdminOrHead={hasPermission('access_admin')}
       />
     </AppLayout>
   );

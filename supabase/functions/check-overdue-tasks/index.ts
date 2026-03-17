@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
           .select("id")
           .eq("user_id", task.assigned_user_id)
           .eq("type", "task_due")
-          .ilike("message", `%${task.id}%`)
+          .like("message", `%ID: ${task.id}%`)
           .gte("created_at", todayStart.toISOString())
           .limit(1);
 

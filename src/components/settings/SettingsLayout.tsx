@@ -3,11 +3,10 @@ import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
-import { useAdminUsers } from '@/hooks/useAdminUsers';
+
 import { usePermissions } from '@/hooks/usePermissions';
 import { useIsMobile } from '@/hooks/use-mobile';
 import {
-  Settings,
   Users,
   UsersRound,
   ShieldCheck,
@@ -33,6 +32,7 @@ import {
   Cog,
   Megaphone,
   MessageCircle,
+  Link as LinkIcon,
 } from 'lucide-react';
 
 interface SettingsNavItem {
@@ -79,7 +79,6 @@ interface SettingsLayoutProps {
 
 function SettingsNavContent({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
-  const { isAdmin, isManager } = useAdminUsers();
   const { hasPermission } = usePermissions();
 
   const isActive = (to: string) => {
@@ -93,72 +92,72 @@ function SettingsNavContent({ onNavigate }: { onNavigate?: () => void }) {
 
   // ── Espaço de Trabalho ──────────────────────────────────────────────────
   const workspaceItems: SettingsNavItem[] = [
-    { to: '/settings',             icon: <Settings className="h-4 w-4" />,   label: 'Geral' },
     { to: '/settings/people',      icon: <Users className="h-4 w-4" />,      label: 'Pessoas' },
-    { to: '/settings/teams',       icon: <UsersRound className="h-4 w-4" />, label: 'Equipes' },
     { to: '/settings/permissions', icon: <ShieldCheck className="h-4 w-4" />,label: 'Segurança e Permissões' },
   ];
 
   // ── Pipeline ────────────────────────────────────────────────────────────
   const pipelineItems: SettingsNavItem[] = [];
-  if (isAdmin || isManager) {
+  if (hasPermission('access_admin')) {
     pipelineItems.push({ to: '/settings/pipeline-statuses', icon: <GitBranch className="h-4 w-4" />, label: 'Etapas do Pipeline' });
   }
-  if (isAdmin || hasPermission('manage_products')) {
+  if (hasPermission('manage_products')) {
     pipelineItems.push({ to: '/settings/products', icon: <Package className="h-4 w-4" />, label: 'Produtos' });
   }
-  if (isAdmin || hasPermission('manage_goals')) {
+  if (hasPermission('manage_goals')) {
     pipelineItems.push({ to: '/settings/goals', icon: <Target className="h-4 w-4" />, label: 'Metas' });
   }
 
   // ── Comunicação ─────────────────────────────────────────────────────────
   const comItems: SettingsNavItem[] = [];
-  if (isAdmin || hasPermission('manage_automatic_messages')) {
+  if (hasPermission('manage_automatic_messages')) {
     comItems.push({ to: '/settings/automatic-messages', icon: <MessageSquareMore className="h-4 w-4" />, label: 'Mensagens Automáticas' });
   }
-  if (isAdmin || hasPermission('manage_email_templates')) {
+  if (hasPermission('manage_email_templates')) {
     comItems.push({ to: '/settings/email-templates',  icon: <MailPlus className="h-4 w-4" />,  label: 'Templates de E-mail' });
     comItems.push({ to: '/settings/email-sequences',  icon: <MailCheck className="h-4 w-4" />,  label: 'Sequências de E-mail' });
   }
-  if (isAdmin) {
+  if (hasPermission('access_admin')) {
     comItems.push({ to: '/settings/forms', icon: <Code2 className="h-4 w-4" />, label: 'Formulários' });
     comItems.push({ to: '/settings/forms?type=whatsapp', icon: <MessageCircle className="h-4 w-4" />, label: 'Widget WhatsApp' });
   }
 
   // ── Inteligência ────────────────────────────────────────────────────────
   const intelItems: SettingsNavItem[] = [];
-  if (isAdmin || hasPermission('manage_ai')) {
+  if (hasPermission('manage_ai')) {
     intelItems.push({ to: '/settings/ai', icon: <Bot className="h-4 w-4" />, label: 'IA' });
   }
-  if (isAdmin || hasPermission('manage_enrichment')) {
+  if (hasPermission('manage_enrichment')) {
     intelItems.push({ to: '/settings/enrich', icon: <Database className="h-4 w-4" />, label: 'Enriquecimento de Dados' });
   }
-  if (isAdmin || isManager || hasPermission('access_call_intelligence')) {
+  if (hasPermission('access_call_intelligence')) {
     intelItems.push({ to: '/settings/call-intelligence', icon: <Headphones className="h-4 w-4" />, label: 'Call Intelligence' });
+  }
+  if (hasPermission('access_admin')) {
+    intelItems.push({ to: '/settings/integrations-catalog', icon: <Blocks className="h-4 w-4" />, label: 'Catálogo de Integrações' });
   }
 
   // ── Marketing ───────────────────────────────────────────────────────────
   const marketingItems: SettingsNavItem[] = [];
-  if (isAdmin) {
+  if (hasPermission('access_admin')) {
     marketingItems.push({ to: '/settings/icp',              icon: <PieChart className="h-4 w-4" />,  label: 'Análise de ICP' });
     marketingItems.push({ to: '/settings/reports/marketing',icon: <Megaphone className="h-4 w-4" />, label: 'Relatórios de Marketing' });
+    marketingItems.push({ to: '/settings/utm-generator',    icon: <LinkIcon className="h-4 w-4" />,  label: 'Gerador de UTM' });
   }
 
   // ── Relatórios ──────────────────────────────────────────────────────────
-  const showReports = isAdmin || hasPermission('view_reports');
+  const showReports = hasPermission('view_reports');
 
   // ── Sistema ─────────────────────────────────────────────────────────────
   const systemItems: SettingsNavItem[] = [];
-  if (isAdmin) {
+  if (hasPermission('access_admin')) {
     systemItems.push({ to: '/settings/clients', icon: <Building2 className="h-4 w-4" />,    label: 'Base de Clientes' });
   }
-  if (isAdmin || hasPermission('manage_import')) {
+  if (hasPermission('manage_import')) {
     systemItems.push({ to: '/settings/import',  icon: <FileSpreadsheet className="h-4 w-4" />, label: 'Importação' });
   }
-  if (isAdmin) {
-    systemItems.push({ to: '/settings/logs',   icon: <ScrollText className="h-4 w-4" />, label: 'Logs do Sistema' });
+  if (hasPermission('access_admin')) {
     systemItems.push({ to: '/settings/trash',  icon: <Trash2 className="h-4 w-4" />,     label: 'Lixeira' });
-    systemItems.push({ to: '/settings/system', icon: <Cog className="h-4 w-4" />,        label: 'Sistema' });
   }
 
   return (

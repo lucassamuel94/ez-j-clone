@@ -38,7 +38,7 @@ import {
 import { cn } from '@/lib/utils';
 import { formatTimeAgo } from '@/utils/priorityCalculator';
 import { WhatsAppIcon } from './icons/WhatsAppIcon';
-import { useUserRole } from '@/hooks/useUserRole';
+import { usePermissions } from '@/hooks/usePermissions';
 import { SendToCloserDialog } from './SendToCloserDialog';
 
 interface LeadModalPreviewProps {
@@ -93,7 +93,7 @@ export const LeadModalPreview = ({
   const [editedName, setEditedName] = useState(lead.name);
   const [optimisticStage, setOptimisticStage] = useState<string | null>(null);
   const [sendToCloserOpen, setSendToCloserOpen] = useState(false);
-  const { isAdmin, isManager } = useUserRole();
+  const { hasPermission } = usePermissions();
   const { stagesDisplay: closerStagesDisplay, linearStages: closerLinearStages } = useCloserStages();
 
   // Sync editedName when lead prop changes
@@ -586,7 +586,7 @@ export const LeadModalPreview = ({
         )}
 
         {/* Send directly to Closer (Admin/Manager only) */}
-        {mode === 'sdr' && (isAdmin || isManager) && (
+        {mode === 'sdr' && hasPermission('access_admin') && (
           <Button
             variant="outline"
             size="sm"

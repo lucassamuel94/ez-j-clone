@@ -1,4 +1,4 @@
-import { useState, useCallback, useReducer } from 'react';
+import { useState, useCallback, useReducer, useRef } from 'react';
 import { Lead, LeadTemperature, LeadStatus } from '@/types/lead';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUpdateLead, useBulkDeleteLeads } from '@/hooks/useLeads';
@@ -115,6 +115,7 @@ export function useLeadInboxDialogs({
   const { user: currentUser } = useCurrentUser();
   const { isConnected: isCalendarConnected, createEvent: createCalendarEvent } = useGoogleCalendar();
 
+  const fetchRequestId = useRef(0);
   const [dialogs, dispatchDialog] = useReducer(dialogReducer, initialDialogState);
   const [bulk, dispatchBulk] = useReducer(bulkReducer, {
     selectedIds: new Set<string>(),
@@ -174,6 +175,7 @@ export function useLeadInboxDialogs({
   }, [handleSelectAll, handleDeselectAll]);
 
   const fetchAllFilteredIds = useCallback(async (limit?: number) => {
+    const currentRequestId = ++fetchRequestId.current;
     dispatchBulk({ type: 'SET_LOADING', loading: true });
     try {
       const sdrIdParam = selectedSdrId === 'all' ? null
@@ -187,13 +189,18 @@ export function useLeadInboxDialogs({
         p_limit: limit || null,
       } as Record<string, unknown>);
       if (error) throw error;
+      // Ignore stale response if filters changed during fetch
+      if (currentRequestId !== fetchRequestId.current) return null;
       return (data as string[]) || [];
     } catch (err) {
+      if (currentRequestId !== fetchRequestId.current) return null;
       console.error('Error fetching all filtered IDs:', err);
       toast.error('Erro ao carregar IDs filtrados. Tente novamente.');
       return null;
     } finally {
-      dispatchBulk({ type: 'SET_LOADING', loading: false });
+      if (currentRequestId === fetchRequestId.current) {
+        dispatchBulk({ type: 'SET_LOADING', loading: false });
+      }
     }
   }, [selectedSdrId, activeFilter, debouncedSearch, advancedFilterStatuses]);
 
@@ -299,12 +306,7 @@ export function useLeadInboxDialogs({
     meetingDate.setHours(hours, minutes, 0, 0);
     const oneHourBefore = new Date(meetingDate.getTime() - 60 * 60 * 1000);
 
-    handleUpdateLead({
-      ...quickActionLead,
-      status: 'Reunião Agendada' as LeadStatus,
-      next_action_at: oneHourBefore,
-    });
-
+    // Create meeting record first
     let meetingRecordId: string | undefined;
     const { data: meetingRow } = await supabase.from('meetings').insert({
       lead_id: quickActionLead.id,
@@ -312,23 +314,41 @@ export function useLeadInboxDialogs({
       meeting_datetime: meetingDate.toISOString(),
       title: data.meetingTitle,
       reminder_minutes_before: data.reminderMinutesBefore,
-      user_id: quickActionLead.owner_user_id || currentUser?.id || null,
+      user_id: currentUser?.id || null,
     }).select('id').single();
     meetingRecordId = meetingRow?.id;
 
+    // Create opportunity BEFORE updating lead status — if it fails, abort
     if (currentUser?.id) {
-      supabase.from('opportunities').insert({
+      const { error: oppError } = await supabase.from('opportunities').insert({
         lead_id: quickActionLead.id,
         created_by_user_id: currentUser.id,
         assigned_to_user_id: data.executiveUserId,
         sdr_user_id: currentUser.id,
         meeting_datetime: meetingDate.toISOString(),
         stage: 'Demonstração',
-      }).then(() => {
-        queryClient.invalidateQueries({ queryKey: ['leads-paginated'] });
-        queryClient.invalidateQueries({ queryKey: ['lead-tab-counts'] });
       });
+      if (oppError) {
+        console.error('Error creating opportunity:', oppError);
+        toast.error('Erro ao criar oportunidade no pipeline do Closer. Tente novamente.');
+        // Clean up meeting record since we're aborting
+        if (meetingRecordId) {
+          try { await supabase.from('meetings').delete().eq('id', meetingRecordId); } catch { /* cleanup */ }
+        }
+        closeDialog('meetingDialogOpen');
+        setQuickActionLead(null);
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ['leads-paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-tab-counts'] });
     }
+
+    // Only update lead status AFTER opportunity was successfully created
+    handleUpdateLead({
+      ...quickActionLead,
+      status: 'Reunião agendada' as LeadStatus,
+      next_action_at: oneHourBefore,
+    });
 
     const meetingEndDate = new Date(meetingDate.getTime() + 60 * 60 * 1000);
     const attendees = (data.inviteEmails || []).map((email: string) => ({ email }));

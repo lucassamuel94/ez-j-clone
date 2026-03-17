@@ -37,6 +37,8 @@ const PRIORITY_LABELS: Record<string, string> = {
 };
 
 const NOTIFY_OPTIONS: Record<string, string> = {
+  '5min': '5 min antes',
+  '15min': '15 min antes',
   '30min': '30 min antes',
   '1h': '1h antes',
   '1d': '1 dia antes',

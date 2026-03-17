@@ -51,7 +51,7 @@ async function callAI(
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-      body: JSON.stringify({ model: modelName, max_tokens: 4096, system: systemPrompt, messages: [{ role: "user", content: userPrompt }] }),
+      body: JSON.stringify({ model: modelName, max_tokens: 8192, system: systemPrompt, messages: [{ role: "user", content: userPrompt }] }),
     });
     if (!res.ok) { const t = await res.text(); throw new Error(`Anthropic error ${res.status}: ${t.slice(0, 200)}`); }
     const d = await res.json();
@@ -115,11 +115,11 @@ serve(async (req) => {
       throw new Error("Transcrição vazia");
     }
 
-    // Format transcription with speakers
+    // Format transcription with speakers and segment indices (for coaching annotations)
     const formattedTranscription = speakerSegments
-      .map((s: { speaker: string; text: string }) => {
+      .map((s: { speaker: string; text: string }, index: number) => {
         const label = s.speaker === "speaker_0" ? "Closer" : "Cliente";
-        return `[${label}]: ${s.text}`;
+        return `[${index}] [${label}]: ${s.text}`;
       })
       .join("\n");
 
@@ -167,7 +167,7 @@ serve(async (req) => {
     }
 
     // Update analysis record
-    await supabase.from("call_analyses").update({
+    const { error: updateError } = await supabase.from("call_analyses").update({
       ai_analysis: parsed,
       call_score: (parsed.call_score as number) ?? 0,
       connection_effective: (parsed.connection_effective as boolean) ?? false,
@@ -185,6 +185,7 @@ serve(async (req) => {
       status: "completed",
       completed_at: new Date().toISOString(),
     }).eq("id", analysis_id);
+    if (updateError) throw new Error(`Failed to save analysis: ${updateError.message}`);
 
     // Send email notification to Closer
     try {
@@ -229,6 +230,11 @@ serve(async (req) => {
 
           <h3 style="font-size:13px; color:#1a1a2e; margin:20px 0 8px;">💡 Feedback</h3>
           <p style="color:#555; font-size:13px; line-height:1.6;">${(parsed.feedback as string) ?? "Não disponível"}</p>
+
+          ${(parsed.coach_overall_message as string) ? `
+          <h3 style="font-size:13px; color:#1a1a2e; margin:20px 0 8px;">🎯 Mensagem do Coach</h3>
+          <p style="color:#555; font-size:13px; line-height:1.6; background:#f0f7ff; border-left:3px solid #3b82f6; padding:12px 16px; border-radius:0 8px 8px 0;">${parsed.coach_overall_message as string}</p>
+          ` : ""}
 
           <h3 style="font-size:13px; color:#1a1a2e; margin:20px 0 8px;">⚠️ Objeções identificadas</h3>
           <ul style="color:#555; font-size:13px; padding-left:20px;">${objectionsList}</ul>

@@ -84,7 +84,7 @@ function extractEmails(headerValue: string): string[] {
 }
 
 async function syncUserSentEmails(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: any,
   tokenRow: TokenRow
 ): Promise<{ synced: number; errors: number }> {
   let synced = 0;
@@ -230,8 +230,8 @@ async function syncUserSentEmails(
         const leadInfo = [...emailToLeadMap.values()].find((v) => v.lead_id === leadId);
 
         // Insert sent_email record
-        const { error: insertError } = await adminClient
-          .from("sent_emails")
+        const { error: insertError } = await (adminClient
+          .from("sent_emails") as any)
           .insert({
             lead_id: leadId,
             user_id: tokenRow.user_id,
@@ -254,7 +254,7 @@ async function syncUserSentEmails(
         let description = `enviou e-mail (Gmail) para ${toHeader}: "${subject}"`;
         if (ccHeader) description += ` (CC: ${ccHeader})`;
 
-        await adminClient.from("lead_activity_logs").insert({
+        await (adminClient.from("lead_activity_logs") as any).insert({
           lead_id: leadId,
           user_id: tokenRow.user_id,
           action_type: "email_sent",
@@ -262,8 +262,7 @@ async function syncUserSentEmails(
         });
 
         // Update lead engagement
-        await adminClient
-          .from("leads")
+        await (adminClient.from("leads") as any)
           .update({
             last_contact_at: new Date().toISOString(),
             attempts_count: (leadInfo?.attempts_count || 0) + 1,
@@ -279,8 +278,7 @@ async function syncUserSentEmails(
   }
 
   // Update sync timestamp
-  await adminClient
-    .from("google_calendar_tokens")
+  await (adminClient.from("google_calendar_tokens") as any)
     .update({ gmail_last_sync_at: new Date().toISOString() })
     .eq("user_id", tokenRow.user_id);
 

@@ -1,8 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUpdateLead } from '@/hooks/useLeads';
-import { useUserRole } from '@/hooks/useUserRole';
-import { useAdminUsers } from '@/hooks/useAdminUsers';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useLeadModal } from '@/hooks/useLeadModal';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -79,8 +78,7 @@ export const getExecDateRange = (period: ExecDatePeriod, customRange?: DateRange
 };
 
 const SDRIndicadoresPage = () => {
-  const { isAdmin, isManager } = useAdminUsers();
-  const { canAccessBoth } = useUserRole();
+  const { hasPermission } = usePermissions();
   const { user: currentUser } = useCurrentUser();
   const [selectedSdrId, setSelectedSdrId] = useState<string>('');
   const [datePeriod, setDatePeriod] = useState<ExecDatePeriod>('today');
@@ -95,7 +93,7 @@ const SDRIndicadoresPage = () => {
   // 2.2 Memoize dateRange to prevent queryKey invalidation on every render
   const dateRange = useMemo(() => getExecDateRange(datePeriod, customRange), [datePeriod, customRange]);
 
-  const canFilterBySdr = isAdmin || isManager;
+  const canFilterBySdr = hasPermission('access_admin');
 
   const { data: sdrProfiles = [] } = useQuery({
     queryKey: ['sdrProfiles'],

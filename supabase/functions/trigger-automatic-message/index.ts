@@ -32,17 +32,30 @@ interface TriggerPayload {
 }
 
 // Rate limiting: max 30 per minute per channel
+// In-memory counter (fast path within single invocation)
 const sendTimestamps: Record<string, number[]> = {};
 const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 60_000;
 
-function checkRateLimit(channel: string): boolean {
+function checkRateLimitLocal(channel: string): boolean {
   const now = Date.now();
   if (!sendTimestamps[channel]) sendTimestamps[channel] = [];
   sendTimestamps[channel] = sendTimestamps[channel].filter(t => now - t < RATE_WINDOW_MS);
   if (sendTimestamps[channel].length >= RATE_LIMIT) return false;
   sendTimestamps[channel].push(now);
   return true;
+}
+
+// DB-backed check (survives serverless restarts)
+async function checkRateLimitDB(supabase: any, channel: string): Promise<boolean> {
+  const oneMinuteAgo = new Date(Date.now() - RATE_WINDOW_MS).toISOString();
+  const { count } = await supabase
+    .from("message_dispatch_logs")
+    .select("*", { count: "exact", head: true })
+    .eq("channel", channel)
+    .in("status", ["sent", "partial"])
+    .gte("created_at", oneMinuteAgo);
+  return (count || 0) < RATE_LIMIT;
 }
 
 serve(async (req) => {
@@ -119,14 +132,15 @@ serve(async (req) => {
 
     // 2. Resolve context data
     const vars: Record<string, string> = { ...extraContext };
-    await resolveContext(supabase, vars, { lead_id, opportunity_id, project_id, trigger_key });
+    await resolveContext(supabase as any, vars, { lead_id, opportunity_id, project_id, trigger_key });
 
     console.log(`[trigger] Resolved vars:`, Object.keys(vars));
 
     // 3. Process each message
     const results: Array<{ message_id: string; sent_to: string[]; errors: string[] }> = [];
 
-    for (const msg of messages) {
+    for (const _msg of messages) {
+      const msg = _msg as Record<string, any>;
       const sentTo: string[] = [];
       const errors: string[] = [];
       const recipientsResolved: Array<{ id?: string; name: string; channel: string }> = [];
@@ -139,19 +153,19 @@ serve(async (req) => {
 
       if (msg.ai_enabled && msg.ai_prompt) {
         aiUsed = true;
-        const aiResult = await generateWithAI(vars, msg.ai_prompt, msg.body);
+        const aiResult = await generateWithAI(vars, msg.ai_prompt as string, msg.body as string);
         body = aiResult.body;
         aiResponseTimeMs = aiResult.responseTimeMs;
         if (aiResult.failed) {
           errors.push(aiResult.errorMessage || "AI generation failed");
           if (!body) {
             // No fallback body — cancel
-            await logDispatch(supabase, {
+            await logDispatch(supabase as any, {
               message_id: msg.id, triggerSource, recipientsResolved, recipientsIgnored,
               channel: (msg.channels || [])[0] || "whatsapp", status: "failed",
               errorReason: "AI failed, no fallback body", aiUsed, aiResponseTimeMs, messageBody: "",
             });
-            await notifyAdmin(supabase, "Falha de IA sem fallback", `Mensagem "${msg.name}": IA falhou e não há corpo manual. Envio cancelado.`);
+            await notifyAdmin(supabase as any, "Falha de IA sem fallback", `Mensagem "${msg.name}": IA falhou e não há corpo manual. Envio cancelado.`);
 
             await supabase.from("automatic_messages").update({
               last_dispatch_status: "failed",
@@ -165,8 +179,8 @@ serve(async (req) => {
       }
 
       // Replace variables — unresolved → empty string (item 7)
-      body = replaceVars(body, vars);
-      body = markdownToWhatsApp(body);
+      body = replaceVars(body as string, vars);
+      body = markdownToWhatsApp(body as string);
 
       // ── Determine recipients ──
       const msgSender = String(msg.sender || "");
@@ -240,7 +254,7 @@ serve(async (req) => {
           }
         }
       } else if (msg.target_type === "all" || msg.target_type === "department" || msg.target_type === "roles" || msg.target_type === "users") {
-        const userIds = await resolveStaticRecipients(supabase, msg);
+        const userIds = await resolveStaticRecipients(supabase as any, msg);
         if (userIds.length > 0) {
           const { data: profiles } = await supabase
             .from("profiles")
@@ -258,10 +272,19 @@ serve(async (req) => {
 
       // ── Send via channels ──
 
+      // DB-backed rate limit check once per message (across invocations)
+      let dbRateLimitOk = true;
+      if (msgChannels.includes("whatsapp")) {
+        dbRateLimitOk = await checkRateLimitDB(supabase, "whatsapp");
+        if (!dbRateLimitOk) {
+          errors.push("Rate limit global atingido (verificação DB). Aguarde 1 minuto.");
+        }
+      }
+
       for (const recipient of recipients) {
         if (msgChannels.includes("whatsapp") && recipient.whatsapp) {
-          if (checkRateLimit("whatsapp")) {
-            const success = await sendWhatsApp(recipient.whatsapp, body);
+          if (dbRateLimitOk && checkRateLimitLocal("whatsapp")) {
+            const success = await sendWhatsApp(recipient.whatsapp, body as string);
             if (success) {
               sentTo.push(recipient.whatsapp);
               recipientsResolved.push({ id: recipient.id, name: recipient.name, channel: "whatsapp" });
@@ -284,9 +307,9 @@ serve(async (req) => {
                      sentTo.length > 0 && errors.length > 0 ? "partial" :
                      sentTo.length === 0 && recipientsIgnored.length > 0 ? "skipped" : "failed";
 
-      await logDispatch(supabase, {
-        message_id: msg.id, triggerSource, recipientsResolved, recipientsIgnored,
-        channel: (msg.channels || [])[0] || "whatsapp", status,
+      await logDispatch(supabase as any, {
+        message_id: msg.id as string, triggerSource, recipientsResolved, recipientsIgnored,
+        channel: ((msg.channels as string[]) || [])[0] || "whatsapp", status,
         errorReason: errors.length > 0 ? errors.join("; ") : undefined,
         aiUsed, aiResponseTimeMs, messageBody: body,
       });
@@ -297,7 +320,7 @@ serve(async (req) => {
         last_dispatch_at: new Date().toISOString(),
       }).eq("id", msg.id);
 
-      results.push({ message_id: msg.id, sent_to: sentTo, errors });
+      results.push({ message_id: msg.id as string, sent_to: sentTo, errors });
       console.log(`[trigger] msg=${msg.name}: sent=${sentTo.length}, errors=${errors.length}, ignored=${recipientsIgnored.length}`);
     }
 
@@ -443,16 +466,16 @@ async function resolveStaticRecipients(
   if (targetType === "department" && Array.isArray(msg.target_departments)) {
     const teamIds = msg.target_departments as string[];
     const { data: members } = await supabase.from("team_members").select("user_id").in("team_id", teamIds);
-    return [...new Set((members || []).map((m: { user_id: string }) => m.user_id))];
+    return [...new Set(((members || []) as any[]).map((m: any) => m.user_id as string))];
   }
   if (targetType === "roles" && Array.isArray(msg.target_roles)) {
     const roleIds = msg.target_roles as string[];
     const { data: userRoles } = await supabase.from("user_roles").select("user_id").in("role_id", roleIds);
-    return [...new Set((userRoles || []).map((r: { user_id: string }) => r.user_id))];
+    return [...new Set(((userRoles || []) as any[]).map((r: any) => r.user_id as string))];
   }
   if (targetType === "all") {
     const { data: profiles } = await supabase.from("profiles").select("id").eq("active", true);
-    return (profiles || []).map((p: { id: string }) => p.id);
+    return ((profiles || []) as any[]).map((p: any) => p.id as string);
   }
   return [];
 }
@@ -466,73 +489,73 @@ async function resolveContext(
   const { lead_id, opportunity_id, project_id, trigger_key } = ctx;
 
   if (opportunity_id) {
-    const { data: opp } = await supabase
+    const { data: opp } = await (supabase
       .from("opportunities")
-      .select("lead_id, assigned_to_user_id, sdr_user_id, deal_value, stage")
+      .select("lead_id, assigned_to_user_id, sdr_user_id, deal_value, stage") as any)
       .eq("id", opportunity_id)
       .single();
 
     if (opp) {
       if (opp.assigned_to_user_id) {
-        const { data: p } = await supabase.from("profiles").select("name, whatsapp, email").eq("id", opp.assigned_to_user_id).single();
-        if (p) { vars.closer = p.name || ""; vars.closer_whatsapp = p.whatsapp || ""; vars.closer_email = p.email || ""; vars.closer_user_id = opp.assigned_to_user_id; }
+        const { data: p } = await (supabase.from("profiles").select("name, whatsapp, email") as any).eq("id", opp.assigned_to_user_id).single();
+        if (p) { vars.closer = (p.name || "") as string; vars.closer_whatsapp = (p.whatsapp || "") as string; vars.closer_email = (p.email || "") as string; vars.closer_user_id = opp.assigned_to_user_id as string; }
       }
       if (opp.sdr_user_id) {
-        const { data: p } = await supabase.from("profiles").select("name, whatsapp, email").eq("id", opp.sdr_user_id).single();
-        if (p) { vars.sdr = p.name || ""; vars.sdr_whatsapp = p.whatsapp || ""; vars.sdr_email = p.email || ""; vars.sdr_user_id = opp.sdr_user_id; }
+        const { data: p } = await (supabase.from("profiles").select("name, whatsapp, email") as any).eq("id", opp.sdr_user_id).single();
+        if (p) { vars.sdr = (p.name || "") as string; vars.sdr_whatsapp = (p.whatsapp || "") as string; vars.sdr_email = (p.email || "") as string; vars.sdr_user_id = opp.sdr_user_id as string; }
       }
       if (opp.deal_value) vars.valor = String(opp.deal_value);
 
       const resolvedLeadId = lead_id || opp.lead_id;
       if (resolvedLeadId) {
-        const { data: lead } = await supabase.from("leads").select("name, company, razao_social, nome_fantasia, whatsapp, phone, email, owner_user_id").eq("id", resolvedLeadId).single();
+        const { data: lead } = await (supabase.from("leads").select("name, company, razao_social, nome_fantasia, whatsapp, phone, email, owner_user_id") as any).eq("id", resolvedLeadId).single();
         if (lead) {
-          vars.lead_name = lead.name || "";
-          vars.empresa = lead.razao_social || lead.nome_fantasia || lead.company || "";
-          vars.lead_whatsapp = lead.whatsapp || lead.phone || "";
-          vars.lead_email = lead.email || "";
+          vars.lead_name = (lead.name || "") as string;
+          vars.empresa = (lead.razao_social || lead.nome_fantasia || lead.company || "") as string;
+          vars.lead_whatsapp = (lead.whatsapp || lead.phone || "") as string;
+          vars.lead_email = (lead.email || "") as string;
         }
       }
     }
   } else if (lead_id) {
-    const { data: lead } = await supabase.from("leads").select("name, company, razao_social, nome_fantasia, whatsapp, phone, email, owner_user_id").eq("id", lead_id).single();
+    const { data: lead } = await (supabase.from("leads").select("name, company, razao_social, nome_fantasia, whatsapp, phone, email, owner_user_id") as any).eq("id", lead_id).single();
     if (lead) {
-      vars.lead_name = lead.name || "";
-      vars.empresa = lead.razao_social || lead.nome_fantasia || lead.company || "";
-      vars.lead_whatsapp = lead.whatsapp || lead.phone || "";
-      vars.lead_email = lead.email || "";
+      vars.lead_name = (lead.name || "") as string;
+      vars.empresa = (lead.razao_social || lead.nome_fantasia || lead.company || "") as string;
+      vars.lead_whatsapp = (lead.whatsapp || lead.phone || "") as string;
+      vars.lead_email = (lead.email || "") as string;
       if (lead.owner_user_id) {
-        const { data: p } = await supabase.from("profiles").select("name, whatsapp, email").eq("id", lead.owner_user_id).single();
-        if (p) { vars.sdr = p.name || ""; vars.sdr_whatsapp = p.whatsapp || ""; vars.sdr_email = p.email || ""; vars.sdr_user_id = lead.owner_user_id; }
+        const { data: p } = await (supabase.from("profiles").select("name, whatsapp, email") as any).eq("id", lead.owner_user_id).single();
+        if (p) { vars.sdr = (p.name || "") as string; vars.sdr_whatsapp = (p.whatsapp || "") as string; vars.sdr_email = (p.email || "") as string; vars.sdr_user_id = lead.owner_user_id as string; }
       }
     }
   }
 
   if (project_id) {
-    const { data: project } = await supabase
+    const { data: project } = await (supabase
       .from("projects")
-      .select("client_name, dev_user_id, ux_po_user_id, treinamento_user_id, head_user_id, closer_user_id, sdr_user_id")
+      .select("client_name, dev_user_id, ux_po_user_id, treinamento_user_id, head_user_id, closer_user_id, sdr_user_id") as any)
       .eq("id", project_id)
       .single();
 
     if (project) {
-      if (!vars.empresa) vars.empresa = project.client_name || "";
+      if (!vars.empresa) vars.empresa = (project.client_name || "") as string;
       const roleUserMap: Record<string, string | null> = {
-        dev: project.dev_user_id,
-        ux_po: project.ux_po_user_id,
-        treinamento: project.treinamento_user_id,
-        head: project.head_user_id,
+        dev: project.dev_user_id as string | null,
+        ux_po: project.ux_po_user_id as string | null,
+        treinamento: project.treinamento_user_id as string | null,
+        head: project.head_user_id as string | null,
       };
-      if (!vars.closer && project.closer_user_id) roleUserMap.closer = project.closer_user_id;
-      if (!vars.sdr && project.sdr_user_id) roleUserMap.sdr = project.sdr_user_id;
+      if (!vars.closer && project.closer_user_id) roleUserMap.closer = project.closer_user_id as string;
+      if (!vars.sdr && project.sdr_user_id) roleUserMap.sdr = project.sdr_user_id as string;
 
       for (const [role, userId] of Object.entries(roleUserMap)) {
         if (userId && !vars[`${role}_whatsapp`]) {
-          const { data: p } = await supabase.from("profiles").select("name, whatsapp, email").eq("id", userId).single();
+          const { data: p } = await (supabase.from("profiles").select("name, whatsapp, email") as any).eq("id", userId).single();
           if (p) {
-            vars[role] = p.name || "";
-            vars[`${role}_whatsapp`] = p.whatsapp || "";
-            vars[`${role}_email`] = p.email || "";
+            vars[role] = (p.name || "") as string;
+            vars[`${role}_whatsapp`] = (p.whatsapp || "") as string;
+            vars[`${role}_email`] = (p.email || "") as string;
             vars[`${role}_user_id`] = userId;
           }
         }
@@ -567,56 +590,56 @@ async function resolveSDRMetrics(
     }).format(now);
 
     // Count meetings today (same source as the SDR Execution Dashboard)
-    const { data: todayMeetings } = await supabase
+    const { data: todayMeetings } = await (supabase
       .from("meetings")
-      .select("user_id")
+      .select("user_id") as any)
       .gte("created_at", startOfDay)
       .lte("created_at", endOfDay);
 
     const sdrCounts: Record<string, number> = {};
     let totalToday = 0;
-    for (const m of todayMeetings || []) {
+    for (const m of (todayMeetings || []) as any[]) {
       if (!m.user_id) continue;
-      sdrCounts[m.user_id] = (sdrCounts[m.user_id] || 0) + 1;
+      sdrCounts[m.user_id as string] = (sdrCounts[m.user_id as string] || 0) + 1;
       totalToday++;
     }
 
-    const { data: goals } = await supabase
+    const { data: goals } = await (supabase
       .from("goals")
-      .select("target_user_id, meetings_scheduled_goal")
+      .select("target_user_id, meetings_scheduled_goal") as any)
       .eq("goal_type", "sdr")
       .eq("period_month", parseInt(spMonth))
       .eq("period_year", parseInt(spYear))
       .not("target_user_id", "is", null);
 
-    const sdrIds = [...new Set([...Object.keys(sdrCounts), ...(goals || []).map((g: { target_user_id: string }) => g.target_user_id)])];
+    const sdrIds = [...new Set([...Object.keys(sdrCounts), ...((goals || []) as any[]).map((g: any) => g.target_user_id as string)])];
 
     if (sdrIds.length === 0) return;
 
-    const { data: profiles } = await supabase.from("profiles").select("id, name").in("id", sdrIds);
+    const { data: profiles } = await (supabase.from("profiles").select("id, name") as any).in("id", sdrIds);
     const nameMap: Record<string, string> = {};
-    for (const p of profiles || []) nameMap[p.id] = p.name || "Sem nome";
+    for (const p of (profiles || []) as any[]) nameMap[p.id as string] = (p.name || "Sem nome") as string;
 
     // Count meetings this month
     const startOfMonth = `${spYear}-${spMonth.padStart(2, "0")}-01T00:00:00-03:00`;
-    const { data: monthMeetings } = await supabase
+    const { data: monthMeetings } = await (supabase
       .from("meetings")
-      .select("user_id")
+      .select("user_id") as any)
       .gte("created_at", startOfMonth);
 
     const monthCounts: Record<string, number> = {};
     let totalMonth = 0;
-    for (const m of monthMeetings || []) {
+    for (const m of (monthMeetings || []) as any[]) {
       if (!m.user_id) continue;
-      monthCounts[m.user_id] = (monthCounts[m.user_id] || 0) + 1;
+      monthCounts[m.user_id as string] = (monthCounts[m.user_id as string] || 0) + 1;
       totalMonth++;
     }
 
     const goalMap: Record<string, number> = {};
     let totalGoal = 0;
-    for (const g of goals || []) {
-      goalMap[g.target_user_id] = g.meetings_scheduled_goal;
-      totalGoal += g.meetings_scheduled_goal;
+    for (const g of (goals || []) as any[]) {
+      goalMap[g.target_user_id as string] = g.meetings_scheduled_goal as number;
+      totalGoal += g.meetings_scheduled_goal as number;
     }
 
     const allSdrIds = [...new Set([...Object.keys(sdrCounts), ...Object.keys(goalMap)])];

@@ -1,11 +1,17 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useRoles } from '@/hooks/useRoles';
+import { useSystemConfig, useUpdateSystemConfig } from '@/hooks/useSystemConfig';
+import { useSystemUsers } from '@/hooks/useSystemUsers';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Label } from '@/components/ui/label';
-import { ShieldCheck, Lock, Loader2, Save, ChevronDown } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ShieldCheck, Lock, Loader2, Save, Settings } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import {
   Select,
   SelectContent,
@@ -13,6 +19,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+
+function useHeadPosVendaUsers() {
+  const { data: allUsers = [] } = useSystemUsers();
+  return useQuery({
+    queryKey: ['head-pos-venda-users'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'head_pos_venda' as any);
+      if (error) throw error;
+      return (data || []).map((r: { user_id: string }) => r.user_id);
+    },
+    staleTime: 5 * 60 * 1000,
+    select: (roleUserIds) => allUsers.filter((u) => roleUserIds.includes(u.id)),
+  });
+}
 
 const CATEGORY_LABELS: Record<string, string> = {
   navigation: 'Navegação',
@@ -33,6 +56,18 @@ export function PermissionsSection() {
     getRolePermissionIds,
     updateRolePermissions,
   } = useRoles();
+
+  // Head Pós-Venda config
+  const { data: currentHeadId, isLoading: loadingConfig } = useSystemConfig('default_head_user_id');
+  const { data: headUsers = [], isLoading: loadingUsers } = useHeadPosVendaUsers();
+  const updateConfig = useUpdateSystemConfig();
+  const [selectedHeadId, setSelectedHeadId] = useState<string>('');
+  useEffect(() => { if (currentHeadId && !selectedHeadId) setSelectedHeadId(currentHeadId); }, [currentHeadId, selectedHeadId]);
+  const isHeadDirty = selectedHeadId !== currentHeadId;
+  const handleSaveHead = useCallback(() => {
+    if (!selectedHeadId) return;
+    updateConfig.mutate({ key: 'default_head_user_id', value: selectedHeadId });
+  }, [selectedHeadId, updateConfig]);
 
   const [selectedRoleId, setSelectedRoleId] = useState<string>('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -178,6 +213,7 @@ export function PermissionsSection() {
           )}
         </div>
       </div>
+
 
       {/* Permission groups - full width grid */}
       {selectedRole && (

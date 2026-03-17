@@ -183,6 +183,7 @@ export function LeadActivityTimeline({ leadId, canEdit = true, leadData, opportu
       { onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['lead-tasks', leadId, opportunityId] });
         queryClient.invalidateQueries({ queryKey: ['lead-timeline-notes', leadId] });
+        queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
       }}
     );
   }, [updateTask, queryClient, leadId, opportunityId]);

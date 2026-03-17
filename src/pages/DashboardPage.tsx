@@ -5,7 +5,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { useMyTasks } from '@/hooks/useMyTasks';
 import { useDashboardCounts } from '@/hooks/useDashboardCounts';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useUserRole } from '@/hooks/useUserRole';
+
 import {
   Bell,
   ListTodo,
@@ -40,10 +40,9 @@ export default function DashboardPage() {
   const { data: tasks = [] } = useMyTasks();
   const { data: counts } = useDashboardCounts();
   const { hasPermission } = usePermissions();
-  const { canAccessBoth, isProjectRole } = useUserRole();
 
-  const canAccessCommercial = hasPermission('view_sdr_leads') || hasPermission('view_closer_pipeline') || canAccessBoth || !isProjectRole;
-  const canAccessProjects = hasPermission('view_projects') || canAccessBoth || isProjectRole;
+  const canAccessCommercial = hasPermission('view_sdr_leads') || hasPermission('view_closer_pipeline');
+  const canAccessProjects = hasPermission('view_projects');
 
   const pendingTasks = tasks.filter((t) => !isTaskCompleted(t));
   const overdueTasks = pendingTasks.filter(t => t.due_date && typeof t.due_date === 'string' && isPast(parseISO(t.due_date)));

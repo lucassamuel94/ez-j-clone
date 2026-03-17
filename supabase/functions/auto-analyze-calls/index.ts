@@ -121,10 +121,25 @@ Deno.serve(async (req) => {
       );
       const todayStr = `${spDate.getFullYear()}-${String(spDate.getMonth() + 1).padStart(2, "0")}-${String(spDate.getDate()).padStart(2, "0")}`;
 
+      // Fetch SDR user IDs (role-filtered)
+      const { data: sdrRoles } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "sdr");
+
+      const sdrUserIds = (sdrRoles || []).map((r: { user_id: string }) => r.user_id);
+      if (!sdrUserIds.length) {
+        console.log("[auto-analyze] No SDR users found");
+        return new Response(JSON.stringify({ message: "No SDRs with extensions" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       // Fetch SDRs with extensions
       const { data: sdrs, error: sdrError } = await supabase
         .from("profiles")
-        .select("id, full_name, email, ramal")
+        .select("id, name, ramal")
+        .in("id", sdrUserIds)
         .not("ramal", "is", null)
         .neq("ramal", "");
 
@@ -203,25 +218,30 @@ Deno.serve(async (req) => {
                 continue;
               }
 
-              // Dispatch transcription (fire-and-forget)
-              const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+              // Dispatch transcription (fire-and-forget, but mark error on failure)
               fetch(`${supabaseUrl}/functions/v1/transcribe-call`, {
                 method: "POST",
                 headers: {
-                  Authorization: `Bearer ${anonKey}`,
+                  Authorization: `Bearer ${serviceKey}`,
                   "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ analysisId: analysis.id }),
-              }).catch((e) => console.error(`[auto-analyze] Transcribe dispatch failed:`, e));
+                body: JSON.stringify({ analysis_id: analysis.id, audio_path: storagePath }),
+              }).catch(async (e) => {
+                console.error(`[auto-analyze] Transcribe dispatch failed:`, e);
+                await supabase.from("call_analyses").update({
+                  status: "error",
+                  feedback: `Falha ao despachar transcrição: ${e?.message || "erro de rede"}`,
+                }).eq("id", analysis.id);
+              });
 
               totalCreated++;
-              console.log(`[auto-analyze] Created analysis for SDR ${sdr.full_name}, call ${call.linkedid}`);
+              console.log(`[auto-analyze] Created analysis for SDR ${sdr.name}, call ${call.linkedid}`);
             } catch (callErr) {
               console.error(`[auto-analyze] Error processing call ${call.linkedid}:`, callErr);
             }
           }
         } catch (sdrErr) {
-          console.error(`[auto-analyze] Error processing SDR ${sdr.full_name}:`, sdrErr);
+          console.error(`[auto-analyze] Error processing SDR ${sdr.name}:`, sdrErr);
         }
       }
 

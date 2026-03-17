@@ -8,11 +8,13 @@ const hoursBetween = (date1: Date, date2: Date): number => {
 
 // Check if a lead is overdue
 export const isLeadOverdue = (lead: Lead): boolean => {
+  if (!lead.next_action_at) return false;
   return new Date(lead.next_action_at) < new Date();
 };
 
 // Calculate hours overdue (negative if not overdue)
 export const getHoursOverdue = (lead: Lead): number => {
+  if (!lead.next_action_at) return 0;
   const now = new Date();
   const nextAction = new Date(lead.next_action_at);
   return hoursBetween(now, nextAction) * (nextAction < now ? 1 : -1);
@@ -20,11 +22,12 @@ export const getHoursOverdue = (lead: Lead): number => {
 
 // Check if action is due today
 export const isDueToday = (lead: Lead): boolean => {
+  if (!lead.next_action_at) return false;
   const now = new Date();
   const nextAction = new Date(lead.next_action_at);
   const endOfToday = new Date(now);
   endOfToday.setHours(23, 59, 59, 999);
-  
+
   return nextAction >= now && nextAction <= endOfToday;
 };
 

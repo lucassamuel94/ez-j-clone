@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/AppLayout";
 import { ProjectDetailModal } from "@/components/projects/ProjectDetailModal";
 import { ProjectDeliveryDialog } from "@/components/projects/ProjectDeliveryDialog";
+import { PauseReasonDialog, type TransitionType } from "@/components/projects/PauseReasonDialog";
 
 // Wrapper that fetches full project data before opening DeliveryDialog
 function DeliveryDialogWithFullData({ open, onOpenChange, projectId, onDelivered }: {
@@ -35,7 +36,7 @@ import { PhaseKanbanCard } from "@/components/projects/PhaseKanbanCard";
 import { useUpdatePhaseStatus } from "@/hooks/useProjects";
 import { useSystemUsers } from "@/hooks/useSystemUsers";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 import { NewProjectDialog } from "@/components/projects/NewProjectDialog";
 import { ClickUpQuickImportDialog } from "@/components/projects/ClickUpQuickImportDialog";
 import { PHASE_LABELS, PHASE_STATUSES, PHASES_BY_TYPE, PRIORITY_LABELS, ProjectPriority, ProjectType } from "@/types/project";
@@ -265,9 +266,9 @@ const PhaseDetailPage = () => {
 
   const { data: systemUsers } = useSystemUsers();
   const { user: currentUser } = useCurrentUser();
-  const { role } = useUserRole();
+  const { hasPermission } = usePermissions();
   const { data: items, isLoading } = usePhaseDetail(phaseName, onlyMine, currentUser?.id);
-  const canCreateProject = role === 'admin' || role === 'head_pos_venda' || role === 'ux_po';
+  const canCreateProject = hasPermission('access_admin') || hasPermission('view_project_phases');
   const canImportClickup = true;
   const showCreateButton = canCreateProject && (phaseName === 'validacao' || phaseName === 'ux_po');
   const [userSearch, setUserSearch] = useState("");
@@ -500,7 +501,11 @@ const PhaseDetailPage = () => {
   const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
     if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverColumn(null);
   };
-  const executePhaseStatusUpdate = (item: PhaseDetailItem, targetStatus: string) => {
+  const [pauseReasonOpen, setPauseReasonOpen] = useState(false);
+  const [pauseReasonType, setPauseReasonType] = useState<TransitionType>("pause");
+  const [pendingPauseItem, setPendingPauseItem] = useState<{ item: PhaseDetailItem; targetStatus: string } | null>(null);
+
+  const executePhaseStatusUpdate = (item: PhaseDetailItem, targetStatus: string, reason?: string) => {
     setTransitioning(true);
     updatePhaseStatus.mutate(
       {
@@ -509,6 +514,7 @@ const PhaseDetailPage = () => {
         phaseName: item.phase_name,
         newStatus: targetStatus,
         oldStatus: item.status,
+        reason,
       },
       {
         onSuccess: () => {
@@ -523,6 +529,23 @@ const PhaseDetailPage = () => {
         },
       },
     );
+  };
+
+  const executeWithPauseCheck = (item: PhaseDetailItem, targetStatus: string) => {
+    const upper = targetStatus.toUpperCase();
+    if (["PAUSADO", "EM PAUSA"].includes(upper)) {
+      setPendingPauseItem({ item, targetStatus });
+      setPauseReasonType("pause");
+      setPauseReasonOpen(true);
+      return;
+    }
+    if (upper === "CANCELADO") {
+      setPendingPauseItem({ item, targetStatus });
+      setPauseReasonType("cancel");
+      setPauseReasonOpen(true);
+      return;
+    }
+    executePhaseStatusUpdate(item, targetStatus);
   };
 
   const handleDeliveryCompleted = () => {
@@ -559,7 +582,7 @@ const PhaseDetailPage = () => {
       }
     }
 
-    executePhaseStatusUpdate(item, targetStatus);
+    executeWithPauseCheck(item, targetStatus);
   };
 
   const toggleSortDir = () => setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -1093,6 +1116,22 @@ const PhaseDetailPage = () => {
           />
         </div>
       </div>
+
+      <PauseReasonDialog
+        open={pauseReasonOpen}
+        type={pauseReasonType}
+        onConfirm={(reason) => {
+          setPauseReasonOpen(false);
+          if (pendingPauseItem) {
+            executePhaseStatusUpdate(pendingPauseItem.item, pendingPauseItem.targetStatus, reason);
+            setPendingPauseItem(null);
+          }
+        }}
+        onCancel={() => {
+          setPauseReasonOpen(false);
+          setPendingPauseItem(null);
+        }}
+      />
     </AppLayout>
   );
 };

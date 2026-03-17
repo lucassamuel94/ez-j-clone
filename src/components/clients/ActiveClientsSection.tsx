@@ -53,7 +53,7 @@ import { MoreHorizontal } from "lucide-react";
 import { useActiveClients } from "@/hooks/useActiveClients";
 import { useClientDeals } from "@/hooks/useClientDeals";
 import { useSystemUsers } from "@/hooks/useSystemUsers";
-import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 import { ClientImportDialog } from "./ClientImportDialog";
 import { ClientDetailModal } from "./ClientDetailModal";
 import { NewDealFromClientDialog } from "@/components/closer/NewDealFromClientDialog";
@@ -193,7 +193,8 @@ export function ActiveClientsSection() {
   const navigate = useNavigate();
   const { data: clients = [], isLoading, importClients, deleteClient, updateOwner, refetch } = useActiveClients(search);
   const { data: systemUsers = [] } = useSystemUsers();
-  const { isAdmin, isManager, canAccessBoth } = useUserRole();
+  const { hasPermission } = usePermissions();
+  const canAccessBoth = hasPermission('access_admin');
 
   // Collect CNPJs for deals lookup
   const clientCnpjs = useMemo(() => clients.map(c => c.cnpj).filter(Boolean) as string[], [clients]);
@@ -580,8 +581,8 @@ export function ActiveClientsSection() {
                 value={st}
                 onValueChange={async (val) => {
                   const { error } = await supabase
-                    .from('active_clients' as any)
-                    .update({ status: val } as any)
+                    .from('accounts')
+                    .update({ status: val })
                     .eq('id', row.original.id);
                   if (error) {
                     toast.error('Erro ao atualizar status');

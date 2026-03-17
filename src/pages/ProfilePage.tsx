@@ -156,9 +156,10 @@ const ProfilePage = () => {
     );
   }
 
-  const initials = user?.name
+  const initials = (user?.name || '')
     .split(' ')
-    .map((n) => n[0])
+    .map((n: string) => n[0])
+    .filter(Boolean)
     .join('')
     .toUpperCase()
     .slice(0, 2) || 'U';

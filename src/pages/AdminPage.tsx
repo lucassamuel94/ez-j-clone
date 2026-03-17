@@ -23,9 +23,7 @@ import { PageHeader } from '@/components/PageHeader';
 
 const AdminPage = () => {
   const {
-    isAdmin,
     isCheckingAdmin,
-    isManager,
     isCheckingManager,
     users,
     isLoadingUsers,
@@ -41,7 +39,7 @@ const AdminPage = () => {
 
   const { hasPermission, isLoading: isLoadingPerms } = usePermissions();
 
-  const canAccess = isAdmin || isManager;
+  const canAccess = hasPermission('access_admin');
 
   if (isCheckingAdmin || isCheckingManager || isLoadingPerms) {
     return (
@@ -102,14 +100,16 @@ const AdminPage = () => {
       </div>
 
       <div className="container mx-auto px-4 py-6">
-        <Tabs defaultValue={isAdmin ? "reports" : hasPermission('access_call_intelligence') ? "call-intelligence" : "roles"} className="space-y-6">
+        <Tabs defaultValue={hasPermission('view_reports') ? "reports" : hasPermission('access_call_intelligence') ? "call-intelligence" : "roles"} className="space-y-6">
           <TabsList className="flex-wrap">
-            {isAdmin && (
+            {hasPermission('view_reports') && (
+              <TabsTrigger value="reports" className="gap-2">
+                <BarChart3 className="h-4 w-4" />
+                Relatórios
+              </TabsTrigger>
+            )}
+            {hasPermission('manage_users') && (
               <>
-                <TabsTrigger value="reports" className="gap-2">
-                  <BarChart3 className="h-4 w-4" />
-                  Relatórios
-                </TabsTrigger>
                 <TabsTrigger value="users" className="gap-2">
                   <Users className="h-4 w-4" />
                   Usuários
@@ -120,55 +120,55 @@ const AdminPage = () => {
                 </TabsTrigger>
               </>
             )}
-            {(isAdmin || hasPermission('manage_goals')) && (
+            {hasPermission('manage_goals') && (
               <TabsTrigger value="goals" className="gap-2">
                 <Target className="h-4 w-4" />
                 Metas
               </TabsTrigger>
             )}
-            {(isAdmin || hasPermission('manage_import')) && (
+            {hasPermission('manage_import') && (
               <TabsTrigger value="import" className="gap-2">
                 <FileSpreadsheet className="h-4 w-4" />
                 Importação
               </TabsTrigger>
             )}
-            {(isAdmin || hasPermission('manage_products')) && (
+            {hasPermission('manage_products') && (
               <TabsTrigger value="products" className="gap-2">
                 <Package className="h-4 w-4" />
                 Produtos
               </TabsTrigger>
             )}
-            {(isAdmin || hasPermission('manage_ai')) && (
+            {hasPermission('manage_ai') && (
               <TabsTrigger value="ai" className="gap-2">
                 <Bot className="h-4 w-4" />
                 IA
               </TabsTrigger>
             )}
-            {(isAdmin || hasPermission('manage_enrichment')) && (
+            {hasPermission('manage_enrichment') && (
               <TabsTrigger value="enrich" className="gap-2">
                 <Database className="h-4 w-4" />
                 Enriquecimento
               </TabsTrigger>
             )}
-            {(isAdmin || hasPermission('manage_email_templates')) && (
+            {hasPermission('manage_email_templates') && (
               <TabsTrigger value="email-templates" className="gap-2">
                 <MailPlus className="h-4 w-4" />
                 E-mail
               </TabsTrigger>
             )}
-            {(isAdmin || isManager || hasPermission('access_call_intelligence')) && (
+            {hasPermission('access_call_intelligence') && (
               <TabsTrigger value="call-intelligence" className="gap-2">
                 <Headphones className="h-4 w-4" />
                 Call Intelligence
               </TabsTrigger>
             )}
-            {(isAdmin || hasPermission('manage_roles')) && (
+            {hasPermission('manage_roles') && (
               <TabsTrigger value="roles" className="gap-2">
                 <ShieldCheck className="h-4 w-4" />
                 Perfis
               </TabsTrigger>
             )}
-            {isAdmin && (
+            {hasPermission('manage_embed_form') && (
               <TabsTrigger value="embed-form" className="gap-2" asChild>
                 <Link to="/embed-form">
                   <Code2 className="h-4 w-4" />
@@ -178,101 +178,97 @@ const AdminPage = () => {
             )}
           </TabsList>
 
-          {isAdmin && (
-            <>
-              <TabsContent value="reports" className="space-y-4">
-                <ReportsSection />
-              </TabsContent>
+          <TabsContent value="reports" className="space-y-4">
+            <ReportsSection />
+          </TabsContent>
 
-              <TabsContent value="users" className="space-y-4">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                      <CardTitle>Gerenciamento de Usuários</CardTitle>
-                      <CardDescription>
-                        Gerencie os usuários da plataforma, seus papéis e status.
-                      </CardDescription>
-                    </div>
-                    <InviteUserDialog
-                      onInvite={(email, role, roleId, teamId) => createInvitation.mutate({ email, role, roleId, teamId })}
-                      isLoading={createInvitation.isPending}
-                    />
-                  </CardHeader>
-                  <CardContent>
-                    {isLoadingUsers ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : (
-                      <UserManagementTable
-                        users={users}
-                        roles={availableRoles}
-                        onToggleActive={(userId, active) => toggleUserActive.mutate({ userId, active })}
-                        onUpdateRole={(userId, roleId) => updateUserRole.mutate({ userId, roleId })}
-                        onUpdateName={(userId, name) => updateUserName.mutate({ userId, name })}
-                        isUpdating={toggleUserActive.isPending || updateUserRole.isPending || updateUserName.isPending}
-                      />
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
+          <TabsContent value="users" className="space-y-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Gerenciamento de Usuários</CardTitle>
+                  <CardDescription>
+                    Gerencie os usuários da plataforma, seus papéis e status.
+                  </CardDescription>
+                </div>
+                <InviteUserDialog
+                  onInvite={(email, role, roleId, teamId) => createInvitation.mutate({ email, role, roleId, teamId })}
+                  isLoading={createInvitation.isPending}
+                />
+              </CardHeader>
+              <CardContent>
+                {isLoadingUsers ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <UserManagementTable
+                    users={users}
+                    roles={availableRoles}
+                    onToggleActive={(userId, active) => toggleUserActive.mutate({ userId, active })}
+                    onUpdateRole={(userId, roleId) => updateUserRole.mutate({ userId, roleId })}
+                    onUpdateName={(userId, name) => updateUserName.mutate({ userId, name })}
+                    isUpdating={toggleUserActive.isPending || updateUserRole.isPending || updateUserName.isPending}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-              <TabsContent value="invitations" className="space-y-4">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                      <CardTitle>Convites Pendentes</CardTitle>
-                      <CardDescription>
-                        Gerencie os convites enviados que ainda não foram aceitos.
-                      </CardDescription>
-                    </div>
-                    <InviteUserDialog
-                      onInvite={(email, role, roleId, teamId) => createInvitation.mutate({ email, role, roleId, teamId })}
-                      isLoading={createInvitation.isPending}
-                    />
-                  </CardHeader>
-                  <CardContent>
-                    {isLoadingInvitations ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : (
-                      <PendingInvitationsTable
-                        invitations={invitations}
-                        onDelete={(invitationId) => deleteInvitation.mutate(invitationId)}
-                        isDeleting={deleteInvitation.isPending}
-                      />
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
+          <TabsContent value="invitations" className="space-y-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Convites Pendentes</CardTitle>
+                  <CardDescription>
+                    Gerencie os convites enviados que ainda não foram aceitos.
+                  </CardDescription>
+                </div>
+                <InviteUserDialog
+                  onInvite={(email, role, roleId, teamId) => createInvitation.mutate({ email, role, roleId, teamId })}
+                  isLoading={createInvitation.isPending}
+                />
+              </CardHeader>
+              <CardContent>
+                {isLoadingInvitations ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <PendingInvitationsTable
+                    invitations={invitations}
+                    onDelete={(invitationId) => deleteInvitation.mutate(invitationId)}
+                    isDeleting={deleteInvitation.isPending}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-              <TabsContent value="goals" className="space-y-4">
-                <GoalsSection />
-              </TabsContent>
+          <TabsContent value="goals" className="space-y-4">
+            <GoalsSection />
+          </TabsContent>
 
-              <TabsContent value="import" className="space-y-4">
-                <MailingImportSection />
-              </TabsContent>
+          <TabsContent value="import" className="space-y-4">
+            <MailingImportSection />
+          </TabsContent>
 
-              <TabsContent value="products" className="space-y-4">
-                <ProductLibrarySection />
-              </TabsContent>
+          <TabsContent value="products" className="space-y-4">
+            <ProductLibrarySection />
+          </TabsContent>
 
-              <TabsContent value="ai" className="space-y-4">
-                <AIPromptsSection />
-              </TabsContent>
+          <TabsContent value="ai" className="space-y-4">
+            <AIPromptsSection />
+          </TabsContent>
 
-              <TabsContent value="enrich" className="space-y-4">
-                <BulkEnrichSection />
-                <DatabaseStatsSection />
-              </TabsContent>
+          <TabsContent value="enrich" className="space-y-4">
+            <BulkEnrichSection />
+            <DatabaseStatsSection />
+          </TabsContent>
 
-              <TabsContent value="email-templates" className="space-y-4">
-                <EmailTemplatesManager />
-              </TabsContent>
-            </>
-          )}
+          <TabsContent value="email-templates" className="space-y-4">
+            <EmailTemplatesManager />
+          </TabsContent>
 
           <TabsContent value="call-intelligence" className="space-y-4">
             <CallIntelligenceSection />

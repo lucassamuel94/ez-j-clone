@@ -52,7 +52,6 @@ const ProposalReviewPage = () => {
     estimated_messages: 0,
     meta_cost: 0,
     total_monthly: 0,
-    setup_total: 0,
     setup_payment_method: 'pix',
     setup_installments: 1,
     contract_months: 12,
@@ -141,7 +140,6 @@ const ProposalReviewPage = () => {
           estimated_messages: p.estimated_messages,
           meta_cost: p.meta_cost,
           total_monthly: p.total_monthly,
-          setup_total: p.setup_total,
           setup_payment_method: p.setup_payment_method,
           setup_installments: p.setup_installments,
           contract_months: p.contract_months,
@@ -168,12 +166,8 @@ const ProposalReviewPage = () => {
     if (!id) return;
     setSaving(true);
     try {
-      await saveProposal(id, editFields, computedSetupTotal);
+      await saveProposal(id, editFields, computedSetupTotal, proposal?.status);
       toast.success('Proposta salva com sucesso!');
-      const url = `${window.location.origin}/proposal-preview/${id}`;
-      navigator.clipboard.writeText(url).then(() => {
-        toast.success('Link da proposta copiado!', { duration: 3000 });
-      }).catch(() => {});
       if (window.history.length > 2) {
         navigate(-1);
       } else {
@@ -228,7 +222,12 @@ const ProposalReviewPage = () => {
               subtitle={proposal.company_name}
               badges={
                 <Badge variant={proposal.status === 'draft' ? 'secondary' : 'default'}>
-                  {proposal.status === 'draft' ? 'Rascunho' : proposal.status}
+                  {proposal.status === 'draft' ? 'Rascunho'
+                    : proposal.status === 'sent' ? 'Enviada'
+                    : proposal.status === 'viewed' ? 'Visualizada'
+                    : proposal.status === 'accepted' ? 'Aceita'
+                    : proposal.status === 'rejected' ? 'Recusada'
+                    : proposal.status}
                 </Badge>
               }
               actions={

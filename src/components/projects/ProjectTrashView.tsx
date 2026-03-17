@@ -19,13 +19,14 @@ import { formatDistanceToNow, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { PROJECT_TYPE_LABELS, ProjectType } from "@/types/project";
 import { cn } from "@/lib/utils";
-import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export function ProjectTrashView() {
   const { data: deletedProjects, isLoading } = useDeletedProjects();
   const restoreMutation = useRestoreProject();
   const permanentDeleteMutation = usePermanentDeleteProject();
-  const { isAdmin } = useUserRole();
+  const { hasPermission } = usePermissions();
+  const isAdmin = hasPermission('access_admin');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   if (isLoading) {

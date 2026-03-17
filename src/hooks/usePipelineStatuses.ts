@@ -21,9 +21,9 @@ const SDR_FALLBACK = [
 ];
 
 const CLOSER_FALLBACK = [
-  'Demonstração', 'Proposta enviada', 'Oportunidade quente',
-  'Oportunidade Futura', 'Oportunidade fria', 'Contrato enviado',
-  'Aguardando pagamento', 'Ganho', 'Perdido',
+  'Demonstração', 'Apresentar proposta', 'Proposta enviada', 'Negociação',
+  'Oportunidade Quente', 'Oportunidade Futura', 'Oportunidade Fria',
+  'Contrato enviado', 'Aguardando pagamento', 'Ganho', 'Perdido',
 ];
 
 const API_OFICIAL_FALLBACK = [

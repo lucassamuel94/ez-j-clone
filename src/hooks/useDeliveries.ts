@@ -92,6 +92,7 @@ export function useDeleteDelivery() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
+      queryClient.invalidateQueries({ queryKey: ['integrations-catalog'] });
       toast.success('Entrega excluída com sucesso');
     },
     onError: () => {

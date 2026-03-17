@@ -33,6 +33,8 @@ export interface CallAnalysis {
   completed_at: string | null;
   media_type: 'audio' | 'video';
   analysis_context: 'sdr_call' | 'demo_closer';
+  share_token: string | null;
+  converted_to_sale: boolean;
   // joined
   sdr_profile?: { name: string } | null;
   lead_data?: { name: string; company: string } | null;
@@ -46,7 +48,7 @@ interface UploadParams {
   analysis_context?: 'sdr_call' | 'demo_closer';
 }
 
-export const useCallAnalyses = (filters?: { sdr_user_id?: string; month?: number; year?: number; dateFrom?: string; dateTo?: string }) => {
+export const useCallAnalyses = (filters?: { sdr_user_id?: string; month?: number; year?: number; dateFrom?: string; dateTo?: string; analysis_context?: 'sdr_call' | 'demo_closer' }) => {
   const queryClient = useQueryClient();
 
   const queryResult = useQuery({
@@ -59,6 +61,9 @@ export const useCallAnalyses = (filters?: { sdr_user_id?: string; month?: number
 
       if (filters?.sdr_user_id) {
         query = query.eq('sdr_user_id', filters.sdr_user_id);
+      }
+      if (filters?.analysis_context) {
+        query = query.eq('analysis_context', filters.analysis_context);
       }
       if (filters?.month && filters?.year) {
         const start = new Date(filters.year, filters.month - 1, 1).toISOString();
@@ -105,10 +110,11 @@ export const useCallAnalyses = (filters?: { sdr_user_id?: string; month?: number
     },
   });
 
-  // Realtime subscription
+  // Realtime subscription — re-subscribe when filters change
   useEffect(() => {
+    const channelName = `call-analyses-realtime-${JSON.stringify(filters)}`;
     const channel = supabase
-      .channel('call-analyses-realtime')
+      .channel(channelName)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'call_analyses' }, () => {
         queryClient.invalidateQueries({ queryKey: ['call-analyses'] });
       })
@@ -118,7 +124,7 @@ export const useCallAnalyses = (filters?: { sdr_user_id?: string; month?: number
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [queryClient]);
+  }, [queryClient, filters]);
 
   return queryResult;
 };
@@ -242,6 +248,56 @@ export const useUpdateCallAnalysisLead = () => {
   });
 };
 
+/**
+ * Retry analysis for records stuck in 'error' or 'transcribed' status.
+ * If transcription exists, calls analyze-call/analyze-demo directly.
+ * Otherwise restarts from transcription.
+ */
+export const useRetryAnalysis = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (analysis: CallAnalysis) => {
+      const hasTranscription = !!analysis.transcribed_at || !!analysis.transcription;
+
+      if (hasTranscription) {
+        // Transcription exists — go straight to AI analysis
+        await (supabase
+          .from('call_analyses' as any)
+          .update({ status: 'processing' } as any) as any)
+          .eq('id', analysis.id);
+
+        const fnName = analysis.analysis_context === 'demo_closer' ? 'analyze-demo' : 'analyze-call';
+        const { error } = await supabase.functions.invoke(fnName, {
+          body: { analysis_id: analysis.id },
+        });
+        if (error) throw new Error(`Erro ao chamar ${fnName}: ${error.message}`);
+      } else {
+        // No transcription — restart from scratch (reset retry count)
+        await (supabase
+          .from('call_analyses' as any)
+          .update({ status: 'processing', feedback: null, worker_retry_count: 0 } as any) as any)
+          .eq('id', analysis.id);
+
+        const fnName = analysis.media_type === 'video' ? 'transcribe-video' : 'transcribe-call';
+        const { error } = await supabase.functions.invoke(fnName, {
+          body: { analysis_id: analysis.id, audio_path: analysis.audio_path },
+        });
+        if (error) throw new Error(`Erro ao chamar ${fnName}: ${error.message}`);
+      }
+
+      return analysis.id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['call-analyses'] });
+      toast.success('Reanálise iniciada!');
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+};
+
 export const useDeleteCallAnalysis = () => {
   const queryClient = useQueryClient();
 
@@ -263,22 +319,144 @@ export const useDeleteCallAnalysis = () => {
   });
 };
 
-export const useCallAnalysisStats = (sdrUserId?: string) => {
+export const useCallAnalysisStats = (
+  sdrUserId?: string,
+  analysisContext?: 'sdr_call' | 'demo_closer',
+) => {
   return useQuery({
-    queryKey: ['call-analysis-stats', sdrUserId],
+    queryKey: ['call-analysis-stats', sdrUserId, analysisContext],
     queryFn: async () => {
       let query = supabase
         .from('call_analyses' as any)
-        .select('call_score, next_step_defined, conversion_potential, objections, sdr_user_id, created_at, interest_level')
+        .select('call_score, next_step_defined, conversion_potential, objections, sdr_user_id, created_at, interest_level, analysis_context')
         .eq('status', 'completed');
 
-      if (sdrUserId) {
-        query = query.eq('sdr_user_id', sdrUserId);
-      }
+      if (sdrUserId) query = query.eq('sdr_user_id', sdrUserId);
+      if (analysisContext) query = query.eq('analysis_context', analysisContext);
 
       const { data, error } = await query;
       if (error) throw error;
       return (data || []) as any[];
+    },
+  });
+};
+
+export const useShareCallAnalysis = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (analysis: { id: string; share_token: string | null }) => {
+      if (analysis.share_token) return analysis.share_token;
+      const token = crypto.randomUUID();
+      const { error } = await (supabase
+        .from('call_analyses' as any)
+        .update({ share_token: token } as any) as any)
+        .eq('id', analysis.id);
+      if (error) throw new Error(`Erro ao compartilhar: ${error.message}`);
+      return token;
+    },
+    onSuccess: (token) => {
+      const url = `${window.location.origin}/call-analysis/share/${token}`;
+      navigator.clipboard.writeText(url).catch(() => {});
+      toast.success('Link copiado para a área de transferência!');
+      queryClient.invalidateQueries({ queryKey: ['call-analyses'] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+};
+
+export const useRevokeCallAnalysisShare = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (analysisId: string) => {
+      const { error } = await (supabase
+        .from('call_analyses' as any)
+        .update({ share_token: null } as any) as any)
+        .eq('id', analysisId);
+      if (error) throw new Error(`Erro ao revogar: ${error.message}`);
+    },
+    onSuccess: () => {
+      toast.success('Compartilhamento revogado.');
+      queryClient.invalidateQueries({ queryKey: ['call-analyses'] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+};
+
+export const usePublicCallAnalysis = (token: string | undefined) => {
+  return useQuery({
+    queryKey: ['public-call-analysis', token],
+    enabled: !!token,
+    queryFn: async () => {
+      const { data, error } = await (supabase
+        .from('call_analyses' as any)
+        .select('*') as any)
+        .eq('share_token', token)
+        .single();
+      if (error) throw error;
+      const row = data as any;
+
+      // Enrich with profile/lead names
+      const [{ data: profile }, { data: lead }] = await Promise.all([
+        row.sdr_user_id
+          ? supabase.from('profiles').select('id, name').eq('id', row.sdr_user_id).single()
+          : Promise.resolve({ data: null }),
+        row.lead_id
+          ? supabase.from('leads').select('id, name, company').eq('id', row.lead_id).single()
+          : Promise.resolve({ data: null }),
+      ]);
+
+      return {
+        ...row,
+        sdr_profile: profile ? { name: (profile as any).name } : null,
+        lead_data: lead ? { name: (lead as any).name, company: (lead as any).company } : null,
+      } as CallAnalysis;
+    },
+  });
+};
+
+export const useToggleConvertedToSale = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
+      const { error } = await (supabase
+        .from('call_analyses' as any)
+        .update({ converted_to_sale: value } as any) as any)
+        .eq('id', id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: (_, { value }) => {
+      queryClient.invalidateQueries({ queryKey: ['call-analyses'] });
+      toast.success(value ? 'Análise marcada como venda!' : 'Marcação de venda removida.');
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+};
+
+export const useBulkDeleteCallAnalyses = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await (supabase
+        .from('call_analyses' as any)
+        .delete() as any)
+        .in('id', ids);
+      if (error) throw new Error(`Erro ao excluir: ${error.message}`);
+      return ids;
+    },
+    onSuccess: (ids) => {
+      queryClient.invalidateQueries({ queryKey: ['call-analyses'] });
+      toast.success(`${ids.length} análise${ids.length > 1 ? 's' : ''} removida${ids.length > 1 ? 's' : ''} com sucesso.`);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
     },
   });
 };

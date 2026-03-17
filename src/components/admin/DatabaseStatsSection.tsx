@@ -25,6 +25,7 @@ interface DbStats {
   semNomeFantasia: number;
   semTelefone: number;
   semEnriquecimentoIA: number;
+  semPerplexity: number;
   semEmail: number;
   semSegmento: number;
   semCnae: number;
@@ -128,6 +129,7 @@ export const DatabaseStatsSection = ({ externalTeamFilter, externalUserIds, exte
         { count: semNomeFantasia },
         { count: semTelefone },
         { count: semEnriquecimentoIA },
+        { count: semPerplexity },
         { count: semEmail },
         { count: semSegmento },
         { count: semCnae },
@@ -141,6 +143,7 @@ export const DatabaseStatsSection = ({ externalTeamFilter, externalUserIds, exte
         buildQuery().or('nome_fantasia.is.null,nome_fantasia.eq.'),
         buildQuery().or('phone.is.null,phone.eq.'),
         buildQuery().is('ai_enrichment_data', null),
+        buildQuery().not('cnpj', 'is', null).neq('cnpj', '').is('ai_enrichment_data', null),
         buildQuery().or('email.is.null,email.eq.'),
         buildQuery().or('company_segment.is.null,company_segment.eq.'),
         buildQuery().or('cnae_fiscal_descricao.is.null,cnae_fiscal_descricao.eq.'),
@@ -156,6 +159,7 @@ export const DatabaseStatsSection = ({ externalTeamFilter, externalUserIds, exte
         semNomeFantasia: semNomeFantasia ?? 0,
         semTelefone: semTelefone ?? 0,
         semEnriquecimentoIA: semEnriquecimentoIA ?? 0,
+        semPerplexity: semPerplexity ?? 0,
         semEmail: semEmail ?? 0,
         semSegmento: semSegmento ?? 0,
         semCnae: semCnae ?? 0,
@@ -214,6 +218,8 @@ export const DatabaseStatsSection = ({ externalTeamFilter, externalUserIds, exte
         return q.or('email.is.null,email.eq.');
       case 'semEnriquecimentoIA':
         return q.is('ai_enrichment_data', null);
+      case 'semPerplexity':
+        return q.not('cnpj', 'is', null).neq('cnpj', '').is('ai_enrichment_data', null);
       case 'semSegmento':
         return q.or('company_segment.is.null,company_segment.eq.');
       case 'semCnae':
@@ -468,6 +474,7 @@ export const DatabaseStatsSection = ({ externalTeamFilter, externalUserIds, exte
     { label: 'Sem Telefone', value: stats.semTelefone, icon: Phone, color: 'text-destructive', key: 'semTelefone' },
     { label: 'Sem Email', value: stats.semEmail, icon: Users, color: 'text-destructive', key: 'semEmail' },
     { label: 'Sem Enriquecimento IA', value: stats.semEnriquecimentoIA, icon: Brain, color: 'text-primary', key: 'semEnriquecimentoIA' },
+    { label: 'Pendentes Perplexity (com CNPJ)', value: stats.semPerplexity, icon: Brain, color: 'text-amber-500', key: 'semPerplexity' },
     { label: 'Sem Segmento', value: stats.semSegmento, icon: BarChart3, color: 'text-info', key: 'semSegmento' },
     { label: 'Sem CNAE', value: stats.semCnae, icon: BarChart3, color: 'text-info', key: 'semCnae' },
     { label: 'Sem Cidade', value: stats.semCidade, icon: MapPin, color: 'text-info', key: 'semCidade' },

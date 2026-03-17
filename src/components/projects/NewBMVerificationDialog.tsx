@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { PhoneInput } from '@/components/PhoneInput';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { ShieldCheck, Plus, Loader2, Building2, User, CheckCircle2 } from 'lucide-react';
 import { BrokerType } from '@/types/project';
 import { useSystemUsers } from '@/hooks/useSystemUsers';
@@ -25,11 +25,59 @@ interface Props {
 
 type FieldErrors = Record<string, string>;
 
+/** Fetch user_ids grouped by display role name (roles table + user_roles.role_id) */
+const useUsersByDisplayRole = () => {
+  return useQuery({
+    queryKey: ['users-by-display-role'],
+    queryFn: async () => {
+      // Fetch both tables in parallel since there's no FK relationship
+      const [rolesRes, userRolesRes] = await Promise.all([
+        supabase.from('roles').select('id, name'),
+        supabase.from('user_roles').select('user_id, role_id'),
+      ]);
+
+      if (rolesRes.error) throw rolesRes.error;
+      if (userRolesRes.error) throw userRolesRes.error;
+
+      const roleNameById = new Map<string, string>();
+      for (const r of rolesRes.data || []) {
+        roleNameById.set(r.id, r.name);
+      }
+
+      const map = new Map<string, Set<string>>();
+      for (const row of (userRolesRes.data || []) as Array<{ user_id: string; role_id: string | null }>) {
+        const roleName = row.role_id ? roleNameById.get(row.role_id) : null;
+        if (!roleName) continue;
+        if (!map.has(roleName)) map.set(roleName, new Set());
+        map.get(roleName)!.add(row.user_id);
+      }
+      return map;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
 export function NewBMVerificationDialog({ open, onOpenChange }: Props) {
   const queryClient = useQueryClient();
   const { data: systemUsers = [] } = useSystemUsers();
+  const { data: roleMap } = useUsersByDisplayRole();
   const { searchByCnpj, isSearching: isCnpjSearching } = useCnpjaSearch();
   const [saving, setSaving] = useState(false);
+
+  // Filtered user lists
+  const executivoUsers = useMemo(() => {
+    if (!roleMap) return systemUsers;
+    const closerIds = roleMap.get('Closer') || new Set();
+    const adminIds = roleMap.get('Administrador') || new Set();
+    const managerIds = roleMap.get('Gerente') || new Set();
+    return systemUsers.filter(u => closerIds.has(u.id) || adminIds.has(u.id) || managerIds.has(u.id));
+  }, [systemUsers, roleMap]);
+
+  const verificacaoUsers = useMemo(() => {
+    if (!roleMap) return [];
+    const bmIds = roleMap.get('Verificação BM') || new Set();
+    return systemUsers.filter(u => bmIds.has(u.id));
+  }, [systemUsers, roleMap]);
 
   // Form fields
   const [cnpj, setCnpj] = useState('');
@@ -390,7 +438,7 @@ export function NewBMVerificationDialog({ open, onOpenChange }: Props) {
                   <Select value={executivo} onValueChange={setExecutivo}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Selecione o executivo..." /></SelectTrigger>
                     <SelectContent>
-                      {systemUsers.map((u) => (
+                      {executivoUsers.map((u) => (
                         <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -401,7 +449,7 @@ export function NewBMVerificationDialog({ open, onOpenChange }: Props) {
                   <Select value={responsavelVerificacao} onValueChange={setResponsavelVerificacao}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Selecione o responsável..." /></SelectTrigger>
                     <SelectContent>
-                      {systemUsers.map((u) => (
+                      {verificacaoUsers.map((u) => (
                         <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
                       ))}
                     </SelectContent>

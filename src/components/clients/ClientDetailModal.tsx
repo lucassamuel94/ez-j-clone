@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Building2,
   User,
@@ -34,17 +35,20 @@ import {
   X,
   AlertTriangle,
   ClipboardCheck,
+  Headphones,
 } from "lucide-react";
 import { MAX_EVOLUTIONS_BEFORE_WARNING } from "@/services/closerService";
 import { ActiveClient } from "@/hooks/useActiveClients";
 import { useClientDeals, ClientDeal, ClientApiOficialDeal } from "@/hooks/useClientDeals";
 import { formatDateBR } from "@/utils/dateFormat";
 import { useSystemUsers } from "@/hooks/useSystemUsers";
-import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 import { updateActiveClient } from "@/services/clientService";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useClientCallAnalyses } from "@/hooks/useClientCallAnalyses";
+import { ClientCallIntelligenceTab } from "./ClientCallIntelligenceTab";
 
 const STATUS_CONFIG: Record<string, { label: string; dot: string; badge: string }> = {
   ativo: {
@@ -70,7 +74,8 @@ interface Props {
 export function ClientDetailModal({ client, open, onOpenChange, onUpdated }: Props) {
   const navigate = useNavigate();
   const { data: systemUsers = [] } = useSystemUsers();
-  const { canAccessBoth } = useUserRole();
+  const { hasPermission } = usePermissions();
+  const canAccessBoth = hasPermission('access_admin');
 
   const cnpjs = useMemo(() => (client?.cnpj ? [client.cnpj] : []), [client?.cnpj]);
   const { data: clientDealsData } = useClientDeals(cnpjs);
@@ -102,6 +107,9 @@ export function ClientDetailModal({ client, open, onOpenChange, onUpdated }: Pro
     if (!client?.cnpj || !clientDealsData) return [];
     return clientDealsData.apiOficialMap.get(client.cnpj.replace(/\D/g, "")) || [];
   }, [client?.cnpj, clientDealsData]);
+
+  const { data: callAnalyses } = useClientCallAnalyses(client?.id);
+  const callAnalysesCount = callAnalyses?.length ?? 0;
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<ActiveClient>>({});
@@ -272,8 +280,26 @@ export function ClientDetailModal({ client, open, onOpenChange, onUpdated }: Pro
           </div>
         </div>
 
-        {/* ─── Body ─── */}
-        <ScrollArea className="flex-1" style={{ maxHeight: "calc(90vh - 200px)" }}>
+        {/* ─── Tabs ─── */}
+        <Tabs defaultValue="dados" className="flex-1 flex flex-col overflow-hidden">
+          <div className="px-6 pt-3 pb-0 border-b border-border">
+            <TabsList className="h-9 bg-transparent p-0 gap-4">
+              <TabsTrigger value="dados" className="text-xs font-medium px-0 pb-2 pt-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none">
+                <Building2 className="h-3.5 w-3.5 mr-1.5" /> Dados
+              </TabsTrigger>
+              <TabsTrigger value="call-intelligence" className="text-xs font-medium px-0 pb-2 pt-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none">
+                <Headphones className="h-3.5 w-3.5 mr-1.5" /> Call Intelligence
+                {callAnalysesCount > 0 && (
+                  <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[9px] rounded-full ml-1.5">
+                    {callAnalysesCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          <TabsContent value="dados" className="flex-1 mt-0 overflow-hidden">
+          <ScrollArea className="flex-1" style={{ maxHeight: "calc(90vh - 240px)" }}>
           <div className="p-6 space-y-6">
             {/* ── Dados Cadastrais ── */}
             <Section title="Dados Cadastrais" icon={Building2}>
@@ -539,6 +565,12 @@ export function ClientDetailModal({ client, open, onOpenChange, onUpdated }: Pro
             )}
           </div>
         </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="call-intelligence" className="flex-1 mt-0 overflow-hidden">
+            {client && <ClientCallIntelligenceTab accountId={client.id} />}
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

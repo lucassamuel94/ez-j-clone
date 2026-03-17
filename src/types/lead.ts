@@ -7,7 +7,6 @@ export type LeadStatus =
   | 'Em contato' 
   | 'Ocupado'
   | 'Agendar retorno'
-  | 'Agendar Retorno'
   | 'Sem retorno'
   | 'Interesse'
   | 'Lead Quente'
@@ -15,7 +14,6 @@ export type LeadStatus =
   | 'Oportunidade Futura'
   | 'Reagendar Reunião'
   | 'Reunião agendada'
-  | 'Reunião Agendada'
   | 'Reunião Confirmada'
   | 'Oportunidade criada' 
   | 'Descartado'
@@ -132,6 +130,8 @@ export interface Lead {
   utm_campaign?: string | null;
   utm_term?: string | null;
   utm_content?: string | null;
+  // Enrichment tracking
+  enriched_at?: string | null;
 }
 
 export interface Interaction {

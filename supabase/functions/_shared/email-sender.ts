@@ -1,4 +1,5 @@
 const DEFAULT_SENDER = 'EZ Journey CRM <noreply@notifications.ezsoft.com.br>';
+// TODO: Fazer upload da nova logo EZ Journey no bucket email-assets e atualizar a URL abaixo
 const LOGO_URL = 'https://ftswdtgdvvewtaeoxpts.supabase.co/storage/v1/object/public/email-assets/ezsoft-logo-white.png';
 
 interface SendEmailOptions {

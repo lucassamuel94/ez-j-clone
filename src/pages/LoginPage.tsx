@@ -24,7 +24,12 @@ const getRedirectByRole = async (userId: string): Promise<string> => {
   return '/';
 };
 
-import ezsoftLogoWhite from '@/assets/ezsoft-logo-white.png';
+import ezsoftLogoWhite from '@/assets/ez-journey-logo-white.svg';
+
+const previewHostname = typeof window !== 'undefined' ? window.location.hostname : '';
+const isLovablePreview =
+  previewHostname.includes('id-preview--') ||
+  previewHostname.endsWith('.lovableproject.com');
 
 const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -34,6 +39,13 @@ const LoginPage = () => {
   const [searchParams] = useSearchParams();
   const inviteId = searchParams.get('invite');
   const [inviteEmail, setInviteEmail] = useState<string | null>(null);
+
+  // Bypass login in Lovable preview environment
+  useEffect(() => {
+    if (isLovablePreview) {
+      navigate('/', { replace: true });
+    }
+  }, [navigate]);
 
   // Check invite
   useEffect(() => {
@@ -173,7 +185,7 @@ const LoginPage = () => {
         </div>
         
         <div>
-          <img src={ezsoftLogoWhite} alt="EZSoft" className="h-7 lg:h-8 w-auto" />
+          <img src={ezsoftLogoWhite} alt="EZ Journey" className="h-7 lg:h-8 w-auto" />
         </div>
         
         <div className="relative z-10 my-4 lg:my-0">

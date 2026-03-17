@@ -101,8 +101,9 @@ async function fetchAllActiveClientsCNAE() {
 
   while (hasMore) {
     const { data, error } = await supabase
-      .from('active_clients')
+      .from('accounts')
       .select('cnae_fiscal_descricao, cnaes_secundarios')
+      .eq('lifecycle_stage', 'client')
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
     if (error) throw error;

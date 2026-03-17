@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { AppLayout } from '@/components/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { useDeliveries, useDeleteDelivery, useUpdateDelivery, DeliveryRecord } from '@/hooks/useDeliveries';
-import { useAdminUsers } from '@/hooks/useAdminUsers';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useSystemUsers } from '@/hooks/useSystemUsers';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +33,8 @@ const COMPLEXITY_COLORS: Record<string, string> = {
 
 export default function DeliveriesPage() {
   const { data: deliveries, isLoading } = useDeliveries();
-  const { isAdmin } = useAdminUsers();
+  const { hasPermission } = usePermissions();
+  const isAdmin = hasPermission('access_admin');
   const deleteDelivery = useDeleteDelivery();
   const updateDelivery = useUpdateDelivery();
   const { data: systemUsers = [] } = useSystemUsers();

@@ -120,9 +120,10 @@ export const GlobalSearchDropdown = memo(({ onSelect, onSearchChange, placeholde
   const handleSelect = useCallback((result: GlobalSearchResult) => {
     onSelect(result);
     setQuery('');
+    onSearchChange?.('');
     setResults([]);
     setIsOpen(false);
-  }, [onSelect]);
+  }, [onSelect, onSearchChange]);
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -147,7 +148,15 @@ export const GlobalSearchDropdown = memo(({ onSelect, onSearchChange, placeholde
         align="start"
         sideOffset={4}
         onOpenAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => e.preventDefault()}
       >
+        {query.trim().length >= 2 && (
+          <div className="px-3 py-1.5 border-b border-border flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground">
+              Filtrando localmente • {results.length} resultado{results.length !== 1 ? 's' : ''} global{results.length !== 1 ? 'is' : ''}
+            </span>
+          </div>
+        )}
         <div className="overflow-y-auto max-h-[320px] space-y-0.5">
           {results.map((r) => (
             <ResultItem key={r.lead_id} result={r} onSelect={handleSelect} />

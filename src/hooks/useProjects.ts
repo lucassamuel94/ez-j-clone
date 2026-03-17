@@ -82,13 +82,15 @@ export const useUpdatePhaseStatus = () => {
       phaseName,
       newStatus,
       oldStatus,
+      reason,
     }: {
       phaseId: string;
       projectId: string;
       phaseName: string;
       newStatus: string;
       oldStatus: string;
-    }) => updatePhaseStatus(phaseId, projectId, phaseName, newStatus, oldStatus),
+      reason?: string;
+    }) => updatePhaseStatus(phaseId, projectId, phaseName, newStatus, oldStatus, reason),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['project-phases', vars.projectId] });
       queryClient.invalidateQueries({ queryKey: ['project-transitions', vars.projectId] });

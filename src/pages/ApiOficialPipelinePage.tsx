@@ -6,7 +6,7 @@ import { useApiOficialDeals, useApiOficialMutations } from '@/hooks/useApiOficia
 import { ApiOficialDeal } from '@/services/apiOficialService';
 import { usePipelineStatuses } from '@/hooks/usePipelineStatuses';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { useAdminUsers } from '@/hooks/useAdminUsers';
+import { usePermissions } from '@/hooks/usePermissions';
 import { ProjectChecklist } from '@/components/projects/ProjectChecklist';
 import { FieldConfig, ProjectViewConfig, loadFieldConfig, saveFieldConfig } from '@/components/projects/ProjectViewConfig';
 import { CloserOpportunity } from '@/services/closerService';
@@ -184,9 +184,9 @@ ApiOficialCardContent.displayName = 'ApiOficialCardContent';
 
 const ApiOficialPipelinePage = () => {
   const { user: currentUser } = useCurrentUser();
-  const { isAdmin, isManager } = useAdminUsers();
-  const canFilterByCloser = isAdmin || isManager;
-  const canBulkSelect = isAdmin || isManager;
+  const { hasPermission } = usePermissions();
+  const canFilterByCloser = hasPermission('access_admin');
+  const canBulkSelect = hasPermission('access_admin');
 
   const { moveStage, lostMutation, updateNotes, createDeal, deleteDeal, invalidateAll } = useApiOficialMutations();
   const { getStatusesForPipeline, getColorMap } = usePipelineStatuses();
@@ -262,10 +262,10 @@ const ApiOficialPipelinePage = () => {
   const closerDefaultSet = useRef(false);
   useEffect(() => {
     if (!closerDefaultSet.current && currentUser?.id) {
-      setSelectedCloserId(isAdmin ? 'all' : currentUser.id);
+      setSelectedCloserId(hasPermission('access_admin') ? 'all' : currentUser.id);
       closerDefaultSet.current = true;
     }
-  }, [currentUser?.id, isAdmin]);
+  }, [currentUser?.id, hasPermission]);
 
   // Reset page / selection on tab or filter change
   useEffect(() => {
@@ -881,7 +881,7 @@ const ApiOficialPipelinePage = () => {
             onDeselectAll={handleDeselectAll}
             onReassign={() => setReassignDialogOpen(true)}
             onDelete={() => setDeleteDialogOpen(true)}
-            showDelete={isAdmin || isManager}
+            showDelete={hasPermission('access_admin')}
           />
         )}
 

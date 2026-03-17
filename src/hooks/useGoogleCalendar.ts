@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -52,14 +52,15 @@ export const useGoogleCalendar = () => {
     checkStatus();
   }, [checkStatus]);
 
+  const connectRef = useRef<() => void>(() => {});
+
   const showReconnectToast = useCallback(() => {
     toast.error('Sua conexão com o Google expirou', {
       description: 'Clique para reconectar sua conta Google',
       action: {
         label: 'Reconectar',
         onClick: () => {
-          // trigger connect flow
-          connect();
+          connectRef.current();
         },
       },
       duration: Infinity,
@@ -102,10 +103,12 @@ export const useGoogleCalendar = () => {
   const connect = useCallback(async () => {
     setIsConnecting(true);
     try {
+      const callbackUri = `${window.location.origin}/google-calendar-callback`;
+      console.log('[GoogleCalendar] Connecting with redirect_uri:', callbackUri);
       const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
         body: {
           action: 'get_auth_url',
-          redirect_uri: `${window.location.origin}/google-calendar-callback`,
+          redirect_uri: callbackUri,
         },
       });
       if (error) throw error;
@@ -122,6 +125,9 @@ export const useGoogleCalendar = () => {
       setIsConnecting(false);
     }
   }, []);
+
+  // Keep ref in sync so showReconnectToast always calls latest connect
+  connectRef.current = connect;
 
   const disconnect = useCallback(async () => {
     try {

@@ -254,6 +254,7 @@ const EmbedFormPage = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [viewingSubmissionsFormId, setViewingSubmissionsFormId] = useState<string | null>(null);
   const [embedCodeFormId, setEmbedCodeFormId] = useState<string | null>(null);
+  const [embedCodeFormWidgetType, setEmbedCodeFormWidgetType] = useState<string>('form');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletingFormId, setDeletingFormId] = useState<string | null>(null);
   const [deletingFormName, setDeletingFormName] = useState('');
@@ -429,7 +430,7 @@ const EmbedFormPage = () => {
                       <FileSpreadsheet className="h-4 w-4 mr-1" />
                       Respostas
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setEmbedCodeFormId(form.id)}>
+                    <Button variant="outline" size="sm" onClick={() => { setEmbedCodeFormId(form.id); setEmbedCodeFormWidgetType((form as any).widget_type || 'form'); }}>
                       <Copy className="h-4 w-4 mr-1" />
                       Embed
                     </Button>
@@ -966,48 +967,58 @@ const EmbedFormPage = () => {
                       </div>
 
                       {/* Embed & Preview link - only for saved forms */}
-                      {editingForm.id && (
-                        <div className="space-y-3 pt-2 border-t border-border">
-                          <div>
-                            <Label className="text-sm font-medium flex items-center gap-1.5">
-                              <Code2 className="h-4 w-4 text-primary" />
-                              Código de incorporação
-                            </Label>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Cole este código HTML no seu site para exibir o formulário.
-                            </p>
+                      {editingForm.id && (() => {
+                        const isWaWidget = (editingForm as any).widget_type === 'whatsapp_widget';
+                        const embedScript = isWaWidget
+                          ? `<script data-ez-whatsapp src="${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-widget-embed?id=${editingForm.id}"></script>`
+                          : `<script data-ez-form src="${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lead-form-embed?id=${editingForm.id}"></script>`;
+                        return (
+                          <div className="space-y-3 pt-2 border-t border-border">
+                            <div>
+                              <Label className="text-sm font-medium flex items-center gap-1.5">
+                                <Code2 className="h-4 w-4 text-primary" />
+                                {isWaWidget ? 'Código do Widget WhatsApp' : 'Código de incorporação'}
+                              </Label>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {isWaWidget
+                                  ? 'Cole este código no seu site para exibir o botão flutuante do WhatsApp.'
+                                  : 'Cole este código HTML no seu site para exibir o formulário.'}
+                              </p>
+                            </div>
+                            <div className="relative">
+                              <pre className="bg-background rounded-md p-3 pr-10 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all border border-border">
+                                {embedScript}
+                              </pre>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="absolute top-2 right-2 h-7 w-7"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(embedScript);
+                                  toast.success('Código copiado!');
+                                }}
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                            {!isWaWidget && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="gap-1.5 text-xs"
+                                onClick={() => {
+                                  window.open(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lead-form-embed?id=${editingForm.id}&preview=1`, '_blank');
+                                }}
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                Visualizar formulário como página
+                              </Button>
+                            )}
                           </div>
-                          <div className="relative">
-                            <pre className="bg-background rounded-md p-3 pr-10 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all border border-border">
-                              {`<script data-ez-form src="${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lead-form-embed?id=${editingForm.id}"></script>`}
-                            </pre>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="absolute top-2 right-2 h-7 w-7"
-                              onClick={() => {
-                                navigator.clipboard.writeText(`<script data-ez-form src="${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lead-form-embed?id=${editingForm.id}"></script>`);
-                                toast.success('Código copiado!');
-                              }}
-                            >
-                              <Copy className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="gap-1.5 text-xs"
-                            onClick={() => {
-                              window.open(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lead-form-embed?id=${editingForm.id}&preview=1`, '_blank');
-                            }}
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                            Visualizar formulário como página
-                          </Button>
-                        </div>
-                      )}
+                        );
+                      })()}
                     </TabsContent>
                   </Tabs>
                 </div>
@@ -1054,7 +1065,7 @@ const EmbedFormPage = () => {
         </Dialog>
 
         {/* Embed Code Dialog */}
-        <EmbedCodeDialog formId={embedCodeFormId} onClose={() => setEmbedCodeFormId(null)} />
+        <EmbedCodeDialog formId={embedCodeFormId} widgetType={embedCodeFormWidgetType} onClose={() => setEmbedCodeFormId(null)} />
 
         {/* Submissions Dialog */}
         <SubmissionsDialog formId={viewingSubmissionsFormId} forms={forms} onClose={() => setViewingSubmissionsFormId(null)} />
@@ -1103,9 +1114,12 @@ const EmbedFormPage = () => {
   );
 };
 
-const EmbedCodeDialog = ({ formId, onClose }: { formId: string | null; onClose: () => void }) => {
-  const embedUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lead-form-embed`;
-  const embedCode = formId ? `<script data-ez-form src="${embedUrl}?id=${formId}"></script>` : '';
+const EmbedCodeDialog = ({ formId, widgetType, onClose }: { formId: string | null; widgetType?: string; onClose: () => void }) => {
+  const isWa = widgetType === 'whatsapp_widget';
+  const endpoint = isWa ? 'whatsapp-widget-embed' : 'lead-form-embed';
+  const attr = isWa ? 'data-ez-whatsapp' : 'data-ez-form';
+  const embedUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${endpoint}`;
+  const embedCode = formId ? `<script ${attr} src="${embedUrl}?id=${formId}"></script>` : '';
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(embedCode);

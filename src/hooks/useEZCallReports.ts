@@ -25,11 +25,13 @@ export interface EZCallSDRReport {
 interface UseEZCallReportsParams {
   dateRange: { start: string; end: string };
   selectedSdrId?: string;
+  enabled?: boolean;
 }
 
-export function useEZCallReports({ dateRange, selectedSdrId }: UseEZCallReportsParams) {
+export function useEZCallReports({ dateRange, selectedSdrId, enabled = true }: UseEZCallReportsParams) {
   return useQuery({
     queryKey: ['ezcall-reports', dateRange.start, dateRange.end, selectedSdrId],
+    enabled,
     queryFn: async (): Promise<EZCallSDRReport[]> => {
       // 1. Get SDR users with ramal
       const { data: roleData } = await supabase

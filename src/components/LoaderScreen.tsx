@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import ezLogoColor from "@/assets/ezsoft-logo-color.png";
-import ezLogoWhite from "@/assets/ezsoft-logo-white-full.png";
+import ezLogoColor from "@/assets/ez-journey-logo-color.svg";
+import ezLogoWhite from "@/assets/ez-journey-logo-white-color.svg";
 
 interface LoaderScreenProps {
   onComplete: () => void;
@@ -62,7 +62,7 @@ export default function LoaderScreen({ onComplete }: LoaderScreenProps) {
           >
             <img
               src={isDark ? ezLogoWhite : ezLogoColor}
-              alt="EZSoft"
+              alt="EZ Journey"
               className="h-16 w-auto"
             />
 

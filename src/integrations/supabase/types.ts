@@ -186,6 +186,7 @@ export type Database = {
           revenue_range: string | null
           situacao_cadastral: string | null
           state: string | null
+          status: string
           updated_at: string
           website: string | null
           whatsapp: string | null
@@ -223,6 +224,7 @@ export type Database = {
           revenue_range?: string | null
           situacao_cadastral?: string | null
           state?: string | null
+          status?: string
           updated_at?: string
           website?: string | null
           whatsapp?: string | null
@@ -260,6 +262,7 @@ export type Database = {
           revenue_range?: string | null
           situacao_cadastral?: string | null
           state?: string | null
+          status?: string
           updated_at?: string
           website?: string | null
           whatsapp?: string | null
@@ -465,6 +468,38 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      api_activation_history: {
+        Row: {
+          blocked_reason: string | null
+          changed_at: string
+          deal_id: string
+          id: string
+          stage: string
+        }
+        Insert: {
+          blocked_reason?: string | null
+          changed_at?: string
+          deal_id: string
+          id?: string
+          stage: string
+        }
+        Update: {
+          blocked_reason?: string | null
+          changed_at?: string
+          deal_id?: string
+          id?: string
+          stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_activation_history_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "api_oficial_deals"
             referencedColumns: ["id"]
           },
         ]
@@ -2095,6 +2130,7 @@ export type Database = {
           email: string | null
           email_2: string | null
           employee_count: string | null
+          enriched_at: string | null
           entry_channel: Database["public"]["Enums"]["channel_type"] | null
           has_budget: string | null
           icp_fit: string | null
@@ -2186,6 +2222,7 @@ export type Database = {
           email?: string | null
           email_2?: string | null
           employee_count?: string | null
+          enriched_at?: string | null
           entry_channel?: Database["public"]["Enums"]["channel_type"] | null
           has_budget?: string | null
           icp_fit?: string | null
@@ -2277,6 +2314,7 @@ export type Database = {
           email?: string | null
           email_2?: string | null
           employee_count?: string | null
+          enriched_at?: string | null
           entry_channel?: Database["public"]["Enums"]["channel_type"] | null
           has_budget?: string | null
           icp_fit?: string | null
@@ -3174,6 +3212,41 @@ export type Database = {
           },
         ]
       }
+      project_status_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          id: string
+          project_id: string
+          reason: string | null
+          status: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          project_id: string
+          reason?: string | null
+          status: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          project_id?: string
+          reason?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_status_history_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_status_transitions: {
         Row: {
           changed_by_user_id: string | null
@@ -3236,6 +3309,7 @@ export type Database = {
           opportunity_id: string | null
           priority: string
           project_id: string | null
+          reminder_sent_at: string | null
           status: string
           task_type: string
           title: string
@@ -3254,6 +3328,7 @@ export type Database = {
           opportunity_id?: string | null
           priority?: string
           project_id?: string | null
+          reminder_sent_at?: string | null
           status?: string
           task_type?: string
           title: string
@@ -3272,6 +3347,7 @@ export type Database = {
           opportunity_id?: string | null
           priority?: string
           project_id?: string | null
+          reminder_sent_at?: string | null
           status?: string
           task_type?: string
           title?: string
@@ -3935,6 +4011,44 @@ export type Database = {
         }
         Relationships: []
       }
+      team_capacity: {
+        Row: {
+          capacity_hours: number
+          created_at: string
+          headcount: number
+          id: string
+          month: string
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          capacity_hours?: number
+          created_at?: string
+          headcount?: number
+          id?: string
+          month: string
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          capacity_hours?: number
+          created_at?: string
+          headcount?: number
+          id?: string
+          month?: string
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_capacity_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_members: {
         Row: {
           created_at: string | null
@@ -3985,6 +4099,39 @@ export type Database = {
         }
         Relationships: []
       }
+      transcription_vocabulary: {
+        Row: {
+          created_at: string
+          from_text: string
+          id: string
+          is_active: boolean
+          is_regex: boolean
+          notes: string | null
+          priority: number
+          to_text: string
+        }
+        Insert: {
+          created_at?: string
+          from_text: string
+          id?: string
+          is_active?: boolean
+          is_regex?: boolean
+          notes?: string | null
+          priority?: number
+          to_text: string
+        }
+        Update: {
+          created_at?: string
+          from_text?: string
+          id?: string
+          is_active?: boolean
+          is_regex?: boolean
+          notes?: string | null
+          priority?: number
+          to_text?: string
+        }
+        Relationships: []
+      }
       user_invitations: {
         Row: {
           accepted_at: string | null
@@ -3993,6 +4140,7 @@ export type Database = {
           expires_at: string
           id: string
           invited_by: string | null
+          ramal: string | null
           role: Database["public"]["Enums"]["app_role"]
           role_id: string | null
           team_id: string | null
@@ -4004,6 +4152,7 @@ export type Database = {
           expires_at?: string
           id?: string
           invited_by?: string | null
+          ramal?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           role_id?: string | null
           team_id?: string | null
@@ -4015,6 +4164,7 @@ export type Database = {
           expires_at?: string
           id?: string
           invited_by?: string | null
+          ramal?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           role_id?: string | null
           team_id?: string | null
@@ -4222,6 +4372,7 @@ export type Database = {
             }
             Returns: string[]
           }
+      get_lead_by_id: { Args: { p_lead_id: string }; Returns: Json }
       get_lead_tab_counts: { Args: { p_sdr_id?: string }; Returns: Json }
       get_least_loaded_users: { Args: never; Returns: Json }
       get_opportunity_tab_counts:
@@ -4312,6 +4463,40 @@ export type Database = {
           p_state?: string
         }
         Returns: boolean
+      }
+      search_accounts_for_deal: {
+        Args: { result_limit?: number; search_term: string }
+        Returns: {
+          account_owner_id: string
+          account_owner_name: string
+          ai_enrichment_data: Json
+          capital_social: number
+          cep: string
+          city: string
+          cnae_fiscal: number
+          cnae_fiscal_descricao: string
+          cnaes_secundarios: string
+          cnpj: string
+          company_name: string
+          company_segment: string
+          contact_name: string
+          created_at: string
+          data_inicio_atividade: string
+          email: string
+          employee_count: string
+          id: string
+          lifecycle_stage: string
+          nome_fantasia: string
+          notes: string
+          phone: string
+          porte: string
+          razao_social: string
+          revenue_range: string
+          situacao_cadastral: string
+          state: string
+          status: string
+          website: string
+        }[]
       }
       search_all_leads_global: {
         Args: { p_limit?: number; p_search: string }
@@ -4445,6 +4630,7 @@ export type Database = {
         | "treinamento"
         | "suporte"
         | "verificacao_bm"
+        | "viewer"
       channel_type: "whatsapp" | "call" | "email" | "other"
       enrollment_status: "active" | "completed" | "replied" | "unsubscribed"
       interaction_outcome:
@@ -4614,6 +4800,7 @@ export const Constants = {
         "treinamento",
         "suporte",
         "verificacao_bm",
+        "viewer",
       ],
       channel_type: ["whatsapp", "call", "email", "other"],
       enrollment_status: ["active", "completed", "replied", "unsubscribed"],

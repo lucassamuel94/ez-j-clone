@@ -120,6 +120,8 @@ Retorne exclusivamente JSON neste formato (sem markdown):
       ? basePrompt + sqoContext
       : basePrompt;
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     const response = await fetch('https://api.perplexity.ai/chat/completions', {
       method: 'POST',
       headers: {
@@ -134,7 +136,9 @@ Retorne exclusivamente JSON neste formato (sem markdown):
         ],
         temperature: 0.3,
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || '';

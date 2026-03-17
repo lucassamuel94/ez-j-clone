@@ -58,7 +58,7 @@ serve(async (req) => {
       url.searchParams.set("message", sanitizedMessage);
     }
 
-    console.log(`Calling EZ Chat: ${url.toString().replace(apiToken, '***')}`);
+    console.log(`Calling EZ Chat: ${url.toString().replaceAll(apiToken, '***')}`);
 
     const maxRetries = 3;
     let lastError = "";

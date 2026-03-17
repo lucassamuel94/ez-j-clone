@@ -1,14 +1,11 @@
-import { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
 import { useAuthSession } from '@/contexts/AuthSessionContext';
-import { useUserRole, UserRole } from '@/hooks/useUserRole';
 import { usePermissions } from '@/hooks/usePermissions';
+import { Navigate, useLocation } from 'react-router-dom';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles?: UserRole[];
   requiredPermission?: string;
 }
 
@@ -17,23 +14,12 @@ const isLovablePreview =
   previewHostname.includes('id-preview--') ||
   previewHostname.endsWith('.lovableproject.com');
 
-export const ProtectedRoute = ({ children, allowedRoles, requiredPermission }: ProtectedRouteProps) => {
+export const ProtectedRoute = ({ children, requiredPermission }: ProtectedRouteProps) => {
   const { status, session, retry } = useAuthSession();
+  const location = useLocation();
   const hasSession = !!session;
   const isUsable = status === 'authenticated' || (status === 'degraded' && hasSession);
-  const { role, isLoading: isLoadingRole } = useUserRole(isUsable);
   const { hasPermission, isLoading: isLoadingPerms } = usePermissions(isUsable);
-  const [showRoleTimeout, setShowRoleTimeout] = useState(false);
-
-  // Timeout for role loading
-  useEffect(() => {
-    if (!allowedRoles || role) {
-      setShowRoleTimeout(false);
-      return;
-    }
-    const t = setTimeout(() => setShowRoleTimeout(true), 10000);
-    return () => clearTimeout(t);
-  }, [allowedRoles, role]);
 
   // Bypass auth in Lovable preview environment
   if (isLovablePreview) return <>{children}</>;
@@ -67,8 +53,8 @@ export const ProtectedRoute = ({ children, allowedRoles, requiredPermission }: P
     return <Navigate to="/login" replace />;
   }
 
-  // Still loading role/perms
-  if (isUsable && (isLoadingRole || isLoadingPerms)) {
+  // Still loading permissions
+  if (isUsable && isLoadingPerms) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -79,40 +65,9 @@ export const ProtectedRoute = ({ children, allowedRoles, requiredPermission }: P
     );
   }
 
-  // Wait for role to load before checking permissions (with timeout)
-  if (allowedRoles && !role) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          {showRoleTimeout ? (
-            <>
-              <p className="text-muted-foreground">Erro ao carregar permissões.</p>
-              <Button variant="outline" onClick={() => window.location.reload()}>Tentar novamente</Button>
-            </>
-          ) : (
-            <>
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="text-muted-foreground">Carregando permissões...</p>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   // Permission-based check
   if (requiredPermission && !hasPermission(requiredPermission)) {
-    return <Navigate to="/" replace />;
-  }
-
-  // Role-based redirect
-  if (allowedRoles && role && !allowedRoles.includes(role)) {
-    if (role === 'closer') return <Navigate to="/closer" replace />;
-    if (role === 'sdr') return <Navigate to="/" replace />;
-    if (role === 'head_pos_venda' || role === 'ux_po' || role === 'dev_chatbot' || role === 'treinamento' || role === 'suporte' || role === 'verificacao_bm') {
-      return <Navigate to="/projects" replace />;
-    }
-    return <Navigate to="/" replace />;
+    return <Navigate to={`/access-denied?from=${encodeURIComponent(location.pathname)}`} replace />;
   }
 
   return (

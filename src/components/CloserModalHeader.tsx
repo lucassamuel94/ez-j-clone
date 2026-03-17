@@ -48,11 +48,11 @@ interface CloserModalHeaderProps {
   currentCloserId?: string | null;
   closerName?: string | null;
   currentUserId?: string | null;
-  isManager?: boolean;
+  canManage?: boolean;
 }
 
-export const CloserModalHeader = ({ lead, opportunity, opportunityId, currentCloserId, closerName, currentUserId, isManager = false }: CloserModalHeaderProps) => {
-  const canEditCloser = isManager || (!!currentUserId && currentCloserId === currentUserId);
+export const CloserModalHeader = ({ lead, opportunity, opportunityId, currentCloserId, closerName, currentUserId, canManage = false }: CloserModalHeaderProps) => {
+  const canEditCloser = canManage || (!!currentUserId && currentCloserId === currentUserId);
   const queryClient = useQueryClient();
   const probability = useMemo(() => calculateClosingProbability(lead, opportunity), [lead, opportunity]);
   const stuckInfo = useMemo(() => isDealStuck(opportunity), [opportunity]);
@@ -376,7 +376,7 @@ export const CloserModalHeader = ({ lead, opportunity, opportunityId, currentClo
             </p>
             <div onClick={(e) => e.stopPropagation()}>
               <CloserSelector opportunityId={opportunityId} currentCloserId={currentCloserId ?? null}
-                currentCloserName={closerName ?? null} disabled={!canEditCloser} closerOnly={!isManager} />
+                currentCloserName={closerName ?? null} disabled={!canEditCloser} closerOnly={!canManage} />
             </div>
           </div>
         )}

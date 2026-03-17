@@ -145,14 +145,18 @@ serve(async (req) => {
           ${buildEmailButton('Ver lead', leadLink)}
         `;
 
-        await sendNotificationEmail({
-          to: userEmail,
-          subject: `${title} - ${meeting.title} (${formattedDate} ${formattedTime})`,
-          bodyHtml,
-          headerTitle: title,
-          headerGradient,
-        });
-        emailsSent++;
+        try {
+          await sendNotificationEmail({
+            to: userEmail,
+            subject: `${title} - ${meeting.title} (${formattedDate} ${formattedTime})`,
+            bodyHtml,
+            headerTitle: title,
+            headerGradient,
+          });
+          emailsSent++;
+        } catch (emailErr) {
+          console.error(`Failed to send meeting reminder email to ${userEmail}:`, emailErr);
+        }
       }
     }
 

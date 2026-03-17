@@ -77,7 +77,7 @@ export const useAdminUsers = () => {
       if (error) throw error;
       return data as RoleOption[];
     },
-    enabled: isAdmin === true,
+    enabled: isAdmin || isManager,
   });
 
   // Fetch all users with their roles
@@ -86,7 +86,7 @@ export const useAdminUsers = () => {
     queryFn: async () => {
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, name, created_at, active, last_seen_at');
+        .select('id, name, email, created_at, active, last_seen_at');
       
       if (profilesError) throw profilesError;
 
@@ -109,7 +109,7 @@ export const useAdminUsers = () => {
         return {
           id: profile.id,
           name: profile.name,
-          email: profile.name,
+          email: profile.email || '',
           active: profile.active ?? true,
           role: userRole?.role as AppRole | null,
           role_id: roleId,
@@ -121,7 +121,7 @@ export const useAdminUsers = () => {
 
       return usersWithRoles;
     },
-    enabled: isAdmin === true,
+    enabled: isAdmin || isManager,
   });
 
   // Fetch pending invitations
@@ -137,7 +137,7 @@ export const useAdminUsers = () => {
       if (error) throw error;
       return data as UserInvitation[];
     },
-    enabled: isAdmin === true,
+    enabled: isAdmin || isManager,
   });
 
   // Update user active status
@@ -208,7 +208,7 @@ export const useAdminUsers = () => {
 
   // Create invitation
   const createInvitation = useMutation({
-    mutationFn: async ({ email, role, roleId, teamId }: { email: string; role: AppRole; roleId?: string; teamId?: string }) => {
+    mutationFn: async ({ email, role, roleId, teamId, ramal }: { email: string; role: AppRole; roleId?: string; teamId?: string; ramal?: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
       
       let inviterName = 'Administrador';
@@ -223,17 +223,18 @@ export const useAdminUsers = () => {
         }
       }
       
-      const insertData: any = { 
+      const insertData: Record<string, unknown> = { 
         email, 
         role,
         invited_by: user?.id,
       };
       if (roleId) insertData.role_id = roleId;
       if (teamId) insertData.team_id = teamId;
+      if (ramal) insertData.ramal = ramal;
 
       const { data: invitation, error } = await supabase
         .from('user_invitations')
-        .insert(insertData)
+        .insert(insertData as Record<string, unknown> & { email: string })
         .select()
         .single();
       

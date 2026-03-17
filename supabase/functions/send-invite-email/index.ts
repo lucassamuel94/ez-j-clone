@@ -41,6 +41,16 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Missing required fields");
     }
 
+    // Validate signupUrl is a safe HTTPS URL (prevent injection)
+    try {
+      const parsed = new URL(signupUrl);
+      if (parsed.protocol !== 'https:') {
+        throw new Error("signupUrl must use HTTPS");
+      }
+    } catch {
+      throw new Error("Invalid signupUrl");
+    }
+
     const roleLabel = roleLabels[role] || role;
 
     const emailResponse = await resend.emails.send({

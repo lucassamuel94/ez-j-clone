@@ -17,8 +17,7 @@ import { LeadTemperature, LeadStatus } from '@/types/lead';
 import { buildLeadFromOpportunity } from '@/utils/leadEmailHelper';
 
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { useAdminUsers } from '@/hooks/useAdminUsers';
-import { useUserRole } from '@/hooks/useUserRole';
+import { usePermissions } from '@/hooks/usePermissions';
 import { CloserSelector } from '@/components/CloserSelector';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { supabase } from '@/integrations/supabase/client';
@@ -164,9 +163,9 @@ const STAGE_ICONS: Record<string, React.ReactNode> = {
   'Apresentar proposta': <FileText className="h-3.5 w-3.5" />,
   'Proposta enviada': <Send className="h-3.5 w-3.5" />,
   'Negociação': <Handshake className="h-3.5 w-3.5" />,
-  'Oportunidade quente': <Flame className="h-3.5 w-3.5" />,
+  'Oportunidade Quente': <Flame className="h-3.5 w-3.5" />,
   'Oportunidade Futura': <CalendarClock className="h-3.5 w-3.5" />,
-  'Oportunidade fria': <Snowflake className="h-3.5 w-3.5" />,
+  'Oportunidade Fria': <Snowflake className="h-3.5 w-3.5" />,
   'Contrato enviado': <FileSignature className="h-3.5 w-3.5" />,
   'Aguardando pagamento': <Clock className="h-3.5 w-3.5" />,
   'Ganho': <CheckCircle2 className="h-3.5 w-3.5" />,
@@ -178,9 +177,9 @@ const STAGE_SHORT_LABELS: Record<string, string> = {
   'Proposta enviada': 'Enviada',
   'Aguardando pagamento': 'Pagamento',
   'Contrato enviado': 'Contrato',
-  'Oportunidade quente': 'Op. Quente',
+  'Oportunidade Quente': 'Op. Quente',
   'Oportunidade Futura': 'Op. Futura',
-  'Oportunidade fria': 'Op. Fria',
+  'Oportunidade Fria': 'Op. Fria',
 };
 
 const STAGE_LABELS_MAP: Record<string, string> = {
@@ -188,9 +187,9 @@ const STAGE_LABELS_MAP: Record<string, string> = {
   'Apresentar proposta': 'Proposta',
   'Proposta enviada': 'Enviada',
   'Negociação': 'Negociação',
-  'Oportunidade quente': 'Op. Quente',
+  'Oportunidade Quente': 'Op. Quente',
   'Oportunidade Futura': 'Op. Futura',
-  'Oportunidade fria': 'Op. Fria',
+  'Oportunidade Fria': 'Op. Fria',
   'Contrato enviado': 'Contrato',
   'Aguardando pagamento': 'Pagamento',
   'Ganho': 'Ganho',
@@ -335,10 +334,9 @@ const MobileCardActions = memo(({ opp, onReturn, onLost, onNotes, onWon, onDelet
 
 const CloserPipelinePage = () => {
   const { user: currentUser } = useCurrentUser();
-  const { isAdmin, isManager } = useAdminUsers();
-  const { canAccessBoth } = useUserRole();
+  const { hasPermission } = usePermissions();
   const isMobile = useIsMobile();
-  const canFilterByCloser = isAdmin || isManager;
+  const canFilterByCloser = hasPermission('access_admin');
   const { stages: dynamicStages, defaultOppFilter, activeStages } = useCloserStages();
   const ALL_STAGES_SET = useMemo(() => new Set(dynamicStages), [dynamicStages]);
 
@@ -347,7 +345,12 @@ const CloserPipelinePage = () => {
   const queryClient = useQueryClient();
   const { exportOpportunities, isExporting: isExportingOpps } = useExportOpportunitiesToExcel();
 
-  const debouncedSearch = '';
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
   const [activeTab, setActiveTab] = useState<CloserTab>(() => {
     return (localStorage.getItem('closer_active_tab') as CloserTab) || 'oportunidades';
   });
@@ -363,7 +366,8 @@ const CloserPipelinePage = () => {
     if (!defaultsApplied.current && defaultOppFilter.size > 0) {
       const saved = localStorage.getItem('closer_advanced_filters');
       if (!saved) {
-        _setAdvancedFilterStatuses(new Set(HIGHLIGHT_DEFAULTS));
+        _setAdvancedFilterStatuses(new Set(dynamicStages));
+        localStorage.setItem('closer_advanced_filters', JSON.stringify(dynamicStages));
       } else {
         const savedSet = new Set<string>(JSON.parse(saved));
         const allStages = new Set(dynamicStages);
@@ -375,7 +379,7 @@ const CloserPipelinePage = () => {
           }
         }
         if (hasInvalid) {
-          const next = savedSet.size > 0 ? savedSet : HIGHLIGHT_DEFAULTS;
+          const next = savedSet.size > 0 ? savedSet : new Set<string>(dynamicStages);
           _setAdvancedFilterStatuses(next);
           localStorage.setItem('closer_advanced_filters', JSON.stringify([...next]));
         }
@@ -387,10 +391,43 @@ const CloserPipelinePage = () => {
     _setAdvancedFilterStatuses(v);
     localStorage.setItem('closer_advanced_filters', JSON.stringify([...v]));
   }, []);
-  const [meetingDateRange, setMeetingDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
-  const [wonDateRange, setWonDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
-  
-  const [selectedCloserId, setSelectedCloserId] = useState('pending');
+  const [meetingDateRange, _setMeetingDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>(() => {
+    try {
+      const saved = localStorage.getItem('closer_meeting_date_range');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return { from: parsed.from ? new Date(parsed.from) : undefined, to: parsed.to ? new Date(parsed.to) : undefined };
+      }
+    } catch {}
+    return { from: undefined, to: undefined };
+  });
+  const setMeetingDateRange = useCallback((range: { from: Date | undefined; to: Date | undefined }) => {
+    localStorage.setItem('closer_meeting_date_range', JSON.stringify({ from: range.from?.toISOString(), to: range.to?.toISOString() }));
+    _setMeetingDateRange(range);
+  }, []);
+
+  const [wonDateRange, _setWonDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>(() => {
+    try {
+      const saved = localStorage.getItem('closer_won_date_range');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return { from: parsed.from ? new Date(parsed.from) : undefined, to: parsed.to ? new Date(parsed.to) : undefined };
+      }
+    } catch {}
+    return { from: undefined, to: undefined };
+  });
+  const setWonDateRange = useCallback((range: { from: Date | undefined; to: Date | undefined }) => {
+    localStorage.setItem('closer_won_date_range', JSON.stringify({ from: range.from?.toISOString(), to: range.to?.toISOString() }));
+    _setWonDateRange(range);
+  }, []);
+
+  const [selectedCloserId, _setSelectedCloserId] = useState(() => {
+    return localStorage.getItem('closer_selected_closer_id') || 'pending';
+  });
+  const setSelectedCloserId = useCallback((v: string) => {
+    localStorage.setItem('closer_selected_closer_id', v);
+    _setSelectedCloserId(v);
+  }, []);
   const [viewMode, setViewMode] = useState<CloserViewMode>(() => {
     return (localStorage.getItem('closer_view_mode') as CloserViewMode) || 'list';
   });
@@ -406,10 +443,10 @@ const CloserPipelinePage = () => {
   const closerDefaultSet = useRef(false);
   useEffect(() => {
     if (!closerDefaultSet.current && currentUser?.id) {
-      setSelectedCloserId(isAdmin ? 'all' : currentUser.id);
+      setSelectedCloserId(hasPermission('access_admin') ? 'all' : currentUser.id);
       closerDefaultSet.current = true;
     }
-  }, [currentUser?.id, isAdmin]);
+  }, [currentUser?.id, hasPermission]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [tableSorting, setTableSorting] = useState<SortingState>([]);
@@ -519,7 +556,7 @@ const CloserPipelinePage = () => {
   const [detectedProjectType, setDetectedProjectType] = useState<string | null>(null);
 
   // Bulk selection state
-  const canBulkSelect = isAdmin || isManager;
+  const canBulkSelect = hasPermission('access_admin');
   const [selectedOppIds, setSelectedOppIds] = useState<Set<string>>(new Set());
   const [allFilteredSelected, setAllFilteredSelected] = useState(false);
   const [isLoadingSelection, setIsLoadingSelection] = useState(false);
@@ -773,7 +810,8 @@ const CloserPipelinePage = () => {
               <div className="flex items-center gap-2 py-2">
                 <GlobalSearchDropdown
                   onSelect={(r) => { handleGlobalSearchSelect(r); setMobileSearchOpen(false); }}
-                  placeholder="Busca global..."
+                  onSearchChange={setSearchQuery}
+                  placeholder="Buscar leads e oportunidades..."
                   className="flex-1"
                 />
                 <Button
@@ -952,7 +990,7 @@ const CloserPipelinePage = () => {
                                   onLost={() => handleOpenLost(opp)}
                                   onNotes={() => handleOpenNotes(opp)}
                                   onWon={() => handleOpenChecklist(opp)}
-                                  onDelete={(isAdmin || isManager) ? () => handleOpenSingleDelete(opp) : undefined}
+                                  onDelete={hasPermission('access_admin') ? () => handleOpenSingleDelete(opp) : undefined}
                                 />
                               </div>
                             )}
@@ -1013,7 +1051,7 @@ const CloserPipelinePage = () => {
             title="Oportunidades"
             actions={
               <div className="flex items-center gap-2">
-                {(isAdmin || isManager) && (
+                {hasPermission('access_admin') && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -1104,7 +1142,8 @@ const CloserPipelinePage = () => {
                 <div className="flex items-center gap-2">
                   <GlobalSearchDropdown
                     onSelect={handleGlobalSearchSelect}
-                    placeholder="Busca global..."
+                    onSearchChange={setSearchQuery}
+                    placeholder="Buscar leads e oportunidades..."
                     className="flex-1 min-w-[140px]"
                   />
                   {canFilterByCloser && (
@@ -1179,12 +1218,12 @@ const CloserPipelinePage = () => {
               sortBy={kanbanSortBy}
               onMoveStage={(id, stage) => moveStage.mutate({ id, stage })}
               onCardClick={handleOpenLeadModal}
-              onDeleteOpp={(isAdmin || isManager) ? handleOpenSingleDelete : undefined}
+              onDeleteOpp={hasPermission('access_admin') ? handleOpenSingleDelete : undefined}
               getOppHref={getOppHref}
               isMoving={moveStage.isPending}
               isLoading={kanbanLoading}
               currentUserId={currentUser?.id ?? null}
-              isManager={isAdmin || isManager}
+              canManage={hasPermission('access_admin')}
               onLoadMore={handleKanbanLoadMore}
             />
           )}
@@ -1194,8 +1233,7 @@ const CloserPipelinePage = () => {
               <CloserTableView
                 opportunities={paginatedOpps}
                 canBulkSelect={canBulkSelect}
-                isAdmin={isAdmin}
-                isManager={isManager}
+                canManage={hasPermission('access_admin')}
                 selectedOppIds={selectedOppIds}
                 onOppCheckChange={handleOppCheckChange}
                 onCheckAllChange={handleCheckAllChange}
@@ -1205,7 +1243,7 @@ const CloserPipelinePage = () => {
                 onLost={handleOpenLost}
                 onNotes={handleOpenNotes}
                 onWon={handleOpenChecklist}
-                onDelete={(isAdmin || isManager) ? handleOpenSingleDelete : undefined}
+                onDelete={hasPermission('access_admin') ? handleOpenSingleDelete : undefined}
                 onStageChange={(id, stage) => moveStage.mutate({ id, stage })}
                 tab={activeTab}
                 sorting={tableSorting}
@@ -1362,7 +1400,7 @@ const CloserPipelinePage = () => {
           onDeselectAll={handleDeselectAll}
           onReassign={() => setReassignDialogOpen(true)}
           onDelete={() => setDeleteDialogOpen(true)}
-          showDelete={isAdmin || isManager}
+          showDelete={hasPermission('access_admin')}
         />
       )}
 

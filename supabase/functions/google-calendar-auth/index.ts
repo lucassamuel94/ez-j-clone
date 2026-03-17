@@ -38,6 +38,7 @@ Deno.serve(async (req) => {
 
     if (action === "get_auth_url") {
       // Generate OAuth URL
+      console.log("OAuth get_auth_url — redirect_uri:", redirect_uri);
       const params = new URLSearchParams({
         client_id: GOOGLE_CLIENT_ID,
         redirect_uri: redirect_uri,
@@ -58,6 +59,7 @@ Deno.serve(async (req) => {
 
     if (action === "exchange_code") {
       // Exchange authorization code for tokens
+      console.log("OAuth exchange_code — redirect_uri:", redirect_uri);
       const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -72,8 +74,9 @@ Deno.serve(async (req) => {
 
       const tokenData = await tokenRes.json();
       if (!tokenRes.ok) {
+        console.error("Token exchange failed — redirect_uri used:", redirect_uri, "response:", JSON.stringify(tokenData));
         throw new Error(
-          `Token exchange failed: ${JSON.stringify(tokenData)}`
+          `Token exchange failed (redirect_uri: ${redirect_uri}): ${tokenData?.error || JSON.stringify(tokenData)}`
         );
       }
 

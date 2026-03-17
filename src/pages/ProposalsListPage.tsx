@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText, Eye, Copy, ExternalLink, Trash2, Pencil, Search,
-  RefreshCw, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Info
+  RefreshCw, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Info, AlignLeft
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -254,7 +254,7 @@ const ProposalsListPage = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'draft': return <Badge variant="secondary">Rascunho</Badge>;
-      case 'sent': return <Badge variant="outline">Criada</Badge>;
+      case 'sent': return <Badge variant="outline">Enviada</Badge>;
       case 'viewed': return <Badge className="bg-chart-3/20 text-chart-3 border-chart-3/30">Visualizada</Badge>;
       case 'accepted': return <Badge className="bg-chart-1/20 text-chart-1 border-chart-1/30">Aceita</Badge>;
       case 'rejected': return <Badge variant="destructive">Recusada</Badge>;
@@ -297,7 +297,7 @@ const ProposalsListPage = () => {
           <ExternalLink className="h-4 w-4 mr-2" /> Abrir proposta
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => setSummaryProposal(p)}>
-          <Eye className="h-4 w-4 mr-2" /> Ver resumo
+          <AlignLeft className="h-4 w-4 mr-2" /> Ver resumo
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => setViewsProposalId(p.id)}>
           <Eye className="h-4 w-4 mr-2" /> Views ({p.view_count || 0})
@@ -375,7 +375,7 @@ const ProposalsListPage = () => {
                       <SelectContent>
                         <SelectItem value="all">Todos Status</SelectItem>
                         <SelectItem value="draft">Rascunho</SelectItem>
-                        <SelectItem value="sent">Criada</SelectItem>
+                        <SelectItem value="sent">Enviada</SelectItem>
                         <SelectItem value="viewed">Visualizada</SelectItem>
                         <SelectItem value="accepted">Aceita</SelectItem>
                         <SelectItem value="rejected">Recusada</SelectItem>

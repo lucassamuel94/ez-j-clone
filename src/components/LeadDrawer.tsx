@@ -29,7 +29,7 @@ import { ActivityLogSection } from './ActivityLogSection';
 import { ContactCompanySection } from './ContactCompanySection';
 import { LeadActivityTimeline } from './LeadActivityTimeline';
 import { useLeadInteractions, useCreateNote, useDeleteLead } from '@/hooks/useLeads';
-import { useAdminUsers } from '@/hooks/useAdminUsers';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useLogLeadActivity } from '@/hooks/useActivityLogs';
 import { ScrollIndicator } from './ScrollIndicator';
 import { SaveIndicator } from './SaveIndicator';
@@ -100,9 +100,10 @@ export const LeadDrawer = ({ lead, open, onClose, onUpdateLead }: LeadDrawerProp
   const { data: interactions = [] } = useLeadInteractions(lead?.id ?? null);
   const createNoteMutation = useCreateNote();
   const deleteLeadMutation = useDeleteLead();
-  const { isAdmin: isAdminLegacy } = useAdminUsers();
   const { logActivity } = useLogLeadActivity();
-  const { isSdr, isAdmin, isManager } = useUserRole();
+  const { isSdr, isManager } = useUserRole();
+  const { hasPermission } = usePermissions();
+  const isAdmin = hasPermission('access_admin');
   const { isConnected: isCalendarConnected, createEvent: createCalendarEvent } = useGoogleCalendar();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
@@ -326,7 +327,7 @@ export const LeadDrawer = ({ lead, open, onClose, onUpdateLead }: LeadDrawerProp
     const nextActionAt = new Date(meetingDatetime.getTime() - 60 * 60 * 1000);
     onUpdateLead({ 
       ...lead, 
-      status: 'Reunião Agendada' as LeadStatus,
+      status: 'Reunião agendada' as LeadStatus,
       last_contact_at: now,
       next_action_at: nextActionAt,
       attempts_count: lead.attempts_count + 1
@@ -577,7 +578,7 @@ export const LeadDrawer = ({ lead, open, onClose, onUpdateLead }: LeadDrawerProp
     // Update lead with new status, next_action_at, last_contact_at, and increment attempts
     onUpdateLead({ 
       ...lead, 
-      status: 'Agendar Retorno' as LeadStatus,
+      status: 'Agendar retorno' as LeadStatus,
       next_action_at: scheduledDate,
       last_contact_at: now,
       attempts_count: lead.attempts_count + 1
@@ -609,7 +610,7 @@ export const LeadDrawer = ({ lead, open, onClose, onUpdateLead }: LeadDrawerProp
       action_type: 'status_changed',
       field_name: 'status',
       old_value: oldStatus,
-      new_value: 'Agendar Retorno',
+      new_value: 'Agendar retorno',
       description: `agendou retorno para ${formattedDate}`,
     });
     

@@ -5,9 +5,9 @@ import type { LeadStatus } from '@/types/lead';
 // ── Hardcoded fallbacks (used when DB has no SDR statuses) ──
 
 const SDR_KANBAN_FALLBACK: LeadStatus[] = [
-  'Novo', 'Em contato', 'Lead Quente', 'Reunião Agendada',
+  'Novo', 'Em contato', 'Lead Quente', 'Reunião agendada',
   'Reunião Confirmada', 'Oportunidade Futura', 'Reciclagem',
-  'Ocupado', 'Agendar Retorno', 'Sem retorno',
+  'Ocupado', 'Agendar retorno', 'Sem retorno',
   'Oportunidade criada', 'Descartado',
 ];
 

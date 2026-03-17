@@ -259,7 +259,12 @@ const CheckoutRegistration = ({ proposalId, companyName, onComplete }: CheckoutR
               </div>
               <div>
                 <Label className={labelClass}>Estado *</Label>
-                <Input {...register('state')} className={cn(inputClass, 'mt-1')} placeholder="UF" maxLength={2} />
+                <select {...register('state')} className={cn(inputClass, 'mt-1')}>
+                  <option value="">Selecione...</option>
+                  {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf => (
+                    <option key={uf} value={uf}>{uf}</option>
+                  ))}
+                </select>
                 {errors.state && <p className={errorClass}>{errors.state.message}</p>}
               </div>
             </div>

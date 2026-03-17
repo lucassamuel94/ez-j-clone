@@ -20,6 +20,8 @@ interface ProjectTasksSectionProps {
 
 const NOTIFY_OPTIONS = [
   { value: 'none', label: 'Sem notificação' },
+  { value: '5min', label: '5 minutos antes' },
+  { value: '15min', label: '15 minutos antes' },
   { value: '30min', label: '30 minutos antes' },
   { value: '1h', label: '1 hora antes' },
   { value: '1d', label: '1 dia antes' },

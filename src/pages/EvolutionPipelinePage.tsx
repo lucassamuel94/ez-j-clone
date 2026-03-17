@@ -16,8 +16,7 @@ import { LeadTemperature } from '@/types/lead';
 import { buildLeadFromOpportunity } from '@/utils/leadEmailHelper';
 
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { useAdminUsers } from '@/hooks/useAdminUsers';
-import { useUserRole } from '@/hooks/useUserRole';
+import { usePermissions } from '@/hooks/usePermissions';
 import { CloserSelector } from '@/components/CloserSelector';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { supabase } from '@/integrations/supabase/client';
@@ -135,10 +134,9 @@ const RETURN_OPTIONS = [
 
 const EvolutionPipelinePage = () => {
   const { user: currentUser } = useCurrentUser();
-  const { isAdmin, isManager } = useAdminUsers();
-  const { canAccessBoth } = useUserRole();
+  const { hasPermission } = usePermissions();
   const isMobile = useIsMobile();
-  const canFilterByCloser = isAdmin || isManager;
+  const canFilterByCloser = hasPermission('access_admin');
   const { stages: evoStages, activeStages: evoActiveStages, allStagesSet: ALL_EVO_STAGES_SET, defaultOppFilter } = useEvolutionStages();
 
   const { moveStage, returnToSdr, markLost, markWon, updateNotes, invalidateAll } = useCloserMutations();
@@ -146,7 +144,12 @@ const EvolutionPipelinePage = () => {
   const queryClient = useQueryClient();
   const { exportOpportunities, isExporting: isExportingOpps } = useExportOpportunitiesToExcel();
 
-  const debouncedSearch = '';
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
   const [activeTab, setActiveTab] = useState<CloserTab>('oportunidades');
   const [advancedFilterStatuses, setAdvancedFilterStatuses] = useState<Set<string>>(new Set());
   const [wonDateRange, setWonDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
@@ -172,10 +175,10 @@ const EvolutionPipelinePage = () => {
   const closerDefaultSet = useRef(false);
   useEffect(() => {
     if (!closerDefaultSet.current && currentUser?.id) {
-      setSelectedCloserId(isAdmin ? 'all' : currentUser.id);
+      setSelectedCloserId(hasPermission('access_admin') ? 'all' : currentUser.id);
       closerDefaultSet.current = true;
     }
-  }, [currentUser?.id, isAdmin]);
+  }, [currentUser?.id, hasPermission]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(() => {
@@ -246,7 +249,7 @@ const EvolutionPipelinePage = () => {
   const [notes, setNotes] = useState('');
   const [detectedProjectType, setDetectedProjectType] = useState<string | null>(null);
 
-  const canBulkSelect = isAdmin || isManager;
+  const canBulkSelect = hasPermission('access_admin');
   const [selectedOppIds, setSelectedOppIds] = useState<Set<string>>(new Set());
   const [allFilteredSelected, setAllFilteredSelected] = useState(false);
   const [isLoadingSelection, setIsLoadingSelection] = useState(false);
@@ -455,7 +458,7 @@ const EvolutionPipelinePage = () => {
               title="Evoluções"
               actions={
                 <div className="flex items-center gap-2">
-                  {(isAdmin || isManager) && (
+                  {(hasPermission('access_admin')) && (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -508,7 +511,8 @@ const EvolutionPipelinePage = () => {
                   <div className="flex items-center gap-2">
                     <GlobalSearchDropdown
                       onSelect={handleGlobalSearchSelect}
-                      placeholder="Busca global..."
+                      onSearchChange={setSearchQuery}
+                      placeholder="Buscar leads e oportunidades..."
                       className="flex-1 min-w-[140px]"
                     />
                     {canFilterByCloser && (
@@ -583,12 +587,12 @@ const EvolutionPipelinePage = () => {
                 sortBy={kanbanSortBy}
                 onMoveStage={(id, stage) => moveStage.mutate({ id, stage })}
                 onCardClick={handleOpenLeadModal}
-                onDeleteOpp={(isAdmin || isManager) ? handleOpenSingleDelete : undefined}
+                onDeleteOpp={(hasPermission('access_admin')) ? handleOpenSingleDelete : undefined}
                 getOppHref={getOppHref}
                 isMoving={moveStage.isPending}
                 isLoading={kanbanLoading}
                 currentUserId={currentUser?.id ?? null}
-                isManager={isAdmin || isManager}
+                canManage={hasPermission('access_admin')}
                 pipelineKey="evolution"
                 onLoadMore={handleKanbanLoadMore}
               />
@@ -599,8 +603,7 @@ const EvolutionPipelinePage = () => {
                 <CloserTableView
                   opportunities={paginatedOpps}
                   canBulkSelect={canBulkSelect}
-                  isAdmin={isAdmin}
-                  isManager={isManager}
+                  canManage={hasPermission('access_admin')}
                   selectedOppIds={selectedOppIds}
                   onOppCheckChange={handleOppCheckChange}
                   onCheckAllChange={handleCheckAllChange}
@@ -610,7 +613,7 @@ const EvolutionPipelinePage = () => {
                   onLost={handleOpenLost}
                   onNotes={handleOpenNotes}
                   onWon={handleOpenChecklist}
-                  onDelete={(isAdmin || isManager) ? handleOpenSingleDelete : undefined}
+                  onDelete={(hasPermission('access_admin')) ? handleOpenSingleDelete : undefined}
                   onStageChange={(id, stage) => moveStage.mutate({ id, stage })}
                   tab={activeTab}
                 />
@@ -761,7 +764,7 @@ const EvolutionPipelinePage = () => {
             onDeselectAll={handleDeselectAll}
             onReassign={() => setReassignDialogOpen(true)}
             onDelete={() => setDeleteDialogOpen(true)}
-            showDelete={isAdmin || isManager}
+            showDelete={hasPermission('access_admin')}
           />
         )}
 

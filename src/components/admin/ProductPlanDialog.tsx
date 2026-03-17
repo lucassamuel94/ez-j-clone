@@ -105,7 +105,7 @@ export const ProductPlanDialog = ({ open, onOpenChange, product, onSave, isLoadi
           <div className="grid grid-cols-2 gap-4 items-end">
             <div>
               <Label>Excedente Contato (R$)</Label>
-              <Input type="number" step="0.01" value={excessContactPrice} onChange={e => setExcessContactPrice(e.target.value)} />
+              <Input type="number" step="0.0001" value={excessContactPrice} onChange={e => setExcessContactPrice(e.target.value)} />
             </div>
             <div className="flex items-center gap-2 pb-2">
               <Switch checked={active} onCheckedChange={setActive} />

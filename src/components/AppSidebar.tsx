@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useAdminUsers } from "@/hooks/useAdminUsers";
+
 import { usePhaseProjectCounts } from "@/hooks/usePhaseProjectCounts";
 import { useSidebar } from "@/contexts/SidebarContext";
 import {
@@ -62,10 +62,11 @@ import {
    FileText as FileTextIcon,
    FileSearch,
    History,
+   UserCheck,
    Keyboard } from
  "lucide-react";
-import ezsoftLogo from "@/assets/ezsoft-logo.svg";
-import ezsoftLogoWhite from "@/assets/ezsoft-logo-white.png";
+import ezsoftLogo from "@/assets/ez-journey-logo-color.svg";
+import ezsoftLogoWhite from "@/assets/ez-journey-logo-white.svg";
 import { supabase } from "@/integrations/supabase/client";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useMyTasks } from "@/hooks/useMyTasks";
@@ -183,12 +184,11 @@ function NavLinkItem({ item, collapsed, isActive, onNavigate }: {item: NavItem;c
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { open: shortcutsOpen, setOpen: setShortcutsOpen } = useShortcutsDialog();
   const { user: currentUser } = useCurrentUser();
-  const { canAccessBoth, isProjectRole, isRealAdmin } = useUserRole();
+  const { isRealAdmin } = useUserRole();
   const { hasPermission, isLoading: isLoadingPerms } = usePermissions();
   const { unreadCount } = useNotifications();
   const { data: myTasks } = useMyTasks();
   const pendingTaskCount = useMemo(() => (myTasks || []).filter(t => t.status === 'pendente').length, [myTasks]);
-  const { isAdmin, isManager } = useAdminUsers();
   const location = useLocation();
   const { collapsed, toggle, isMobile } = useSidebar();
   const { data: phaseCounts } = usePhaseProjectCounts();
@@ -198,11 +198,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   // In mobile sheet, never show as "collapsed"
   const isCollapsed = isMobile ? false : collapsed;
 
-  const canAccessProjects = hasPermission('view_projects') || canAccessBoth || isProjectRole;
-  const canAccessSdr = hasPermission('view_sdr_leads') || canAccessBoth;
-  const canAccessCloser = hasPermission('view_closer_pipeline') || canAccessBoth;
+  const canAccessProjects = hasPermission('view_projects');
+  const canAccessSdr = hasPermission('view_sdr_leads');
+  const canAccessCloser = hasPermission('view_closer_pipeline');
   const canAccessCommercial = canAccessSdr || canAccessCloser;
-  const canAccessAdmin = hasPermission('access_admin') || isAdmin || isManager;
+  const canAccessAdmin = hasPermission('access_admin');
 
   const isLinkActive = (to: string) => {
     if (to === "/") return location.pathname === "/";
@@ -238,7 +238,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       { to: "/leads", icon: <Inbox className="h-3.5 w-3.5" />, label: "Leads" },
       { to: "/sdr/call-intelligence", icon: <TrendingUp className="h-3.5 w-3.5" />, label: "Call Intelligence" },
       { to: "/sdr/icp", icon: <PieChart className="h-3.5 w-3.5" />, label: "Análise de ICP" },
-      { to: "/sdr/indicadores", icon: <BarChart3 className="h-3.5 w-3.5" />, label: "Dashboard" }]
+      { to: "/sdr/indicadores", icon: <BarChart3 className="h-3.5 w-3.5" />, label: "Dashboard" },
+      { to: "/sdr/meus-clientes", icon: <UserCheck className="h-3.5 w-3.5" />, label: "Meus Clientes" }]
     });
   }
   if (canAccessCloser) {
@@ -253,6 +254,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       { to: "/proposals", icon: <FileTextIcon className="h-3.5 w-3.5" />, label: "Propostas" },
       { to: "/sdr/icp", icon: <PieChart className="h-3.5 w-3.5" />, label: "Análise de ICP" },
       { to: "/accounts", icon: <Building2 className="h-3.5 w-3.5" />, label: "Gestão de Contas" },
+      { to: "/closer/call-intelligence", icon: <TrendingUp className="h-3.5 w-3.5" />, label: "Call Intelligence" },
       { to: "/closer/indicadores", icon: <BarChart3 className="h-3.5 w-3.5" />, label: "Dashboard" }]
     });
   }
@@ -261,11 +263,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     <>
       {/* Logo + Collapse (desktop only) */}
       {!isMobile && (
-        <div className="flex items-center justify-between h-14 px-3 border-b border-border/40 flex-shrink-0">
+        <div className="flex items-center justify-center h-14 px-3 border-b border-border/40 flex-shrink-0">
           {!isCollapsed &&
-          <Link to="/" className="flex items-center">
-              <img src={ezsoftLogo} alt="EZSoft" className="h-6 w-auto dark:hidden" />
-              <img src={ezsoftLogoWhite} alt="EZSoft" className="h-6 w-auto hidden dark:block" />
+          <Link to="/" className="flex items-center justify-center flex-1">
+              <img src={ezsoftLogo} alt="EZ Journey" className="h-10 w-auto dark:hidden" />
+              <img src={ezsoftLogoWhite} alt="EZ Journey" className="h-10 w-auto hidden dark:block" />
             </Link>
           }
           <Tooltip>
@@ -339,6 +341,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             collapsed={isCollapsed}
             isActive={location.pathname === "/projects"}
             onNavigate={onNavigate} />
+            {isRealAdmin && (
+            <NavLinkItem
+            item={{ to: "/projects/dashboard", icon: <BarChart3 className="h-4 w-4" />, label: "Dashboard Gerencial" }}
+            collapsed={isCollapsed}
+            isActive={location.pathname === "/projects/dashboard"}
+            onNavigate={onNavigate} />
+            )}
 
             {!isCollapsed && PROJECT_PHASES_ORDER.map((phase) => {
             const count = phaseCounts?.find((p) => p.phase_name === phase)?.count || 0;

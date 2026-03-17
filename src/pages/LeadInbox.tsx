@@ -20,7 +20,7 @@ import {
 import { Lead, FilterType, LeadTemperature, LeadStatus } from '@/types/lead';
 import { useLeadsPaginated, useLeadTabCounts, useUpdateLead, useBulkDeleteLeads } from '@/hooks/useLeads';
 import { bulkDiscardLeads } from '@/services/leadService';
-import { useAdminUsers } from '@/hooks/useAdminUsers';
+import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
 import { LeadAdvancedFilter, ActiveFilterChips } from '@/components/LeadAdvancedFilter';
 import { LeadRow, LeadTableHeader } from '@/components/LeadRow';
@@ -80,21 +80,32 @@ const LeadInbox = () => {
   const queryClient = useQueryClient();
   const updateLeadMutation = useUpdateLead();
   const bulkDeleteMutation = useBulkDeleteLeads();
-  const { isAdmin, isManager } = useAdminUsers();
+  const { hasPermission } = usePermissions();
   const { user: currentUser } = useCurrentUser();
-  const { canAccessBoth, role: currentRole, isSdr } = useUserRole();
+  const { role: currentRole, isManager } = useUserRole();
   const { isConnected: isCalendarConnected, createEvent: createCalendarEvent } = useGoogleCalendar();
   
   const { lead: selectedLead, opportunity: modalOpp, isOpen: drawerOpen, openLead, closeLead } = useLeadModal();
   const { exportLeads, isExporting: isExportingLeads } = useExportLeadsToExcel();
   const [globalSearchReadOnly, setGlobalSearchReadOnly] = useState(false);
   const [newLeadDialogOpen, setNewLeadDialogOpen] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<FilterType>('today');
+  const [activeFilter, _setActiveFilter] = useState<FilterType>(() => {
+    return (localStorage.getItem('sdr_active_filter') as FilterType) || 'today';
+  });
+  const setActiveFilter = useCallback((v: FilterType) => {
+    localStorage.setItem('sdr_active_filter', v);
+    _setActiveFilter(v);
+  }, []);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [advancedFilterStatuses, _setAdvancedFilterStatuses] = useState<Set<string>>(() => {
     const saved = localStorage.getItem('sdr_advanced_filters');
-    return saved ? new Set<string>(JSON.parse(saved)) : new Set();
+    if (saved) return new Set<string>(JSON.parse(saved));
+    return new Set<string>([
+      'Novo', 'Devolvido pelo Closer', 'Lead Quente', 'Reunião agendada',
+      'Reunião Confirmada', 'Oportunidade criada', 'Oportunidade Futura',
+      'Reciclagem', 'Descartado', 'Ocupado', 'Sem retorno', 'Agendar retorno', 'Em contato',
+    ]);
   });
   const setAdvancedFilterStatuses = useCallback((v: Set<string>) => {
     _setAdvancedFilterStatuses(v);
@@ -112,7 +123,13 @@ const LeadInbox = () => {
     const saved = localStorage.getItem('sdr_items_per_page');
     return saved ? Number(saved) : 20;
   });
-  const [selectedSdrId, setSelectedSdrId] = useState<string>(() => 'pending');
+  const [selectedSdrId, _setSelectedSdrId] = useState<string>(() => {
+    return localStorage.getItem('sdr_selected_sdr_id') || 'pending';
+  });
+  const setSelectedSdrId = useCallback((v: string) => {
+    localStorage.setItem('sdr_selected_sdr_id', v);
+    _setSelectedSdrId(v);
+  }, []);
   
   // Bulk selection state
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
@@ -181,18 +198,18 @@ const LeadInbox = () => {
   
   // All users can select leads; admin/manager get extra actions
   const canBulkSelect = true;
-  const canBulkReassign = isAdmin || isManager || isSdr;
+  const canBulkReassign = hasPermission('access_admin') || hasPermission('view_sdr_leads');
 
   // Set default SDR filter: admin/manager see all, others see own leads
   useEffect(() => {
     if (selectedSdrId !== 'pending') return;
     if (!currentUser) return;
-    if (isAdmin || isManager) {
+    if (hasPermission('access_admin')) {
       setSelectedSdrId('all');
     } else {
       setSelectedSdrId(currentUser.id);
     }
-  }, [currentUser, isAdmin, isManager, selectedSdrId]);
+  }, [currentUser, hasPermission, selectedSdrId]);
 
 
   // ═══ Server-side paginated data ═══
@@ -295,7 +312,7 @@ const LeadInbox = () => {
     }
   }, [searchParams, setSearchParams]);
 
-  const canFilterBySdr = isAdmin || isManager;
+  const canFilterBySdr = hasPermission('access_admin');
 
   // For non-admin/manager: filter profiles to same role only
   const visibleProfiles = useMemo(() => {
@@ -524,13 +541,7 @@ const LeadInbox = () => {
 
     const oneHourBefore = new Date(meetingDate.getTime() - 60 * 60 * 1000);
 
-    handleUpdateLead({
-      ...quickActionLead,
-      status: 'Reunião Agendada' as LeadStatus,
-      next_action_at: oneHourBefore,
-    });
-
-    // Create meeting record
+    // Create meeting record first (non-blocking failure)
     let meetingRecordId: string | undefined;
     const { data: meetingRow } = await supabase.from('meetings').insert({
       lead_id: quickActionLead.id,
@@ -538,24 +549,36 @@ const LeadInbox = () => {
       meeting_datetime: meetingDate.toISOString(),
       title: data.meetingTitle,
       reminder_minutes_before: data.reminderMinutesBefore,
-      user_id: quickActionLead.owner_user_id || currentUser?.id || null,
+      user_id: currentUser?.id || null,
     }).select('id').single();
     meetingRecordId = meetingRow?.id;
 
-    // Create opportunity
+    // Create opportunity BEFORE updating lead status — if it fails, status is NOT changed
     if (currentUser?.id) {
-      supabase.from('opportunities').insert({
+      const { error: oppError } = await supabase.from('opportunities').insert({
         lead_id: quickActionLead.id,
         created_by_user_id: currentUser.id,
         assigned_to_user_id: data.executiveUserId,
         sdr_user_id: currentUser.id,
         meeting_datetime: meetingDate.toISOString(),
         stage: 'Demonstração',
-      }).then(() => {
-        queryClient.invalidateQueries({ queryKey: ['leads-paginated'] });
-        queryClient.invalidateQueries({ queryKey: ['lead-tab-counts'] });
       });
+      if (oppError) {
+        toast.error('Erro ao criar oportunidade no pipeline do Closer. Tente novamente.');
+        setMeetingDialogOpen(false);
+        setQuickActionLead(null);
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ['leads-paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-tab-counts'] });
     }
+
+    // Only update lead status after opportunity is successfully created
+    handleUpdateLead({
+      ...quickActionLead,
+      status: 'Reunião agendada' as LeadStatus,
+      next_action_at: oneHourBefore,
+    });
 
     // Google Calendar event + email (non-blocking)
     const meetingEndDate = new Date(meetingDate.getTime() + 60 * 60 * 1000);
@@ -713,9 +736,23 @@ const LeadInbox = () => {
 
   // Kanban move handler
   const [isKanbanMoving, setIsKanbanMoving] = useState(false);
-  const handleKanbanMoveStatus = useCallback((leadId: string, newStatus: LeadStatus) => {
+  const handleKanbanMoveStatus = useCallback(async (leadId: string, newStatus: LeadStatus) => {
     const lead = kanbanAllLeads.find(l => l.id === leadId);
     if (!lead) return;
+
+    // "Reunião agendada" requires the meeting dialog — same validation as Quick Action
+    if (newStatus === 'Reunião agendada') {
+      const { canAdvanceToMeeting } = await import('@/utils/qualificationScore');
+      const advanceCheck = canAdvanceToMeeting(lead);
+      if (!advanceCheck.allowed) {
+        toast.error(advanceCheck.reason);
+        return;
+      }
+      setQuickActionLead(lead);
+      setMeetingDialogOpen(true);
+      return; // status only changes after meeting dialog is confirmed
+    }
+
     setIsKanbanMoving(true);
     const now = new Date();
     const updatedLead = {
@@ -804,7 +841,7 @@ const LeadInbox = () => {
             count={totalFiltered}
             actions={
               <div className="flex items-center gap-2">
-                {(isAdmin || isManager) && (
+                {(hasPermission('access_admin')) && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -835,7 +872,8 @@ const LeadInbox = () => {
               </div>
             }
             toolbar={
-              <div className="flex items-center gap-2">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <LeadAdvancedFilter
                     selectedStatuses={advancedFilterStatuses}
                     onSelectedStatusesChange={setAdvancedFilterStatuses}
@@ -850,6 +888,8 @@ const LeadInbox = () => {
                     }}
                     onClearAll={() => setAdvancedFilterStatuses(new Set())}
                   />
+                </div>
+                <div className="flex items-center gap-2">
                   <GlobalSearchDropdown
                     onSelect={handleGlobalSearchSelect}
                     onSearchChange={setSearchQuery}
@@ -879,8 +919,6 @@ const LeadInbox = () => {
                       </SelectContent>
                     </Select>
                   </div>
-
-                  {/* Kanban sort */}
                   {viewMode === 'kanban' && (
                     <Select value={kanbanSortBy} onValueChange={(v) => setKanbanSortBy(v as SDRSortOption)}>
                       <SelectTrigger className="w-[140px] h-8 text-xs font-medium">
@@ -896,8 +934,6 @@ const LeadInbox = () => {
                       </SelectContent>
                     </Select>
                   )}
-
-                  {/* View toggle */}
                   <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as 'list' | 'kanban')} className="h-8">
                     <ToggleGroupItem value="list" aria-label="Lista" className="h-8 w-8 p-0">
                       <List className="h-3.5 w-3.5" />
@@ -907,6 +943,7 @@ const LeadInbox = () => {
                     </ToggleGroupItem>
                   </ToggleGroup>
                 </div>
+              </div>
             }
           />
 
@@ -917,13 +954,13 @@ const LeadInbox = () => {
               visibleStatuses={kanbanVisibleStatusesMerged}
               onMoveStatus={handleKanbanMoveStatus}
               onCardClick={handleLeadClick}
-              onDeleteLead={(isAdmin || isManager) ? handleSingleDelete : undefined}
-              onSendToCloser={(isAdmin || isManager) ? handleSendToCloser : undefined}
+              onDeleteLead={(hasPermission('access_admin')) ? handleSingleDelete : undefined}
+              onSendToCloser={(hasPermission('access_admin')) ? handleSendToCloser : undefined}
               getLeadHref={(lead) => `/leads?lead=${lead.id}`}
               isMoving={isKanbanMoving}
               isLoading={isKanbanLoading}
               currentUserId={currentUser?.id ?? null}
-              isManager={isAdmin || isManager}
+              canManage={hasPermission('access_admin')}
               onLoadMore={handleKanbanLoadMore}
             />
           ) : (
@@ -971,8 +1008,8 @@ const LeadInbox = () => {
                       onRescheduleMeeting={handleQuickRescheduleMeeting}
                       onTemperatureChange={handleQuickTemperatureChange}
                       onStatusChange={handleQuickStatusChange}
-                      onDelete={(isAdmin || isManager) ? handleSingleDelete : undefined}
-                      onSendToCloser={(isAdmin || isManager) ? handleSendToCloser : undefined}
+                      onDelete={(hasPermission('access_admin')) ? handleSingleDelete : undefined}
+                      onSendToCloser={(hasPermission('access_admin')) ? handleSendToCloser : undefined}
                     />
                   ))
                 )}
@@ -1097,9 +1134,9 @@ const LeadInbox = () => {
           onSelectCustomCount={handleSelectCustomCount}
           onDeselectAll={handleDeselectAll}
           onReassign={canBulkReassign ? () => setReassignDialogOpen(true) : undefined}
-          onDelete={(isAdmin || isManager) ? () => setDeleteDialogOpen(true) : undefined}
+          onDelete={(hasPermission('access_admin')) ? () => setDeleteDialogOpen(true) : undefined}
           onDiscard={() => setBulkDiscardDialogOpen(true)}
-          showDelete={isAdmin || isManager}
+          showDelete={hasPermission('access_admin')}
           showReassign={canBulkReassign}
           showDiscard={true}
         />

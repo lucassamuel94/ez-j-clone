@@ -62,7 +62,12 @@ async function fetchCnpjData(cnpj: string): Promise<BrasilApiCnpj | null> {
     const cleanCnpj = normalizeCnpj(cnpj);
     console.log(`Fetching CNPJ data from BrasilAPI: ${cleanCnpj}`);
     
-    const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       console.error(`BrasilAPI error: ${response.status} ${response.statusText}`);

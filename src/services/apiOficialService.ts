@@ -157,9 +157,9 @@ export const createApiOficialDealFromClient = async (
   activeClientId: string,
   userId: string,
 ): Promise<string> => {
-  // 1. Fetch client
+  // 1. Fetch account (unified client entity)
   const { data: client, error: clientError } = await supabase
-    .from('active_clients' as any)
+    .from('accounts')
     .select('*')
     .eq('id', activeClientId)
     .single();
@@ -196,8 +196,8 @@ export const createApiOficialDealFromClient = async (
       const { data: newLead, error: leadError } = await supabase
         .from('leads')
         .insert({
-          name: c.contact_name || c.company,
-          company: c.company,
+          name: c.contact_name || c.company_name,
+          company: c.company_name,
           cnpj: c.cnpj,
           razao_social: c.razao_social,
           nome_fantasia: c.nome_fantasia,

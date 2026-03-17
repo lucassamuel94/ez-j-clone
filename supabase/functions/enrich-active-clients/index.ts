@@ -148,7 +148,10 @@ Deno.serve(async (req) => {
           if (Object.keys(updates).length > 0) {
             // Only stamp enriched_at when we actually got data
             updates.enriched_at = new Date().toISOString();
-            await supabase.from("active_clients").update(updates).eq("id", batch[j].id);
+            const { error: updateError } = await supabase.from("active_clients").update(updates).eq("id", batch[j].id);
+            if (updateError) {
+              console.error("Failed to save updates for", batch[j].company, updateError.message);
+            }
           } else {
             // No data found — do NOT stamp enriched_at so the record is retried in future runs
             console.log(`No enrichment data found for ${batch[j].company}, will retry later`);
@@ -374,10 +377,10 @@ async function enrichClient(
           const cleaned = content.replace(/```json?\s*/g, "").replace(/```/g, "").trim();
           const parsed = JSON.parse(cleaned);
           // Map to columns — non-destructive
-          if (parsed.employee_count && !updates.employee_count) updates.employee_count = String(parsed.employee_count);
-          if (parsed.revenue_range && !updates.revenue_range) updates.revenue_range = String(parsed.revenue_range);
+          if (parsed.employee_count && !client.employee_count && !updates.employee_count) updates.employee_count = String(parsed.employee_count);
+          if (parsed.revenue_range && !client.revenue_range && !updates.revenue_range) updates.revenue_range = String(parsed.revenue_range);
           if (parsed.company_segment && !client.segment && !updates.segment) updates.segment = String(parsed.company_segment);
-          if (parsed.website && !updates.website) updates.website = String(parsed.website);
+          if (parsed.website && !client.website && !updates.website) updates.website = String(parsed.website);
           // Save full result for future reference
           updates.ai_enrichment_data = { ...parsed, enriched_at: new Date().toISOString() };
           perplexityOk = true;

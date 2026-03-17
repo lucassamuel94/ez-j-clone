@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useSystemUsers } from '@/hooks/useSystemUsers';
 import { useCreateProjectTask, useUpdateProjectTask } from '@/hooks/useProjectTasks';
-import { useUserRole } from '@/hooks/useUserRole';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { cn } from '@/lib/utils';
 import {
@@ -66,7 +66,8 @@ const QUICK_DATES = [
 
 export function ProjectTaskDialog({ projectId, open, onOpenChange, onTaskCreated, editTask, opportunityId, leadId }: ProjectTaskDialogProps) {
   const { data: users } = useSystemUsers();
-  const { isAdmin } = useUserRole();
+  const { hasPermission } = usePermissions();
+  const isAdmin = hasPermission('access_admin');
   const { user: currentUser } = useCurrentUser();
   const createTask = useCreateProjectTask();
   const updateTask = useUpdateProjectTask();

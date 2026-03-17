@@ -163,6 +163,7 @@ const mapDbLeadToLead = (row: any): Lead => ({
   main_pain_point: row.main_pain_point || '',
   solution_urgency: row.solution_urgency || '',
   has_budget: row.has_budget || '',
+  qualification_notes: row.qualification_notes || '',
   // SQO Validation fields
   sqo_pain_category: row.sqo_pain_category || '',
   sqo_pain_other: row.sqo_pain_other || '',
@@ -332,16 +333,13 @@ export const fetchLeadTabCounts = async (sdrId: string): Promise<LeadTabCounts> 
 
 // Fetch a single lead by ID
 export const fetchLeadById = async (leadId: string): Promise<Lead> => {
-  const { data, error } = await supabase
-    .from('leads')
-    .select('*, profiles:owner_user_id(name)')
-    .eq('id', leadId)
-    .single();
+  const { data, error } = await supabase.rpc('get_lead_by_id', { p_lead_id: leadId });
 
   if (error) {
     console.error('Error fetching lead by id:', error);
     throw error;
   }
+  if (!data) throw new Error('Lead not found');
 
   return mapDbLeadToLead(data);
 };
@@ -380,6 +378,8 @@ export const createLead = async (lead: Omit<Lead, 'id' | 'created_at' | 'updated
       situacao_cadastral: lead.situacao_cadastral || null,
       cnae_fiscal: lead.cnae_fiscal || null,
       cnae_fiscal_descricao: lead.cnae_fiscal_descricao || null,
+      company_segment: lead.company_segment || null,
+      cnaes_secundarios: lead.cnaes_secundarios || null,
       data_inicio_atividade: lead.data_inicio_atividade || null,
       logradouro: lead.logradouro || null,
       numero: lead.numero || null,
@@ -844,12 +844,5 @@ export async function fetchCloserNameForLead(leadId: string): Promise<string | n
 export async function refreshLeadFromDb(leadId: string): Promise<Lead | null> {
   const { data } = await supabase.from('leads').select('*').eq('id', leadId).single();
   if (!data) return null;
-
-  return {
-    ...data,
-    last_contact_at: data.last_contact_at ? new Date(data.last_contact_at) : null,
-    next_action_at: new Date(data.next_action_at),
-    created_at: new Date(data.created_at),
-    updated_at: new Date(data.updated_at),
-  } as unknown as Lead;
+  return mapDbLeadToLead(data);
 }

@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useRoleSimulation } from '@/stores/useRoleSimulation';
 import { useAuthSession } from '@/contexts/AuthSessionContext';
 
-export type UserRole = 'admin' | 'manager' | 'sdr' | 'closer' | 'moderator' | 'head_pos_venda' | 'ux_po' | 'dev_chatbot' | 'treinamento' | 'suporte' | 'verificacao_bm';
+export type UserRole = 'admin' | 'manager' | 'sdr' | 'closer' | 'moderator' | 'head_pos_venda' | 'ux_po' | 'dev_chatbot' | 'treinamento' | 'suporte' | 'verificacao_bm' | 'viewer';
 
 const isLovablePreview = typeof window !== 'undefined' &&
   (window.location.hostname.includes('id-preview--') || window.location.hostname.endsWith('.lovableproject.com'));

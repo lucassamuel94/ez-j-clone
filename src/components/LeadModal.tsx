@@ -45,7 +45,7 @@ import {
   useDeleteNote,
   useDeleteLead,
 } from "@/hooks/useLeads";
-import { useAdminUsers } from "@/hooks/useAdminUsers";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useLogLeadActivity } from "@/hooks/useActivityLogs";
 import { SaveIndicator } from "./SaveIndicator";
 import { isLeadOverdue, getInboundSLA, formatTimeAgo } from "@/utils/priorityCalculator";
@@ -230,12 +230,10 @@ export const LeadModal = ({
   const deleteNoteMutation = useDeleteNote();
   const deleteLeadMutation = useDeleteLead();
   const enrichLeadMutation = useEnrichIndividualLead();
-  const { isAdmin: isAdminLegacy, isManager: isManagerLegacy } = useAdminUsers();
   const { logActivity } = useLogLeadActivity();
-  const { isSdr, isAdmin: isAdminRole, isManager: isManagerRole } = useUserRole();
-  // Unified permission: prefer useUserRole, fallback to useAdminUsers
-  const isAdmin = isAdminRole || isAdminLegacy;
-  const isManager = isManagerRole || isManagerLegacy;
+  const { isSdr, isManager } = useUserRole();
+  const { hasPermission } = usePermissions();
+  const isAdmin = hasPermission('access_admin');
   const { isConnected: isCalendarConnected, createEvent: createCalendarEvent } = useGoogleCalendar();
   const { user: authUser } = useCurrentUser();
   const currentUserId = authUser?.id ?? null;
@@ -455,13 +453,8 @@ export const LeadModal = ({
       meetingDatetime.setHours(hours, minutes, 0, 0);
       // Set next_action_at to 1 hour before the meeting
       const nextActionAt = new Date(meetingDatetime.getTime() - 60 * 60 * 1000);
-      onUpdateLead({
-        ...lead,
-        status: "Reunião agendada" as any,
-        last_contact_at: now,
-        next_action_at: nextActionAt,
-        attempts_count: lead.attempts_count + 1,
-      });
+
+      // Create meeting record first (needed for calendar link)
       let meetingRecordId: string | undefined;
       try {
         const { data: meetingRow } = await supabase
@@ -480,7 +473,9 @@ export const LeadModal = ({
       } catch (error) {
         console.error("Error saving meeting:", error);
       }
-      // Create opportunity in Closer pipeline
+
+      // Create opportunity in Closer pipeline BEFORE updating lead status
+      // If this fails, we abort so the lead doesn't get stuck in "Reunião agendada" without an opportunity
       try {
         await createOpportunityFromMeeting(
           lead.id,
@@ -488,9 +483,26 @@ export const LeadModal = ({
           meetingData.executiveUserId || null,
           meetingDatetime.toISOString(),
         );
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error creating opportunity:", error);
+        const errorMsg = error?.message || "Erro desconhecido";
+        toast.error(`Não foi possível criar a oportunidade no pipeline do Closer: ${errorMsg}`);
+        // Clean up the meeting record since we're aborting
+        if (meetingRecordId) {
+          try { await supabase.from("meetings").delete().eq("id", meetingRecordId); } catch { /* cleanup */ }
+        }
+        return;
       }
+
+      // Only update lead status AFTER opportunity was successfully created
+      onUpdateLead({
+        ...lead,
+        status: "Reunião agendada" as any,
+        last_contact_at: now,
+        next_action_at: nextActionAt,
+        attempts_count: lead.attempts_count + 1,
+      });
+
       const formattedDate = meetingDatetime.toLocaleDateString("pt-BR", {
         day: "2-digit",
         month: "2-digit",
@@ -1239,7 +1251,7 @@ export const LeadModal = ({
                   ownerUserId={lead.owner_user_id}
                   ownerName={lead.owner_name}
                   currentUserId={currentUserId}
-                  isManager={isAdmin || isManager}
+                  canManage={isAdmin || isManager}
                   closerName={sdrModeCloserName || opportunity?.closer_name || null}
                 />
               )}
@@ -1527,7 +1539,7 @@ export const LeadModal = ({
                   currentCloserId={opportunity.assigned_to_user_id}
                   closerName={opportunity.closer_name}
                   currentUserId={currentUserId}
-                  isManager={isAdmin || isManager}
+                  canManage={isAdmin || isManager}
                 />
               )}
 

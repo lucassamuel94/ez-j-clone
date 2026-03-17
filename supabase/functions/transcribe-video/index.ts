@@ -1,3 +1,4 @@
+// v2 – nova-3, no keyterm/keywords
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -90,8 +91,9 @@ serve(async (req) => {
     // This function returns immediately — no waiting, no worker needed.
     const callbackUrl = `${supabaseUrl}/functions/v1/deepgram-webhook?analysis_id=${analysis_id}&type=demo`;
 
+    // Brand vocabulary is handled post-transcription via transcription_vocabulary table.
     const deepgramParams = new URLSearchParams({
-      model: "nova-2",
+      model: "nova-3",
       language: "pt-BR",
       diarize: "true",
       punctuate: "true",

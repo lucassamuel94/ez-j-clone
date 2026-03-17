@@ -104,3 +104,24 @@ verify_jwt = false
 
 [functions.whatsapp-widget-embed]
 verify_jwt = false
+
+[functions.send-task-reminders]
+verify_jwt = false
+
+[functions.dashboard-teams]
+verify_jwt = false
+
+[functions.team-capacity-update]
+verify_jwt = false
+
+[functions.dashboard-api-activations]
+verify_jwt = false
+
+[functions.dashboard-workload]
+verify_jwt = false
+
+[functions.bulk-scan-calls]
+verify_jwt = false
+
+[functions.bulk-process-queue]
+verify_jwt = false

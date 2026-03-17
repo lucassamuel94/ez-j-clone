@@ -70,7 +70,7 @@ interface CloserKanbanViewProps {
   isMoving?: boolean;
   isLoading?: boolean;
   currentUserId?: string | null;
-  isManager?: boolean;
+  canManage?: boolean;
   pipelineKey?: 'closer' | 'evolution';
   onLoadMore?: (stage: string) => void;
 }
@@ -86,9 +86,9 @@ const STAGE_PROGRESS: Record<string, number> = {
   'Demonstração': 15,
   'Demonstracao': 15,
   'Proposta enviada': 35,
-  'Oportunidade fria': 30,
+  'Oportunidade Fria': 30,
   'Oportunidade Futura': 40,
-  'Oportunidade quente': 55,
+  'Oportunidade Quente': 55,
   'Contrato enviado': 75,
   'Aguardando pagamento': 90,
   'Ganho': 100,
@@ -165,9 +165,9 @@ const STAGE_ICONS: Record<string, React.ReactNode> = {
   'Demonstração': <Presentation className="h-3 w-3" />,
   'Demonstracao': <Presentation className="h-3 w-3" />,
   'Proposta enviada': <Send className="h-3 w-3" />,
-  'Oportunidade fria': <Snowflake className="h-3 w-3" />,
+  'Oportunidade Fria': <Snowflake className="h-3 w-3" />,
   'Oportunidade Futura': <Eye className="h-3 w-3" />,
-  'Oportunidade quente': <Zap className="h-3 w-3" />,
+  'Oportunidade Quente': <Zap className="h-3 w-3" />,
   'Contrato enviado': <FileText className="h-3 w-3" />,
   'Aguardando pagamento': <CreditCard className="h-3 w-3" />,
   'Ganho': <Trophy className="h-3 w-3" />,
@@ -185,7 +185,7 @@ function StageBadge({ stage }: {stage: string;}) {
 
 // ---------- Kanban Card Content ----------
 
-function CardContent({ opp, fields, proposalType, currentUserId, isManager, evolutionCount }: {opp: CloserOpportunity;fields: FieldConfig[];proposalType?: string;currentUserId?: string | null;isManager?: boolean;evolutionCount?: number;}) {
+function CardContent({ opp, fields, proposalType, currentUserId, canManage, evolutionCount }: {opp: CloserOpportunity;fields: FieldConfig[];proposalType?: string;currentUserId?: string | null;canManage?: boolean;evolutionCount?: number;}) {
   const visibleFields = new Set(fields.filter((f) => f.visible).map((f) => f.id));
   const stuckInfo = isDealStuck(opp);
   const isTerminal = opp.stage === 'Ganho' || opp.stage === 'Perdido';
@@ -327,7 +327,7 @@ export function CloserKanbanView({
   isMoving = false,
   isLoading = false,
   currentUserId,
-  isManager = false,
+  canManage = false,
   pipelineKey = 'closer',
   onLoadMore,
 }: CloserKanbanViewProps) {
@@ -581,7 +581,7 @@ export function CloserKanbanView({
                         onCardClick(opp);
                       }}>
 
-                        <CardContent opp={opp} fields={cardFields} proposalType={proposalTypeMap[opp.id]} currentUserId={currentUserId} isManager={isManager} evolutionCount={getEvolutionCount(opp)} />
+                        <CardContent opp={opp} fields={cardFields} proposalType={proposalTypeMap[opp.id]} currentUserId={currentUserId} canManage={canManage} evolutionCount={getEvolutionCount(opp)} />
                       </KanbanCard>
                   </ContextMenuTrigger>
                   {onDeleteOpp && (
@@ -624,7 +624,7 @@ export function CloserKanbanView({
         })}
 
         <KanbanOverlay>
-          {activeOpp && <CardContent opp={activeOpp} fields={cardFields} proposalType={proposalTypeMap[activeOpp.id]} currentUserId={currentUserId} isManager={isManager} evolutionCount={getEvolutionCount(activeOpp)} />}
+          {activeOpp && <CardContent opp={activeOpp} fields={cardFields} proposalType={proposalTypeMap[activeOpp.id]} currentUserId={currentUserId} canManage={canManage} evolutionCount={getEvolutionCount(activeOpp)} />}
         </KanbanOverlay>
       </KanbanProvider>
     </div>);

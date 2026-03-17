@@ -20,7 +20,7 @@ import {
 } from "@/components/projects/ProjectViewConfig";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useProjects, useUserAssignedProjectIds, useUserPhaseAssignments } from "@/hooks/useProjects";
-import { useUserRole } from "@/hooks/useUserRole";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useProjectModal } from "@/hooks/useProjectModal";
 import { Loader2, FolderKanban, Plus, BarChart3, Eye, Upload } from "lucide-react";
@@ -58,7 +58,8 @@ const DEFAULT_LIST_COLUMNS: FieldConfig[] = [
 
 const ProjectsPage = () => {
   const { data: projects, isLoading } = useProjects();
-  const { isAdmin } = useUserRole();
+  const { hasPermission } = usePermissions();
+  const isAdmin = hasPermission('access_admin');
   const { user: currentUser } = useCurrentUser();
   const { data: assignedProjectIds } = useUserAssignedProjectIds(currentUser?.id);
   const { data: phaseAssignments } = useUserPhaseAssignments(currentUser?.id);

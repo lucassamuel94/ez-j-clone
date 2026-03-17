@@ -50,9 +50,12 @@ serve(async (req) => {
       throw new Error("Transcrição vazia");
     }
 
-    // Format transcription with speakers
+    // Format transcription with speakers and segment indices (for coaching annotations)
     const formattedTranscription = speakerSegments
-      .map((s: any) => `[${s.speaker}]: ${s.text}`)
+      .map((s: { speaker: string; text: string }, index: number) => {
+        const label = s.speaker === "speaker_0" ? "SDR" : "Lead";
+        return `[${index}] [${label}]: ${s.text}`;
+      })
       .join("\n");
 
     // Get prompt config from ai_prompts
@@ -185,7 +188,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           model: modelName,
-          max_tokens: 4096,
+          max_tokens: 8192,
           system: systemPrompt,
           messages: [{ role: "user", content: userPrompt }],
         }),
@@ -260,7 +263,7 @@ serve(async (req) => {
     }
 
     // Update analysis
-    await supabase.from("call_analyses").update({
+    const { error: updateError } = await supabase.from("call_analyses").update({
       ai_analysis: parsed,
       call_score: parsed.call_score ?? 0,
       connection_effective: parsed.connection_effective ?? false,
@@ -278,6 +281,7 @@ serve(async (req) => {
       status: "completed",
       completed_at: new Date().toISOString(),
     }).eq("id", analysis_id);
+    if (updateError) throw new Error(`Failed to save analysis: ${updateError.message}`);
 
     // Send email notification to SDR
     try {

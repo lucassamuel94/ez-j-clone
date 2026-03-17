@@ -127,7 +127,7 @@ export const suggestNextAction = (lead: Lead): string => {
   const score = lead.behavioral_score ?? calculateBehavioralScore(lead).total;
   const lastDate = lead.last_contact_at || lead.created_at;
   const idleHours = hoursSince(lastDate);
-  const isOverdue = new Date(lead.next_action_at) < new Date();
+  const isOverdue = lead.next_action_at ? new Date(lead.next_action_at) < new Date() : false;
   
   // Critical: overdue + high score
   if (isOverdue && score >= 70) {
@@ -250,7 +250,7 @@ export const calculateClosingProbability = (lead: Lead, opportunity?: any): numb
     probability += stageBonus[opportunity.stage] || 0;
     
     // Adicional: +1 se reunião agendada em estágio inicial
-    if (opportunity.meeting_datetime && opportunity.stage === 'Oportunidade quente') {
+    if (opportunity.meeting_datetime && opportunity.stage === 'Oportunidade Quente') {
       probability += 1;
     }
   }
@@ -354,8 +354,8 @@ export const getAbandonmentAlerts = (lead: Lead): { type: 'warning' | 'error'; m
   const alerts: { type: 'warning' | 'error'; message: string }[] = [];
   const lastDate = lead.last_contact_at || lead.created_at;
   const idleHours = hoursSince(lastDate);
-  const nextAction = new Date(lead.next_action_at);
-  const overdueHours = (new Date().getTime() - nextAction.getTime()) / (1000 * 60 * 60);
+  const nextAction = lead.next_action_at ? new Date(lead.next_action_at) : null;
+  const overdueHours = nextAction ? (new Date().getTime() - nextAction.getTime()) / (1000 * 60 * 60) : 0;
   
   // No interaction > 5 days
   if (idleHours > 120 && lead.status !== 'Descartado' && lead.status !== 'Oportunidade criada') {

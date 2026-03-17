@@ -28,6 +28,11 @@ export function useIntegrations() {
         companies: Set<string>;
       }>();
 
+      // Normalize to title case for consistent display (e.g. "openai" → "OpenAI" is user-provided,
+      // but "openai" and "OpenAI" should merge — we keep the version with the most capital letters)
+      const preferredCase = (a: string, b: string) =>
+        (b.match(/[A-Z]/g)?.length ?? 0) >= (a.match(/[A-Z]/g)?.length ?? 0) ? b : a;
+
       for (const row of data || []) {
         const key = row.integration_name.trim().toLowerCase();
         if (!map.has(key)) {
@@ -40,8 +45,11 @@ export function useIntegrations() {
           });
         }
         const entry = map.get(key)!;
+        // Keep the casing with more uppercase letters (preserves acronyms like "GPT", "API")
+        entry.integration_name = preferredCase(entry.integration_name, row.integration_name.trim());
         entry.projectIds.add(row.project_id);
-        if (row.notes && !entry.notes) entry.notes = row.notes;
+        // Keep the longest non-empty notes value
+        if (row.notes && (!entry.notes || row.notes.length > entry.notes.length)) entry.notes = row.notes;
         if (row.is_new) entry.is_new = true;
         const companyName = (row as any).projects?.company_name;
         if (companyName) entry.companies.add(companyName);

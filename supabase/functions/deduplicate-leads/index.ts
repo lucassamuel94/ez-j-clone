@@ -190,6 +190,7 @@ Deno.serve(async (req) => {
           }
 
           // 3. Migrate dependent tables
+          let migrationHadRealError = false;
           for (const table of DEPENDENT_TABLES) {
             const { count, error: migrateError } = await db
               .from(table)
@@ -198,8 +199,16 @@ Deno.serve(async (req) => {
               .select("id");
 
             if (migrateError) {
-              // Table might not exist or have no lead_id - skip silently
-              console.log(`Skipping ${table}: ${migrateError.message}`);
+              // Distinguish expected errors (no lead_id column) from real failures
+              const isExpected = migrateError.message.includes("does not exist")
+                || migrateError.message.includes("column")
+                || migrateError.code === "42703";
+              if (isExpected) {
+                console.log(`Skipping ${table}: ${migrateError.message}`);
+              } else {
+                migrationHadRealError = true;
+                report.errors.push(`Migration failed for ${table} in group "${group.comp}": ${migrateError.message}`);
+              }
               continue;
             }
             if (count && count > 0) {
@@ -207,7 +216,12 @@ Deno.serve(async (req) => {
             }
           }
 
-          // 4. Delete duplicate leads
+          // 4. Delete duplicate leads (only if all migrations succeeded)
+          if (migrationHadRealError) {
+            report.errors.push(`Skipping delete for group "${group.comp}": migration errors prevent safe deletion`);
+            continue;
+          }
+
           const { error: deleteError } = await db
             .from("leads")
             .delete()

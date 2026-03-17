@@ -329,6 +329,7 @@ Deno.serve(async (req) => {
     // Build MIME message
     const boundary = "boundary_" + crypto.randomUUID().replace(/-/g, "");
     const rawAttParts: string[] = [];
+    const failedAttachments: string[] = [];
 
     if (attachments && attachments.length > 0) {
       for (const att of attachments as AttachmentInfo[]) {
@@ -339,6 +340,7 @@ Deno.serve(async (req) => {
 
         if (downloadError || !fileData) {
           console.error(`Failed to download: ${att.path}`, downloadError);
+          failedAttachments.push(att.name);
           continue;
         }
 
@@ -545,7 +547,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, messageId: sendData.id }),
+      JSON.stringify({ success: true, messageId: sendData.id, failedAttachments }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

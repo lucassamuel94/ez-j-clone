@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -51,7 +53,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Search, Shield, Clock, Trash2, Pencil, UserX, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Search, Shield, Clock, Trash2, Pencil, UserX, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown, Plus, X } from 'lucide-react';
+import { TeamMember } from '@/hooks/useTeams';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -80,7 +83,7 @@ export function PeopleSection() {
     deleteInvitation,
   } = useAdminUsers();
   const { roles } = useRoles();
-  const { teams, teamMembers } = useTeams();
+  const { teams, teamMembers, createTeam, addMember, removeMember } = useTeams();
 
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('all');
@@ -93,6 +96,9 @@ export function PeopleSection() {
   const [editUser, setEditUser] = useState<UserWithRole | null>(null);
   const [editName, setEditName] = useState('');
   const [editRamal, setEditRamal] = useState('');
+  const [editTeamIds, setEditTeamIds] = useState<Set<string>>(new Set());
+  const [newTeamName, setNewTeamName] = useState('');
+  const [showNewTeamInput, setShowNewTeamInput] = useState(false);
 
   // Confirm disable dialog
   const [confirmDisableUser, setConfirmDisableUser] = useState<UserWithRole | null>(null);
@@ -189,18 +195,45 @@ export function PeopleSection() {
   const handleOpenEdit = async (user: UserWithRole) => {
     setEditName(user.name);
     setEditUser(user);
-    // Fetch current ramal
+    setEditTeamIds(new Set(getUserTeams(user.id).map((t) => t.id)));
+    setShowNewTeamInput(false);
+    setNewTeamName('');
     const { data } = await supabase.from('profiles').select('ramal').eq('id', user.id).single();
     setEditRamal((data as unknown as { ramal: string | null })?.ramal || '');
   };
 
-  const handleSaveEdit = async () => {
-    if (editUser && editName.trim()) {
-      updateUserName.mutate({ userId: editUser.id, name: editName.trim() });
-      // Save ramal separately
-      await supabase.from('profiles').update({ ramal: editRamal.trim() || null } as Record<string, unknown>).eq('id', editUser.id);
-      setEditUser(null);
+  const handleCreateTeam = async () => {
+    if (!newTeamName.trim()) return;
+    try {
+      const newTeam = await createTeam.mutateAsync({ name: newTeamName.trim(), description: '' });
+      setEditTeamIds((prev) => new Set([...prev, newTeam.id]));
+      setNewTeamName('');
+      setShowNewTeamInput(false);
+    } catch {
+      // error handled by mutation
     }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editUser || !editName.trim()) return;
+    updateUserName.mutate({ userId: editUser.id, name: editName.trim() });
+    await supabase.from('profiles').update({ ramal: editRamal.trim() || null } as Record<string, unknown>).eq('id', editUser.id);
+
+    // Sync team memberships
+    const currentTeamIds = new Set(getUserTeams(editUser.id).map((t) => t.id));
+    for (const teamId of editTeamIds) {
+      if (!currentTeamIds.has(teamId)) {
+        addMember.mutate({ teamId, userId: editUser.id });
+      }
+    }
+    for (const teamId of currentTeamIds) {
+      if (!editTeamIds.has(teamId)) {
+        const member = teamMembers.find((m) => m.team_id === teamId && m.user_id === editUser.id);
+        if (member) removeMember.mutate(member.id);
+      }
+    }
+
+    setEditUser(null);
   };
 
   const handleConfirmDisable = () => {
@@ -221,7 +254,7 @@ export function PeopleSection() {
           </p>
         </div>
         <InviteUserDialog
-          onInvite={(email, role, roleId, teamId) => createInvitation.mutate({ email, role, roleId, teamId })}
+          onInvite={(email, role, roleId, teamId, ramal) => createInvitation.mutate({ email, role, roleId, teamId, ramal })}
           isLoading={createInvitation.isPending}
         />
       </div>
@@ -318,6 +351,8 @@ export function PeopleSection() {
                   user={user}
                   roles={availableRoles}
                   userTeams={getUserTeams(user.id)}
+                  allTeams={teams}
+                  teamMembers={teamMembers}
                   onToggleActive={(active) => {
                     if (!active) {
                       setConfirmDisableUser(user);
@@ -328,6 +363,8 @@ export function PeopleSection() {
                   onUpdateRole={(roleId) =>
                     updateUserRole.mutate({ userId: user.id, roleId })
                   }
+                  onAddTeam={(teamId) => addMember.mutate({ teamId, userId: user.id })}
+                  onRemoveTeam={(memberId) => removeMember.mutate(memberId)}
                   onEdit={() => handleOpenEdit(user)}
                   onDisable={() => setConfirmDisableUser(user)}
                 />
@@ -387,6 +424,63 @@ export function PeopleSection() {
               />
               <p className="text-[10px] text-muted-foreground">Ramal do PABX para relatório de ligações</p>
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Equipes</Label>
+              {teams.length > 0 && (
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                  {teams.map((team) => (
+                    <div key={team.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`team-${team.id}`}
+                        checked={editTeamIds.has(team.id)}
+                        onCheckedChange={(checked) =>
+                          setEditTeamIds((prev) => {
+                            const next = new Set(prev);
+                            if (checked) next.add(team.id);
+                            else next.delete(team.id);
+                            return next;
+                          })
+                        }
+                      />
+                      <label htmlFor={`team-${team.id}`} className="text-sm cursor-pointer">
+                        {team.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {showNewTeamInput ? (
+                <div className="flex items-center gap-1.5 mt-1">
+                  <Input
+                    value={newTeamName}
+                    onChange={(e) => setNewTeamName(e.target.value)}
+                    className="h-7 text-xs flex-1"
+                    placeholder="Nome da equipe"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleCreateTeam();
+                      if (e.key === 'Escape') { setShowNewTeamInput(false); setNewTeamName(''); }
+                    }}
+                  />
+                  <Button size="sm" className="h-7 text-xs px-2" onClick={handleCreateTeam} disabled={!newTeamName.trim() || createTeam.isPending}>
+                    Criar
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs px-2" onClick={() => { setShowNewTeamInput(false); setNewTeamName(''); }}>
+                    ✕
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs gap-1.5 text-muted-foreground px-0 hover:text-foreground"
+                  onClick={() => setShowNewTeamInput(true)}
+                >
+                  <Plus className="h-3 w-3" />
+                  Nova equipe
+                </Button>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setEditUser(null)}>
@@ -424,16 +518,24 @@ function UserRow({
   user,
   roles,
   userTeams,
+  allTeams,
+  teamMembers,
   onToggleActive,
   onUpdateRole,
+  onAddTeam,
+  onRemoveTeam,
   onEdit,
   onDisable,
 }: {
   user: UserWithRole;
   roles: { id: string; name: string }[];
   userTeams: { id: string; name: string }[];
+  allTeams: { id: string; name: string }[];
+  teamMembers: TeamMember[];
   onToggleActive: (active: boolean) => void;
   onUpdateRole: (roleId: string) => void;
+  onAddTeam: (teamId: string) => void;
+  onRemoveTeam: (memberId: string) => void;
   onEdit: () => void;
   onDisable: () => void;
 }) {
@@ -472,17 +574,66 @@ function UserRow({
             </Select>
           </TableCell>
           <TableCell>
-            {userTeams.length > 0 ? (
-              <div className="flex flex-wrap gap-1">
-                {userTeams.map((t) => (
-                  <Badge key={t.id} variant="outline" className="text-[10px] px-1.5 py-0 h-5 font-medium">
+            <div className="flex flex-wrap items-center gap-1">
+              {userTeams.map((t) => {
+                const member = teamMembers.find(
+                  (m) => m.team_id === t.id && m.user_id === user.id
+                );
+                return (
+                  <Badge key={t.id} variant="outline" className="text-[10px] px-1.5 py-0 h-5 font-medium gap-0.5 group/badge">
                     {t.name}
+                    <button
+                      type="button"
+                      className="ml-0.5 opacity-0 group-hover/badge:opacity-100 transition-opacity hover:text-destructive"
+                      onClick={() => member && onRemoveTeam(member.id)}
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
                   </Badge>
-                ))}
-              </div>
-            ) : (
-              <span className="text-xs text-muted-foreground">—</span>
-            )}
+                );
+              })}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center h-5 w-5 rounded border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-2" align="start">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 px-1">Equipes</p>
+                  {allTeams.length === 0 && (
+                    <p className="text-xs text-muted-foreground px-1 py-2">Nenhuma equipe criada.</p>
+                  )}
+                  {allTeams.map((team) => {
+                    const isMember = userTeams.some((ut) => ut.id === team.id);
+                    const member = teamMembers.find(
+                      (m) => m.team_id === team.id && m.user_id === user.id
+                    );
+                    return (
+                      <label
+                        key={team.id}
+                        className="flex items-center gap-2 px-1 py-1 rounded hover:bg-accent cursor-pointer text-xs"
+                      >
+                        <Checkbox
+                          checked={isMember}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              onAddTeam(team.id);
+                            } else if (member) {
+                              onRemoveTeam(member.id);
+                            }
+                          }}
+                          className="h-3.5 w-3.5"
+                        />
+                        {team.name}
+                      </label>
+                    );
+                  })}
+                </PopoverContent>
+              </Popover>
+            </div>
           </TableCell>
           <TableCell>
             {user.last_seen_at ? (

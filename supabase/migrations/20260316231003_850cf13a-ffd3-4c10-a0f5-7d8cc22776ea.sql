@@ -1,0 +1,1 @@
+ALTER TABLE project_tasks ADD COLUMN IF NOT EXISTS reminder_sent_at timestamptz;

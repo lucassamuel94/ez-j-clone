@@ -6,15 +6,18 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Eye, Phone, BarChart3, CheckCircle2, AlertCircle, Trash2, Play, Upload, Volume2, Square, Pause, Video } from 'lucide-react';
+import { Loader2, Eye, Phone, BarChart3, CheckCircle2, AlertCircle, Trash2, Play, Upload, Volume2, Square, Pause, Video, RotateCcw, BookText, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Trophy } from 'lucide-react';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { CallAnalysisUploadForm } from './CallAnalysisUploadForm';
 import { CallAnalysisDetailModal } from './CallAnalysisDetailModal';
 import { CallManagerDashboard } from './CallManagerDashboard';
+import { TranscriptionVocabularyEditor } from './TranscriptionVocabularyEditor';
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
-import { useCallAnalyses, useDeleteCallAnalysis, useStartAnalysis, CallAnalysis } from '@/hooks/useCallAnalyses';
+import { useCallAnalyses, useDeleteCallAnalysis, useBulkDeleteCallAnalyses, useStartAnalysis, useRetryAnalysis, CallAnalysis } from '@/hooks/useCallAnalyses';
 import { CallAnalysisLeadPicker } from './CallAnalysisLeadPicker';
+import { BulkCallAnalysisPanel } from './BulkCallAnalysisPanel';
 
 const useElapsedSeconds = (since: string | null, active: boolean) => {
   const [elapsed, setElapsed] = useState(0);
@@ -110,23 +113,88 @@ const ProcessingIndicator = ({ status, createdAt, transcribedAt, avgTranscriptio
   );
 };
 
+type SortKey = 'created_at' | 'duration_seconds' | 'sdr' | 'call_score' | 'interest_level' | 'status';
+type SortDir = 'asc' | 'desc';
+
+const interestOrder: Record<string, number> = { Alto: 3, Médio: 2, Baixo: 1 };
+const statusOrder: Record<string, number> = { completed: 4, transcribed: 3, processing: 2, uploaded: 1, error: 0, queued: 0 };
+
 export const CallIntelligenceSection = () => {
   const [selectedAnalysis, setSelectedAnalysis] = useState<CallAnalysis | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CallAnalysis | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [contextFilter, setContextFilter] = useState<'all' | 'sdr_call' | 'demo_closer'>('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [sortKey, setSortKey] = useState<SortKey>('created_at');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { data: analyses = [], isLoading } = useCallAnalyses();
   const deleteAnalysis = useDeleteCallAnalysis();
+  const bulkDeleteAnalyses = useBulkDeleteCallAnalyses();
   const startAnalysis = useStartAnalysis();
+  
+  const retryAnalysis = useRetryAnalysis();
+
+  const toggleSort = useCallback((key: SortKey) => {
+    setSortKey(prev => {
+      if (prev === key) {
+        setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+        return key;
+      }
+      setSortDir('desc');
+      return key;
+    });
+  }, []);
+
+  const SortIcon = useCallback(({ column }: { column: SortKey }) => {
+    if (sortKey !== column) return <ArrowUpDown className="h-3 w-3 opacity-40" />;
+    return sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />;
+  }, [sortKey, sortDir]);
 
   const filteredAnalyses = useMemo(() => {
-    if (contextFilter === 'all') return analyses;
-    return analyses.filter(a => a.analysis_context === contextFilter);
-  }, [analyses, contextFilter]);
+    let list = contextFilter === 'all' ? [...analyses] : analyses.filter(a => a.analysis_context === contextFilter);
+    list.sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case 'created_at':
+          cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          break;
+        case 'duration_seconds':
+          cmp = (a.duration_seconds || 0) - (b.duration_seconds || 0);
+          break;
+        case 'sdr':
+          cmp = (a.sdr_profile?.name || '').localeCompare(b.sdr_profile?.name || '');
+          break;
+        case 'call_score':
+          cmp = (a.call_score || 0) - (b.call_score || 0);
+          break;
+        case 'interest_level':
+          cmp = (interestOrder[a.interest_level] || 0) - (interestOrder[b.interest_level] || 0);
+          break;
+        case 'status':
+          cmp = (statusOrder[a.status] || 0) - (statusOrder[b.status] || 0);
+          break;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return list;
+  }, [analyses, contextFilter, sortKey, sortDir]);
+
+  // Reset page only when user changes filters/sort/page-size (not on data refetch)
+  useEffect(() => { setPage(1); }, [contextFilter, pageSize, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredAnalyses.length / pageSize));
+  const paginatedAnalyses = useMemo(
+    () => filteredAnalyses.slice((page - 1) * pageSize, page * pageSize),
+    [filteredAnalyses, page, pageSize],
+  );
+  const rangeStart = filteredAnalyses.length === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, filteredAnalyses.length);
 
   const handlePlayAudio = useCallback(async (analysisId: string, audioPath: string, mediaType: string = 'audio') => {
     // If already playing this one, stop it
@@ -188,9 +256,11 @@ export const CallIntelligenceSection = () => {
     return () => { audioRef.current?.pause(); };
   }, []);
 
-  // Uploaded items that can be selected for bulk analysis
+  // Uploaded items (subset) — used to show/hide "Analisar Selecionados"
   const uploadedItems = useMemo(() => filteredAnalyses.filter(a => a.status === 'uploaded'), [filteredAnalyses]);
-  const allUploadedSelected = uploadedItems.length > 0 && uploadedItems.every(a => selectedIds.has(a.id));
+  // Selection covers ALL rows on current page
+  const allPageSelected = paginatedAnalyses.length > 0 && paginatedAnalyses.every(a => selectedIds.has(a.id));
+  const hasUploadedSelected = Array.from(selectedIds).some(id => filteredAnalyses.find(a => a.id === id)?.status === 'uploaded');
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -202,22 +272,32 @@ export const CallIntelligenceSection = () => {
   };
 
   const toggleSelectAll = () => {
-    if (allUploadedSelected) {
+    if (allPageSelected) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(uploadedItems.map(a => a.id)));
+      setSelectedIds(new Set(paginatedAnalyses.map(a => a.id)));
     }
   };
 
   const handleStartBulk = () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
+    const withoutLead = filteredAnalyses.filter(a => ids.includes(a.id) && !a.lead_id);
+    if (withoutLead.length > 0) {
+      toast.error(`Associe um lead/empresa antes de analisar. ${withoutLead.length} registro(s) sem lead vinculado.`);
+      return;
+    }
     startAnalysis.mutate(ids, {
       onSuccess: () => setSelectedIds(new Set()),
     });
   };
 
   const handleStartSingle = (id: string) => {
+    const analysis = filteredAnalyses.find(a => a.id === id);
+    if (analysis && !analysis.lead_id) {
+      toast.error('Associe um lead/empresa antes de iniciar a análise.');
+      return;
+    }
     startAnalysis.mutate([id]);
   };
 
@@ -256,9 +336,17 @@ export const CallIntelligenceSection = () => {
             <BarChart3 className="h-4 w-4" />
             Painel Gerencial
           </TabsTrigger>
+          <TabsTrigger value="vocabulary" className="gap-2">
+            <BookText className="h-4 w-4" />
+            Vocabulário
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="analyses" className="space-y-4 mt-4">
+          <BulkCallAnalysisPanel
+            processingCount={analyses.filter(a => a.status === 'processing').length}
+            analyzingCount={analyses.filter(a => a.status === 'transcribed').length}
+          />
           <CallAnalysisUploadForm />
 
           {/* Context filter */}
@@ -291,24 +379,37 @@ export const CallIntelligenceSection = () => {
             </Button>
           </div>
 
+
           {/* Bulk action bar */}
           {selectedIds.size > 0 && (
-            <div className="flex items-center gap-3 p-3 rounded-lg border bg-primary/5">
+            <div className="flex items-center gap-3 p-3 rounded-lg border bg-primary/5 flex-wrap">
               <span className="text-xs font-medium text-muted-foreground">
                 {selectedIds.size} selecionado{selectedIds.size > 1 ? 's' : ''}
               </span>
+              {hasUploadedSelected && (
+                <Button
+                  size="sm"
+                  onClick={handleStartBulk}
+                  disabled={startAnalysis.isPending}
+                  className="h-7 text-xs gap-1.5"
+                >
+                  {startAnalysis.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Play className="h-3.5 w-3.5" />
+                  )}
+                  Analisar Selecionados
+                </Button>
+              )}
               <Button
+                variant="destructive"
                 size="sm"
-                onClick={handleStartBulk}
-                disabled={startAnalysis.isPending}
+                onClick={() => setBulkDeleteOpen(true)}
+                disabled={bulkDeleteAnalyses.isPending}
                 className="h-7 text-xs gap-1.5"
               >
-                {startAnalysis.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Play className="h-3.5 w-3.5" />
-                )}
-                Analisar Selecionados
+                <Trash2 className="h-3.5 w-3.5" />
+                Excluir Selecionados
               </Button>
               <Button
                 variant="ghost"
@@ -337,28 +438,40 @@ export const CallIntelligenceSection = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10">
-                      {uploadedItems.length > 0 && (
+                      {paginatedAnalyses.length > 0 && (
                         <Checkbox
-                          checked={allUploadedSelected}
+                          checked={allPageSelected}
                           onCheckedChange={toggleSelectAll}
-                          aria-label="Selecionar todos pendentes"
+                          aria-label="Selecionar todos desta página"
                         />
                       )}
                     </TableHead>
                     <TableHead className="text-xs">Tipo</TableHead>
-                    <TableHead className="text-xs">Data</TableHead>
+                    <TableHead className="text-xs cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => toggleSort('created_at')}>
+                      <span className="inline-flex items-center gap-1">Data <SortIcon column="created_at" /></span>
+                    </TableHead>
                     <TableHead className="text-xs">Arquivo</TableHead>
-                    <TableHead className="text-xs text-center">Duração</TableHead>
-                    <TableHead className="text-xs">{contextFilter === 'demo_closer' ? 'Closer' : 'SDR'}</TableHead>
+                    <TableHead className="text-xs text-center cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => toggleSort('duration_seconds')}>
+                      <span className="inline-flex items-center gap-1 justify-center">Duração <SortIcon column="duration_seconds" /></span>
+                    </TableHead>
+                    <TableHead className="text-xs cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => toggleSort('sdr')}>
+                      <span className="inline-flex items-center gap-1">{contextFilter === 'demo_closer' ? 'Closer' : 'SDR'} <SortIcon column="sdr" /></span>
+                    </TableHead>
                     <TableHead className="text-xs">Lead / Empresa</TableHead>
-                    <TableHead className="text-xs text-center">Score</TableHead>
-                    <TableHead className="text-xs text-center">Interesse</TableHead>
-                    <TableHead className="text-xs">Status</TableHead>
+                    <TableHead className="text-xs text-center cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => toggleSort('call_score')}>
+                      <span className="inline-flex items-center gap-1 justify-center">Score <SortIcon column="call_score" /></span>
+                    </TableHead>
+                    <TableHead className="text-xs text-center cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => toggleSort('interest_level')}>
+                      <span className="inline-flex items-center gap-1 justify-center">Interesse <SortIcon column="interest_level" /></span>
+                    </TableHead>
+                    <TableHead className="text-xs cursor-pointer select-none hover:text-foreground transition-colors" onClick={() => toggleSort('status')}>
+                      <span className="inline-flex items-center gap-1">Status <SortIcon column="status" /></span>
+                    </TableHead>
                     <TableHead className="text-xs w-24"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredAnalyses.map((a) => {
+                  {paginatedAnalyses.map((a) => {
                     const isInProgress = a.status === 'processing' || a.status === 'transcribed';
                     const isUploaded = a.status === 'uploaded';
                     return (
@@ -368,12 +481,10 @@ export const CallIntelligenceSection = () => {
                         onClick={() => a.status === 'completed' && setSelectedAnalysis(a)}
                       >
                         <TableCell onClick={(e) => e.stopPropagation()}>
-                          {isUploaded && (
-                            <Checkbox
-                              checked={selectedIds.has(a.id)}
-                              onCheckedChange={() => toggleSelect(a.id)}
-                            />
-                          )}
+                          <Checkbox
+                            checked={selectedIds.has(a.id)}
+                            onCheckedChange={() => toggleSelect(a.id)}
+                          />
                         </TableCell>
                         <TableCell>
                           {a.analysis_context === 'demo_closer' ? (
@@ -487,10 +598,37 @@ export const CallIntelligenceSection = () => {
                                 Analisar
                               </Button>
                             )}
+                            {(a.status === 'error' || a.status === 'transcribed') && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs gap-1"
+                                    onClick={() => retryAnalysis.mutate(a)}
+                                    disabled={retryAnalysis.isPending}
+                                  >
+                                    <RotateCcw className="h-3 w-3" />
+                                    Reanalisar
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Retomar análise de onde parou</TooltipContent>
+                              </Tooltip>
+                            )}
                             {a.status === 'completed' && (
                               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedAnalysis(a)}>
                                 <Eye className="h-3.5 w-3.5" />
                               </Button>
+                            )}
+                            {a.converted_to_sale && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex items-center justify-center h-7 w-7 text-success">
+                                    <Trophy className="h-3.5 w-3.5" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>Venda realizada</TooltipContent>
+                              </Tooltip>
                             )}
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(a)}>
                               <Trash2 className="h-3.5 w-3.5" />
@@ -502,12 +640,46 @@ export const CallIntelligenceSection = () => {
                   })}
                 </TableBody>
               </Table>
+
+              {/* Pagination bar */}
+              <div className="flex items-center justify-between px-4 py-3 border-t">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">Linhas por página</span>
+                  <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+                    <SelectTrigger className="h-7 w-[70px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground">
+                    {rangeStart}–{rangeEnd} de {filteredAnalyses.length}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="icon" className="h-7 w-7" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </TabsContent>
 
         <TabsContent value="dashboard" className="mt-4">
           <CallManagerDashboard />
+        </TabsContent>
+
+        <TabsContent value="vocabulary" className="mt-4">
+          <TranscriptionVocabularyEditor />
         </TabsContent>
       </Tabs>
 
@@ -528,6 +700,22 @@ export const CallIntelligenceSection = () => {
         }}
         title="Excluir análise"
         description={`Tem certeza que deseja excluir a análise de ${deleteTarget?.sdr_profile?.name || 'SDR'} — ${deleteTarget ? new Date(deleteTarget.created_at).toLocaleDateString('pt-BR') : ''}?`}
+      />
+
+      <ConfirmDeleteDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        title={`Excluir ${selectedIds.size} análise${selectedIds.size !== 1 ? 's' : ''}?`}
+        description={`Esta ação não pode ser desfeita. As ${selectedIds.size} análise${selectedIds.size !== 1 ? 's' : ''} selecionada${selectedIds.size !== 1 ? 's' : ''} serão removidas permanentemente.`}
+        isDeleting={bulkDeleteAnalyses.isPending}
+        onConfirm={() => {
+          bulkDeleteAnalyses.mutate(Array.from(selectedIds), {
+            onSuccess: () => {
+              setSelectedIds(new Set());
+              setBulkDeleteOpen(false);
+            },
+          });
+        }}
       />
     </div>
   );

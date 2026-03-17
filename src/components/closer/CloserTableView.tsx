@@ -64,8 +64,7 @@ import { toast } from 'sonner';
 interface CloserTableViewProps {
   opportunities: CloserOpportunity[];
   canBulkSelect: boolean;
-  isAdmin: boolean;
-  isManager: boolean;
+  canManage: boolean;
   selectedOppIds: Set<string>;
   onOppCheckChange: (oppId: string, checked: boolean) => void;
   onCheckAllChange: (checked: boolean) => void;
@@ -91,9 +90,9 @@ const formatCurrency = (value: number) =>
 const stageLabelsMap: Record<string, string> = {
   'Demonstração': 'Demonstração',
   'Proposta enviada': 'Enviada',
-  'Oportunidade quente': 'Op. Quente',
+  'Oportunidade Quente': 'Op. Quente',
   'Oportunidade Futura': 'Op. Futura',
-  'Oportunidade fria': 'Op. Fria',
+  'Oportunidade Fria': 'Op. Fria',
   'Contrato enviado': 'Contrato',
   'Aguardando pagamento': 'Pagamento',
   'Ganho': 'Ganho',
@@ -280,8 +279,7 @@ const RowQuickActions = memo(function RowQuickActions({ opp, onReturn, onLost, o
 export function CloserTableView({
   opportunities,
   canBulkSelect,
-  isAdmin,
-  isManager,
+  canManage,
   selectedOppIds,
   onOppCheckChange,
   onCheckAllChange,
@@ -465,8 +463,8 @@ export function CloserTableView({
               opportunityId={opp.id}
               currentCloserId={opp.assigned_to_user_id}
               currentCloserName={opp.closer_name || null}
-              disabled={!(isAdmin || isManager || opp.assigned_to_user_id === currentUser?.id)}
-              closerOnly={!isAdmin && !isManager && opp.assigned_to_user_id === currentUser?.id}
+              disabled={!(canManage || opp.assigned_to_user_id === currentUser?.id)}
+              closerOnly={!canManage && opp.assigned_to_user_id === currentUser?.id}
             />
           </div>
         );
@@ -498,7 +496,7 @@ export function CloserTableView({
     return cols;
   // selectedOppIds intentionally omitted — read via selectedOppIdsRef to avoid
   // rebuilding column definitions on every checkbox tick.
-  }, [canBulkSelect, opportunities, tab, isAdmin, isManager, currentUser?.id, onCheckAllChange, onOppCheckChange, onReturn, onLost, onNotes, onWon, onDelete, onEmail]);
+  }, [canBulkSelect, opportunities, tab, canManage, currentUser?.id, onCheckAllChange, onOppCheckChange, onReturn, onLost, onNotes, onWon, onDelete, onEmail]);
 
   const emailLead = emailOpp ? buildLeadFromOpportunity(emailOpp) : null;
 

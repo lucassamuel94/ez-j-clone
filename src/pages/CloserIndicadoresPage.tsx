@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useCloserPipeline } from '@/hooks/useCloserPipeline';
-import { useAdminUsers } from '@/hooks/useAdminUsers';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloserStatsSection, CloserPeriodType } from '@/components/CloserStatsSection';
 import { CloserRevenueDashboard } from '@/components/CloserRevenueDashboard';
@@ -36,7 +36,7 @@ const periodOptions: { value: CloserPeriodType; label: string }[] = [
 
 const CloserIndicadoresPage = () => {
   const { opportunities, isLoading } = useCloserPipeline();
-  const { isAdmin, isManager } = useAdminUsers();
+  const { hasPermission } = usePermissions();
   const queryClient = useQueryClient();
   const updateLeadMutation = useUpdateLead();
 
@@ -46,7 +46,7 @@ const CloserIndicadoresPage = () => {
   const [rangePickerOpen, setRangePickerOpen] = useState(false);
   const { lead: modalLead, opportunity: modalOpp, isOpen: leadModalOpen, openLead, closeLead } = useLeadModal();
 
-  const canFilterByCloser = isAdmin || isManager;
+  const canFilterByCloser = hasPermission('access_admin');
 
   const closerProfiles = useMemo(() => {
     const map = new Map<string, string>();

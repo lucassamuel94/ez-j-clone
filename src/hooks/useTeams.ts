@@ -69,6 +69,7 @@ export const useTeams = () => {
       return data;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['teams'] });
       toast.success('Equipe criada');
     },
     onError: () => {

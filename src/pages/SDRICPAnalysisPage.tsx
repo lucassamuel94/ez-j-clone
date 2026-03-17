@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Users, Building2, AlertCircle, Briefcase, CalendarDays } from 'lucide-react';
 import { useSDRProspectingCNAEs } from '@/hooks/useSDRProspectingCNAEs';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { useUserRole } from '@/hooks/useUserRole';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useSystemUsers } from '@/hooks/useSystemUsers';
 import { useICPAnalysis } from '@/hooks/useICPAnalysis';
 import { ICPChatSection } from '@/components/clients/ICPChatSection';
@@ -64,8 +64,8 @@ function RankedList({ title, data, loading }: { title: string; data: { name: str
 
 export default function SDRICPAnalysisPage() {
   const { user } = useCurrentUser();
-  const { canAccessBoth, isCloser } = useUserRole();
-  const canViewAll = canAccessBoth || isCloser;
+  const { hasPermission } = usePermissions();
+  const canViewAll = hasPermission('access_admin') || hasPermission('view_closer_pipeline');
   const { data: allUsers } = useSystemUsers();
 
   const [selectedSdr, setSelectedSdr] = useState<string>('');

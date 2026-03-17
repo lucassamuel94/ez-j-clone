@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +12,7 @@ import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { PROJECT_TYPE_LABELS, ProjectType } from '@/types/project';
 import { toast } from 'sonner';
-import { Loader2, Building2, Link as LinkIcon, Plug, MessageSquare, User, Code, BarChart3, FileText, Plus, X } from 'lucide-react';
+import { Loader2, Building2, Link as LinkIcon, Plug, MessageSquare, User, Code, BarChart3, FileText, Plus, X, Star } from 'lucide-react';
 import { IntegrationNameInput } from './IntegrationNameInput';
 
 interface ProjectDeliveryDialogProps {
@@ -22,12 +23,13 @@ interface ProjectDeliveryDialogProps {
 }
 
 export function ProjectDeliveryDialog({ open, onOpenChange, project, onDelivered }: ProjectDeliveryDialogProps) {
+  const queryClient = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
 
   // Form state
   const [adminLink, setAdminLink] = useState('');
   const [hasIntegration, setHasIntegration] = useState(false);
-  const [integrationsList, setIntegrationsList] = useState<{ name: string; description: string }[]>([]);
+  const [integrationsList, setIntegrationsList] = useState<{ name: string; description: string; isNew: boolean }[]>([]);
   const [observations, setObservations] = useState('');
   const [uxResponsible, setUxResponsible] = useState('');
   const [projectTypeLabel, setProjectTypeLabel] = useState('');
@@ -46,7 +48,7 @@ export function ProjectDeliveryDialog({ open, onOpenChange, project, onDelivered
     setComplexityLevel(project.complexity_level || '');
     setProjectTypeLabel(PROJECT_TYPE_LABELS[project.project_type as ProjectType] || project.project_type || '');
     setIntegrationsList(project.integrations_description ?
-      project.integrations_description.split(/[,\n]+/).filter(Boolean).map((s: string) => ({ name: s.trim(), description: '' })) :
+      project.integrations_description.split(/[,\n]+/).filter(Boolean).map((s: string) => ({ name: s.trim(), description: '', isNew: false })) :
       []);
     // Fetch UX and Closer names from profiles
     const fetchNames = async () => {
@@ -72,6 +74,10 @@ export function ProjectDeliveryDialog({ open, onOpenChange, project, onDelivered
   const handleSubmit = async () => {
     if (!adminLink.trim()) {
       toast.error('O link do admin é obrigatório');
+      return;
+    }
+    if (hasIntegration && !integrationsList.some((i) => i.name.trim())) {
+      toast.error('Adicione ao menos uma integração ou desative a opção de integrações');
       return;
     }
 
@@ -113,7 +119,7 @@ export function ProjectDeliveryDialog({ open, onOpenChange, project, onDelivered
             delivery_id: delivery.id,
             integration_name: item.name.trim(),
             notes: item.description.trim() || null,
-            is_new: false,
+            is_new: item.isNew,
           }));
 
           const { error: intError } = await supabase
@@ -132,7 +138,11 @@ export function ProjectDeliveryDialog({ open, onOpenChange, project, onDelivered
         description: `Formulário de entrega preenchido. Link: ${adminLink.trim()}`,
       } as any);
 
-      toast.success('Entrega registrada com sucesso!');
+      const validCount = hasIntegration ? integrationsList.filter((i) => i.name.trim()).length : 0;
+      toast.success(validCount > 0
+        ? `Entrega registrada! ${validCount} integração(ões) adicionada(s) ao catálogo.`
+        : 'Entrega registrada com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['integrations-catalog'] });
       onDelivered();
       onOpenChange(false);
     } catch (err: any) {
@@ -232,6 +242,20 @@ export function ProjectDeliveryDialog({ open, onOpenChange, project, onDelivered
                         type="button"
                         variant="ghost"
                         size="icon"
+                        title={item.isNew ? 'Marcar como existente' : 'Marcar como nova integração'}
+                        className={`h-8 w-8 shrink-0 ${item.isNew ? 'text-amber-500 hover:text-amber-600' : 'text-muted-foreground hover:text-amber-500'}`}
+                        onClick={() => {
+                          const updated = [...integrationsList];
+                          updated[idx] = { ...updated[idx], isNew: !updated[idx].isNew };
+                          setIntegrationsList(updated);
+                        }}
+                      >
+                        <Star className={`h-3.5 w-3.5 ${item.isNew ? 'fill-current' : ''}`} />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
                         className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                         onClick={() => setIntegrationsList(integrationsList.filter((_, i) => i !== idx))}
                       >
@@ -244,7 +268,7 @@ export function ProjectDeliveryDialog({ open, onOpenChange, project, onDelivered
                     variant="outline"
                     size="sm"
                     className="h-7 text-xs gap-1"
-                    onClick={() => setIntegrationsList([...integrationsList, { name: '', description: '' }])}
+                    onClick={() => setIntegrationsList([...integrationsList, { name: '', description: '', isNew: false }])}
                   >
                     <Plus className="h-3 w-3" /> Adicionar integração
                   </Button>

@@ -108,6 +108,11 @@ async function syncLeadNextAction(leadId: string, newDueDate: string) {
 // --- End sync helpers ---
 
 export const updateProjectTask = async (taskId: string, updates: Record<string, unknown>) => {
+  // Reset reminder if due_date or notify_before changed so a new reminder can be sent
+  if ('due_date' in updates || 'notify_before' in updates) {
+    updates = { ...updates, reminder_sent_at: null };
+  }
+
   const { error } = await supabase
     .from('project_tasks')
     .update(updates as any)

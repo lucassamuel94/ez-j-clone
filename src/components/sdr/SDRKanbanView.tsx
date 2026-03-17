@@ -59,7 +59,7 @@ interface SDRKanbanViewProps {
   isMoving?: boolean;
   isLoading?: boolean;
   currentUserId?: string | null;
-  isManager?: boolean;
+  canManage?: boolean;
   onLoadMore?: (status: string) => void;
 }
 
@@ -111,7 +111,7 @@ function TemperatureBadge({ temperature }: { temperature: string | null | undefi
 
 // ---------- Card Content ----------
 
-function CardContent({ lead, currentUserId, isManager }: { lead: Lead; currentUserId?: string | null; isManager?: boolean }) {
+function CardContent({ lead, currentUserId, canManage }: { lead: Lead; currentUserId?: string | null; canManage?: boolean }) {
   const isTerminal = TERMINAL_STATUSES.has(lead.status);
   const hasNextAction = !!lead.next_action_at;
   const nextActionIsFuture = hasNextAction && new Date(lead.next_action_at!) > new Date();
@@ -218,7 +218,7 @@ export function SDRKanbanView({
   isMoving = false,
   isLoading = false,
   currentUserId,
-  isManager = false,
+  canManage = false,
   onLoadMore,
 }: SDRKanbanViewProps) {
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
@@ -374,7 +374,7 @@ export function SDRKanbanView({
                           onCardClick(lead);
                         }}
                       >
-                        <CardContent lead={lead} currentUserId={currentUserId} isManager={isManager} />
+                        <CardContent lead={lead} currentUserId={currentUserId} canManage={canManage} />
                       </KanbanCard>
                     </ContextMenuTrigger>
                     {(onDeleteLead || onSendToCloser) && (
@@ -428,7 +428,7 @@ export function SDRKanbanView({
         })}
 
         <KanbanOverlay>
-          {activeLead && <CardContent lead={activeLead} currentUserId={currentUserId} isManager={isManager} />}
+          {activeLead && <CardContent lead={activeLead} currentUserId={currentUserId} canManage={canManage} />}
         </KanbanOverlay>
       </KanbanProvider>
     </div>

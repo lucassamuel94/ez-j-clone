@@ -59,7 +59,14 @@ export const useSendEmail = () => {
         throw new Error(data.error);
       }
 
-      toast.success('E-mail enviado com sucesso!');
+      if (data?.failedAttachments?.length > 0) {
+        toast.warning('E-mail enviado, mas alguns anexos falharam', {
+          description: `Anexos não incluídos: ${data.failedAttachments.join(', ')}`,
+          duration: 8000,
+        });
+      } else {
+        toast.success('E-mail enviado com sucesso!');
+      }
       return { success: true };
     } catch (err: unknown) {
       console.error('Send email error:', err);

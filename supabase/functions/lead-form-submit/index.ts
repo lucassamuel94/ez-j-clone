@@ -328,12 +328,7 @@ Deno.serve(async (req) => {
 
     // If post_action is 'closer', update lead and create opportunity
     if (formId && formPostAction === 'closer' && formAssignedCloserId) {
-      await supabase
-        .from('leads')
-        .update({ status: 'Oportunidade criada' })
-        .eq('id', leadData.id)
-
-      await supabase
+      const { error: oppError } = await supabase
         .from('opportunities')
         .insert({
           lead_id: leadData.id,
@@ -342,6 +337,16 @@ Deno.serve(async (req) => {
           sdr_user_id: null,
           stage: 'Demonstração',
         })
+
+      if (oppError) {
+        console.error('Error creating opportunity from form:', oppError)
+      } else {
+        // Only update lead status if opportunity was successfully created
+        await supabase
+          .from('leads')
+          .update({ status: 'Oportunidade criada' })
+          .eq('id', leadData.id)
+      }
     }
 
     // Save unmapped fields as a lead note (Observação)

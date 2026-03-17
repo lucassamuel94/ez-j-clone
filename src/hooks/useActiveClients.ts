@@ -35,6 +35,42 @@ export interface ActiveClient {
   status: string;
 }
 
+/** Map accounts row → ActiveClient shape (preserves interface for downstream consumers) */
+function mapAccountToActiveClient(row: any): ActiveClient {
+  return {
+    id: row.id,
+    company: row.company_name,
+    cnpj: row.cnpj,
+    contact_name: row.contact_name,
+    email: row.email,
+    phone: row.phone,
+    segment: row.company_segment,
+    razao_social: row.razao_social,
+    nome_fantasia: row.nome_fantasia,
+    cnae_fiscal: row.cnae_fiscal,
+    cnae_fiscal_descricao: row.cnae_fiscal_descricao,
+    cnaes_secundarios: row.cnaes_secundarios,
+    porte: row.porte,
+    employee_count: row.employee_count,
+    revenue_range: row.revenue_range,
+    capital_social: row.capital_social,
+    city: row.city,
+    state: row.state,
+    cep: row.cep,
+    website: row.website,
+    situacao_cadastral: row.situacao_cadastral,
+    data_inicio_atividade: row.data_inicio_atividade,
+    ai_enrichment_data: row.ai_enrichment_data,
+    enriched_at: row.enriched_at,
+    imported_by: row.imported_by,
+    notes: row.notes,
+    created_at: row.created_at,
+    account_owner_id: row.account_owner_id,
+    account_owner_name: row.account_owner?.name || null,
+    status: row.status || row.lifecycle_stage || 'active',
+  };
+}
+
 export const useActiveClients = (search?: string) => {
   const queryClient = useQueryClient();
 
@@ -48,13 +84,14 @@ export const useActiveClients = (search?: string) => {
 
       while (hasMore) {
         let q = supabase
-          .from('active_clients' as any)
-          .select('*, account_owner:profiles!active_clients_account_owner_id_fkey(name)')
+          .from('accounts')
+          .select('*, account_owner:profiles!accounts_account_owner_id_profiles_fkey(name)')
+          .eq('lifecycle_stage', 'client')
           .order('created_at', { ascending: false })
           .range(from, from + PAGE_SIZE - 1);
 
         if (search && search.trim()) {
-          q = q.or(`company.ilike.%${search}%,cnpj.ilike.%${search}%,contact_name.ilike.%${search}%,city.ilike.%${search}%`);
+          q = q.or(`company_name.ilike.%${search}%,cnpj.ilike.%${search}%,contact_name.ilike.%${search}%,city.ilike.%${search}%`);
         }
 
         const { data, error } = await q;
@@ -66,11 +103,7 @@ export const useActiveClients = (search?: string) => {
         from += PAGE_SIZE;
       }
 
-      return allData.map((row: any) => ({
-        ...row,
-        account_owner_name: row.account_owner?.name || null,
-        account_owner: undefined,
-      })) as unknown as ActiveClient[];
+      return allData.map(mapAccountToActiveClient);
     },
   });
 
@@ -89,8 +122,9 @@ export const useActiveClients = (search?: string) => {
       let existingCnpjs = new Set<string>();
       if (cnpjs.length > 0) {
         const { data: existing } = await supabase
-          .from('active_clients' as any)
+          .from('accounts')
           .select('cnpj')
+          .eq('lifecycle_stage', 'client')
           .in('cnpj', cnpjs);
         existingCnpjs = new Set((existing || []).map((e: any) => e.cnpj?.replace(/\D/g, '') || ''));
       }
@@ -106,12 +140,40 @@ export const useActiveClients = (search?: string) => {
       if (toInsert.length > 0) {
         for (let i = 0; i < toInsert.length; i += 100) {
           const chunk = toInsert.slice(i, i + 100);
-          const { error } = await supabase.from('active_clients' as any).insert(chunk as any);
+          // Map ActiveClient fields → accounts columns
+          const rows = chunk.map(c => ({
+            company_name: c.company || 'Sem nome',
+            cnpj: c.cnpj,
+            razao_social: c.razao_social,
+            nome_fantasia: c.nome_fantasia,
+            company_segment: c.segment,
+            cnae_fiscal: c.cnae_fiscal,
+            cnae_fiscal_descricao: c.cnae_fiscal_descricao,
+            cnaes_secundarios: c.cnaes_secundarios,
+            porte: c.porte,
+            employee_count: c.employee_count,
+            revenue_range: c.revenue_range,
+            capital_social: c.capital_social,
+            city: c.city,
+            state: c.state,
+            cep: c.cep,
+            website: c.website,
+            situacao_cadastral: c.situacao_cadastral,
+            data_inicio_atividade: c.data_inicio_atividade,
+            contact_name: c.contact_name,
+            email: c.email,
+            phone: c.phone,
+            notes: c.notes,
+            lifecycle_stage: 'client',
+            status: 'active',
+          }));
+
+          const { error } = await supabase.from('accounts').insert(rows);
           if (error) {
             if (error.code === '23505') {
               // Unique violation — insert one-by-one to skip duplicates
-              for (const item of chunk) {
-                const { error: singleErr } = await supabase.from('active_clients' as any).insert(item as any);
+              for (const item of rows) {
+                const { error: singleErr } = await supabase.from('accounts').insert(item);
                 if (singleErr && singleErr.code === '23505') {
                   dbDuplicates++;
                 } else if (singleErr) {
@@ -138,7 +200,7 @@ export const useActiveClients = (search?: string) => {
 
   const deleteClient = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('active_clients' as any).delete().eq('id', id);
+      const { error } = await supabase.from('accounts').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -151,8 +213,8 @@ export const useActiveClients = (search?: string) => {
     mutationFn: async ({ clientIds, ownerId }: { clientIds: string[]; ownerId: string | null }) => {
       for (const id of clientIds) {
         const { error } = await supabase
-          .from('active_clients' as any)
-          .update({ account_owner_id: ownerId } as any)
+          .from('accounts')
+          .update({ account_owner_id: ownerId })
           .eq('id', id);
         if (error) throw error;
       }

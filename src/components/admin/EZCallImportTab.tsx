@@ -8,7 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Search, Download, Loader2, Phone } from 'lucide-react';
 import { useEZCallReports, useEZCallRecordingUrl, type EZCallRecord } from '@/hooks/useEZCallReports';
-import { useSystemUsers } from '@/hooks/useSystemUsers';
+import { useSDRUsers } from '@/hooks/useSDRUsers';
 import { useUploadCallAnalysis } from '@/hooks/useCallAnalyses';
 import { formatDateTimeBR } from '@/utils/dateFormat';
 import { toast } from 'sonner';
@@ -25,7 +25,7 @@ export const EZCallImportTab = () => {
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
 
-  const { data: sdrs = [] } = useSystemUsers();
+  const { data: sdrs = [] } = useSDRUsers();
   const { playRecording } = useEZCallRecordingUrl();
   const upload = useUploadCallAnalysis();
 
@@ -37,6 +37,7 @@ export const EZCallImportTab = () => {
   const { data: reports = [], isLoading, refetch } = useEZCallReports({
     dateRange,
     selectedSdrId: selectedSdrId || undefined,
+    enabled: searchEnabled,
   });
 
   // Flatten all calls from all SDR reports, filter only answered with billsec > 10

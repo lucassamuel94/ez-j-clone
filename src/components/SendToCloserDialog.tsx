@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { CloserStage, createOpportunityFromMeeting } from '@/services/closerService';
 import { useCloserStages } from '@/hooks/useCloserStages';
-import { useUserRole } from '@/hooks/useUserRole';
+import { usePermissions } from '@/hooks/usePermissions';
 import { createActivityLog } from '@/services/activityLogService';
 import {
   Dialog,
@@ -45,8 +45,8 @@ export const SendToCloserDialog = ({
   const [selectedStage, setSelectedStage] = useState<CloserStage>('Demonstração');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { isAdmin, isManager } = useUserRole();
-  const isAdminTransfer = isAdmin || isManager;
+  const { hasPermission } = usePermissions();
+  const isAdminTransfer = hasPermission('access_admin');
 
   // Fetch users with closer role
   const { data: closers = [], isLoading: isLoadingClosers } = useQuery({

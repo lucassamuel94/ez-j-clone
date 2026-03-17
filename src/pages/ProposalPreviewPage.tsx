@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, FileText, MessageSquare, Shield, CheckCircle2, Clock, Headphones, ChevronDown, ChevronUp, Check, LayoutGrid } from 'lucide-react';
+import { toast } from 'sonner';
+import { ArrowLeft, Building2, FileText, MessageSquare, Shield, CheckCircle2, Clock, Headphones, ChevronDown, ChevronUp, Check, LayoutGrid, Download } from 'lucide-react';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from '@/components/ui/carousel';
 import type { Product } from '@/hooks/useProducts';
 import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 import { supabase } from '@/integrations/supabase/client';
-import ezLogo from '@/assets/ezsoft-logo-white.png';
+import ezLogo from '@/assets/ez-journey-logo-white.svg';
 import metaPartnerLogo from '@/assets/meta-business-partner.png';
 import gptwBadge from '@/assets/gptw-badge.png';
 
@@ -60,7 +61,53 @@ const ProposalPreviewPage = () => {
   const [plans, setPlans] = useState<Product[]>([]);
   const [plansOpen, setPlansOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  const [accepted, setAccepted] = useState(false);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  const handleDownloadPdf = useCallback(async () => {
+    if (!contentRef.current || !proposal || pdfGenerating) return;
+    setPdfGenerating(true);
+
+    // Force collapsible plans open for PDF capture
+    const wasPlansOpen = plansOpen;
+    if (!wasPlansOpen && plans.length > 0) setPlansOpen(true);
+
+    // Wait for React re-render (hides buttons + opens collapsible)
+    await new Promise(r => setTimeout(r, 400));
+
+    try {
+      const html2pdf = (await import('html2pdf.js')).default;
+
+      const proposalCode = `EZ-${new Date(proposal.created_at).toISOString().replace(/[-T:.Z]/g, '').slice(0, 14)}-${proposal.id.slice(0, 4).toUpperCase()}`;
+      const fileName = `Proposta_${proposal.company_name.replace(/[^a-zA-Z0-9À-ÿ\s-]/g, '').replace(/\s+/g, '_')}_${proposalCode}.pdf`;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (html2pdf() as any)
+        .set({
+          margin: [6, 6, 6, 6],
+          filename: fileName,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            letterRendering: true,
+            logging: false,
+          },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+        })
+        .from(contentRef.current)
+        .save();
+
+      toast.success('PDF baixado com sucesso!');
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      toast.error('Erro ao gerar PDF. Tente novamente.');
+    } finally {
+      if (!wasPlansOpen) setPlansOpen(false);
+      setPdfGenerating(false);
+    }
+  }, [proposal, pdfGenerating, plansOpen, plans.length]);
 
   const handleAccept = () => {
     if (!id) return;
@@ -70,13 +117,14 @@ const ProposalPreviewPage = () => {
   const handleReject = async () => {
     if (!id || actionLoading) return;
     setActionLoading(true);
-    const { data, error } = await supabase.rpc('update_proposal_status', {
+    const { error } = await supabase.rpc('update_proposal_status', {
       p_proposal_id: id,
       p_status: 'rejected'
     });
     setActionLoading(false);
     if (error) {
       console.error('Error rejecting proposal:', error);
+      toast.error('Erro ao recusar proposta. Tente novamente.');
       return;
     }
     if (proposal) setProposal({ ...proposal, status: 'rejected' });
@@ -86,35 +134,33 @@ const ProposalPreviewPage = () => {
     if (!closerWhatsapp) return;
     const phone = closerWhatsapp.replace(/\D/g, '');
     const text = encodeURIComponent(message);
-    window.open(`https://web.whatsapp.com/send?phone=55${phone}&text=${text}`, '_blank');
+    // wa.me works cross-platform (mobile app + WhatsApp Web on desktop)
+    window.open(`https://wa.me/55${phone}?text=${text}`, '_blank');
   };
 
   useEffect(() => {
     if (!id) return;
     const fetchData = async () => {
-      // Track view independently of proposal fetch (works for anon users)
-      const { error: viewError } = await supabase.rpc('increment_proposal_views', {
+      // Track view — fire-and-forget, does not block proposal load
+      supabase.rpc('increment_proposal_views', {
         proposal_id: id,
         p_user_agent: navigator.userAgent,
+      }).then(({ error }) => {
+        if (error) console.error('Failed to track proposal view:', error);
       });
-      if (viewError) console.error('Failed to track proposal view:', viewError);
 
-      // Notify closer (fire-and-forget)
-      if (!viewError) {
-        supabase.functions.invoke('notify-proposal-view', {
-          body: { proposal_id: id },
-        }).catch((err) => console.warn('Notify proposal view failed:', err));
-      }
+      // Notify closer — independent of view tracking
+      supabase.functions.invoke('notify-proposal-view', {
+        body: { proposal_id: id },
+      }).catch((err) => console.warn('Notify proposal view failed:', err));
 
       const { data, error } = await supabase
         .from('proposals')
-        .select('*, opportunities(lead_id, leads(razao_social))')
+        .select('*')
         .eq('id', id)
         .single();
       if (!error && data) {
-        const opp = data.opportunities as any;
-        const razaoSocial = opp?.leads?.razao_social || null;
-        setProposal({ ...(data as unknown as Proposal), razao_social: razaoSocial, product_type: (data as any).product_type || 'ez_chat' });
+        setProposal({ ...(data as unknown as Proposal), product_type: (data as any).product_type || 'ez_chat' });
 
         // Fetch closer's whatsapp from profile
         if (data.created_by_user_id) {
@@ -132,17 +178,19 @@ const ProposalPreviewPage = () => {
   }, [id]);
 
   useEffect(() => {
+    if (!proposal) return;
     const fetchPlans = async () => {
+      const category = proposal.product_type || 'ez_chat';
       const { data } = await supabase
         .from('products')
         .select('*')
-        .eq('category', 'ez_chat')
+        .eq('category', category)
         .eq('active', true)
         .order('sort_order', { ascending: true });
       if (data) setPlans(data as unknown as Product[]);
     };
     fetchPlans();
-  }, []);
+  }, [proposal?.product_type]);
 
   if (loading) {
     return (
@@ -224,15 +272,23 @@ const ProposalPreviewPage = () => {
   return (
     <div className="min-h-screen bg-[#e8e8e8]">
       {/* Top bar */}
-      <div className="bg-white border-b border-[#ddd] sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-6 py-3 flex items-center gap-4">
+      <div className="bg-white border-b border-[#ddd] sticky top-0 z-50 no-pdf">
+        <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between">
           <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-[#7c3aed] hover:underline text-sm font-medium">
             <ArrowLeft className="h-4 w-4" /> Voltar
+          </button>
+          <button
+            onClick={handleDownloadPdf}
+            disabled={pdfGenerating}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#7c3aed] text-white font-medium text-sm hover:bg-[#6d28d9] transition-colors disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            {pdfGenerating ? 'Gerando PDF...' : 'Baixar PDF'}
           </button>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div ref={contentRef} className="max-w-4xl mx-auto px-4 py-6">
         {/* Proposal code */}
         <h1 className="text-2xl font-bold text-[#1a1a2e] mb-1 font-display">Proposta {proposalCode}</h1>
         <p className="text-[#666] mb-6">Para: {proposal.company_name}</p>
@@ -242,7 +298,7 @@ const ProposalPreviewPage = () => {
           <div className="px-8 pt-8 pb-6">
             {/* Logos */}
             <div className="flex items-start justify-between mb-8">
-              <img src={ezLogo} alt="EZ Soft" className="h-10" />
+              <img src={ezLogo} alt="EZ Journey" className="h-10" />
               <div className="flex items-center gap-3">
                 <img src={gptwBadge} alt="Great Place to Work" className="h-[72px] rounded" />
                 <img src={metaPartnerLogo} alt="Meta Business Partner" className="h-[52px] rounded" />
@@ -252,7 +308,7 @@ const ProposalPreviewPage = () => {
             {/* Company info */}
             <p className="text-white/70 text-sm tracking-wider uppercase font-medium">{isEvolucao ? 'Proposta de Evolução' : 'Proposta Comercial'}</p>
             <h2 className="text-3xl font-bold text-white mt-1 font-display">{proposal.company_name}</h2>
-            {proposal.razao_social && (
+            {proposal.razao_social && proposal.razao_social !== proposal.company_name && (
               <p className="text-white/70 text-sm mt-1">{proposal.razao_social}</p>
             )}
             <div className="mb-6" />
@@ -372,7 +428,7 @@ const ProposalPreviewPage = () => {
               <p className="text-[#555] text-sm leading-relaxed mb-6">
                 Após a manifestação de "de acordo" por parte da Contratante, será encaminhado o <strong>Contrato de Prestação de Serviços</strong> para formalização da contratação, por meio do qual as Partes reconhecem a <strong>integridade, autenticidade, validade, executividade e regularidade</strong> dos termos acordados.
               </p>
-              {accepted || proposal.status === 'accepted' ? (
+              {proposal.status === 'accepted' ? (
                 <div className="flex items-center gap-3 p-4 rounded-lg bg-green-50 border border-green-200">
                   <CheckCircle2 className="h-5 w-5 text-green-600" />
                   <p className="text-green-700 font-semibold text-sm">Proposta aceita! Entraremos em contato para formalização do contrato.</p>
@@ -381,7 +437,7 @@ const ProposalPreviewPage = () => {
                 <div className="flex items-center gap-3 p-4 rounded-lg bg-red-50 border border-red-200">
                   <p className="text-red-600 font-semibold text-sm">Esta proposta foi recusada.</p>
                 </div>
-              ) : (
+              ) : !pdfGenerating ? (
                 <>
                   <h4 className="font-semibold text-[#1a1a2e] text-sm mb-4">O que deseja fazer?</h4>
                   <div className="flex flex-wrap gap-3">
@@ -399,7 +455,7 @@ const ProposalPreviewPage = () => {
                     </button>
                   </div>
                 </>
-              )}
+              ) : null}
             </div>
           </>
         ) : (
@@ -876,7 +932,7 @@ const ProposalPreviewPage = () => {
           <p className="text-[#555] text-sm leading-relaxed mb-6">
             Após a manifestação de "de acordo" por parte da Contratante, será encaminhado o <strong>Contrato de Prestação de Serviços</strong> para formalização da contratação.
           </p>
-          {accepted || proposal.status === 'accepted' ? (
+          {proposal.status === 'accepted' ? (
             <div className="flex items-center gap-3 p-4 rounded-lg bg-green-50 border border-green-200">
               <CheckCircle2 className="h-5 w-5 text-green-600" />
               <p className="text-green-700 font-semibold text-sm">Proposta aceita! Entraremos em contato para formalização do contrato.</p>
@@ -885,7 +941,7 @@ const ProposalPreviewPage = () => {
             <div className="flex items-center gap-3 p-4 rounded-lg bg-red-50 border border-red-200">
               <p className="text-red-600 font-semibold text-sm">Esta proposta foi recusada.</p>
             </div>
-          ) : (
+          ) : !pdfGenerating ? (
             <>
               <h4 className="font-semibold text-[#1a1a2e] text-sm mb-4">O que deseja fazer?</h4>
               <div className="flex flex-wrap gap-3">
@@ -903,7 +959,7 @@ const ProposalPreviewPage = () => {
                 </button>
               </div>
             </>
-          )}
+          ) : null}
         </div>
           </>
         )}
@@ -927,7 +983,7 @@ const ProposalPreviewPage = () => {
           )}
           <p className="text-white/60 text-xs mt-1">Executivo Comercial</p>
           <div className="mt-4">
-            <img src={ezLogo} alt="EZ Soft" className="h-6 mx-auto brightness-0 invert opacity-50" />
+            <img src={ezLogo} alt="EZ Journey" className="h-6 mx-auto brightness-0 invert opacity-50" />
           </div>
           <p className="text-white/40 text-xs mt-4">Avenida Cesário Alvim, 3813 · Uberlândia/MG · 18.531.719/0001-49</p>
         </div>

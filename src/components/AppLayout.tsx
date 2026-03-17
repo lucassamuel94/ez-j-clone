@@ -9,8 +9,8 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { RoleSimulationBanner } from '@/components/admin/RoleSimulationBanner';
 import { useRoleSimulation } from '@/stores/useRoleSimulation';
-import ezsoftLogo from '@/assets/ezsoft-logo.svg';
-import ezsoftLogoWhite from '@/assets/ezsoft-logo-white.png';
+import ezsoftLogo from '@/assets/ez-journey-logo-color.svg';
+import ezsoftLogoWhite from '@/assets/ez-journey-logo-white.svg';
 import { Link } from 'react-router-dom';
 
 export const AppLayout = React.forwardRef<HTMLDivElement, { children: React.ReactNode }>(function AppLayout({ children }, ref) {
@@ -37,8 +37,8 @@ export const AppLayout = React.forwardRef<HTMLDivElement, { children: React.Reac
             <Menu className="h-5 w-5" />
           </Button>
           <Link to="/" className="flex items-center">
-            <img src={ezsoftLogo} alt="EZSoft" className="h-6 w-auto dark:hidden" />
-            <img src={ezsoftLogoWhite} alt="EZSoft" className="h-6 w-auto hidden dark:block" />
+            <img src={ezsoftLogo} alt="EZ Journey" className="h-6 w-auto dark:hidden" />
+            <img src={ezsoftLogoWhite} alt="EZ Journey" className="h-6 w-auto hidden dark:block" />
           </Link>
           <div className="flex items-center gap-1">
             <NotificationCenter />

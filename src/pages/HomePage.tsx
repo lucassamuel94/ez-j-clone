@@ -7,7 +7,7 @@ import { useMyProjects } from '@/hooks/useMyProjects';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useDashboardCounts } from '@/hooks/useDashboardCounts';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useUserRole } from '@/hooks/useUserRole';
+
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -94,15 +94,14 @@ export default function HomePage() {
   const { notifications, unreadCount, isLoading: notifsLoading } = useNotifications();
   const { data: counts } = useDashboardCounts();
   const { hasPermission } = usePermissions();
-  const { canAccessBoth, isProjectRole } = useUserRole();
   const { data: myProjects = [] } = useMyProjects();
 
   const isLoading = userLoading || tasksLoading || notifsLoading;
 
   const quote = useMemo(() => QUOTES[Math.floor(Math.random() * QUOTES.length)], []);
 
-  const canAccessCommercial = hasPermission('view_sdr_leads') || hasPermission('view_closer_pipeline') || canAccessBoth || !isProjectRole;
-  const canAccessProjects = hasPermission('view_projects') || canAccessBoth || isProjectRole;
+  const canAccessCommercial = hasPermission('view_sdr_leads') || hasPermission('view_closer_pipeline');
+  const canAccessProjects = hasPermission('view_projects');
 
   const pendingTasks = useMemo(() => {
     if (!tasks) return [];

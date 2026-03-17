@@ -283,13 +283,16 @@ export const returnLeadToSdr = async (id: string, reason: string): Promise<void>
 
   // Update lead status to 'Devolvido pelo Closer'
   if (opp?.lead_id) {
-    await supabase
+    const { error: leadUpdateError } = await supabase
       .from('leads')
-      .update({ 
+      .update({
         status: 'Devolvido pelo Closer' as any,
         next_action_at: new Date().toISOString(),
       })
       .eq('id', opp.lead_id);
+    if (leadUpdateError) {
+      console.error('Failed to update lead status on return to SDR:', leadUpdateError);
+    }
   }
 
   // Create notification for SDR
@@ -353,6 +356,12 @@ export const markOpportunityWon = async (id: string): Promise<void> => {
   if (error) throw error;
 
   if (current?.lead_id) {
+    // Auto-mark all call analyses for this lead as converted to sale
+    await supabase
+      .from('call_analyses')
+      .update({ converted_to_sale: true } as Record<string, unknown>)
+      .eq('lead_id', current.lead_id);
+
     await createActivityLog({
       lead_id: current.lead_id,
       action_type: 'opportunity_created',
@@ -482,9 +491,9 @@ export const createDealFromActiveClient = async (
   closerUserId: string,
   opportunityType: OpportunityType = 'new_business'
 ): Promise<{ opportunityId: string; leadId: string }> => {
-  // 1. Fetch active_client
+  // 1. Fetch account (unified client entity)
   const { data: client, error: clientError } = await supabase
-    .from('active_clients' as any)
+    .from('accounts')
     .select('*')
     .eq('id', activeClientId)
     .single();
@@ -531,8 +540,8 @@ export const createDealFromActiveClient = async (
       const { data: newLead, error: leadError } = await supabase
         .from('leads')
         .insert({
-          name: (client as any).contact_name || (client as any).company,
-          company: (client as any).company,
+          name: (client as any).contact_name || (client as any).company_name,
+          company: (client as any).company_name,
           cnpj: (client as any).cnpj,
           razao_social: (client as any).razao_social,
           nome_fantasia: (client as any).nome_fantasia,
@@ -555,8 +564,8 @@ export const createDealFromActiveClient = async (
     const { data: newLead, error: leadError } = await supabase
       .from('leads')
       .insert({
-        name: (client as any).contact_name || (client as any).company,
-        company: (client as any).company,
+        name: (client as any).contact_name || (client as any).company_name,
+        company: (client as any).company_name,
         email: (client as any).email,
         phone: (client as any).phone,
         city: (client as any).city,

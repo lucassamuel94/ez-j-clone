@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import CheckoutRegistration from '@/components/checkout/CheckoutRegistration';
 import CheckoutSuccess from '@/components/checkout/CheckoutSuccess';
-import ezLogo from '@/assets/ezsoft-logo-white.png';
+import ezLogo from '@/assets/ez-journey-logo-white.svg';
 
 const CheckoutPage = () => {
   const [searchParams] = useSearchParams();
@@ -50,7 +50,7 @@ const CheckoutPage = () => {
       {/* Header */}
       <div className="bg-card border-b border-border sticky top-0 z-50">
         <div className="max-w-3xl mx-auto px-6 py-3 flex items-center gap-4">
-          <img src={ezLogo} alt="EZ Soft" className="h-7 brightness-0 dark:brightness-0 dark:invert" />
+          <img src={ezLogo} alt="EZ Journey" className="h-7 brightness-0 dark:brightness-0 dark:invert" />
           <span className="text-sm font-medium text-muted-foreground">Checkout — {companyName}</span>
         </div>
       </div>

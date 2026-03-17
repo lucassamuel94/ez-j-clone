@@ -164,13 +164,19 @@ Deno.serve(async (req) => {
     const batchSize = body.batch_size || 10;
     const batchOffset = body.batch_offset || 0;
 
-    // Fetch leads with valid CNPJ
+    // Fetch leads with valid CNPJ — filter in SQL for performance
     let query = supabase
       .from('leads')
-      .select('id, cnpj, razao_social, nome_fantasia, company, ai_enrichment_data, company_segment, employee_count, revenue_range, website, cnae_fiscal, porte, phone, whatsapp, email')
+      .select('id, cnpj, razao_social, nome_fantasia, company, ai_enrichment_data, company_segment, employee_count, revenue_range, website, cnae_fiscal, porte, phone, whatsapp, email, enriched_at')
       .not('cnpj', 'is', null)
-      .neq('cnpj', '')
-      .order('created_at', { ascending: false })
+      .neq('cnpj', '');
+
+    // When only_missing, only fetch leads that were never enriched
+    if (onlyMissingData) {
+      query = query.is('enriched_at', null);
+    }
+
+    query = query.order('created_at', { ascending: false })
       .range(batchOffset, batchOffset + batchSize - 1);
 
     const { data: leads, error: fetchError } = await query;
@@ -186,35 +192,26 @@ Deno.serve(async (req) => {
     const validLeads = (leads || []).filter(l => {
       const clean = (l.cnpj || '').replace(/\D/g, '');
       if (clean.length < 11) return false;
-      // Skip all-zeros CNPJs
       if (/^0+$/.test(clean)) return false;
       return true;
     });
 
-    // If only_missing, filter leads that are missing at least one key enrichment field
-    // (broader than just cnae_fiscal+porte to catch leads with CNAE but no contact info)
-    const filteredLeads = onlyMissingData
-      ? validLeads.filter(l =>
-          l.cnae_fiscal == null ||
-          l.porte == null ||
-          !l.website ||
-          !l.employee_count ||
-          !l.company_segment
-        )
-      : validLeads;
-
     // Also get total count for progress tracking
-    const { count: totalCount } = await supabase
+    let countQuery = supabase
       .from('leads')
       .select('id', { count: 'exact', head: true })
       .not('cnpj', 'is', null)
       .neq('cnpj', '');
+    if (onlyMissingData) {
+      countQuery = countQuery.is('enriched_at', null);
+    }
+    const { count: totalCount } = await countQuery;
 
     const results = {
       total_eligible: totalCount || 0,
       batch_size: batchSize,
       batch_offset: batchOffset,
-      batch_count: filteredLeads.length,
+      batch_count: validLeads.length,
       brasilapi_success: 0,
       brasilapi_failed: 0,
       perplexity_success: 0,
@@ -225,7 +222,7 @@ Deno.serve(async (req) => {
       has_more: (leads || []).length === batchSize,
     };
 
-    for (const lead of filteredLeads) {
+    for (const lead of validLeads) {
       const updates: Record<string, any> = {};
 
       // Step 1: BrasilAPI — non-destructive: only fill fields that are empty on the lead
@@ -287,6 +284,7 @@ Deno.serve(async (req) => {
 
       // Apply updates
       if (Object.keys(updates).length > 0) {
+        updates.enriched_at = new Date().toISOString();
         const { error: updateError } = await supabase
           .from('leads')
           .update(updates)
@@ -296,6 +294,9 @@ Deno.serve(async (req) => {
         } else {
           results.updated++;
         }
+      } else {
+        // Mark as enriched even if no new data (to avoid reprocessing)
+        await supabase.from('leads').update({ enriched_at: new Date().toISOString() }).eq('id', lead.id);
       }
 
       results.processed++;
