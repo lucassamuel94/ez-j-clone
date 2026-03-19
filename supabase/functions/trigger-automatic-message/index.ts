@@ -603,7 +603,7 @@ async function resolveSDRMetrics(
 
     const sdrIdsArray = [...sdrRoleIds];
 
-    // 2) Count meetings today — filtered by SDR role
+    // 2) Count meetings today — by created_at (new meetings scheduled today)
     const { data: todayMeetings } = await (supabase
       .from("meetings")
       .select("user_id") as any)
@@ -628,23 +628,17 @@ async function resolveSDRMetrics(
       .eq("period_year", parseInt(spYear))
       .in("target_user_id", sdrIdsArray);
 
-    // Build allSdrIds from SDRs that have meetings today or goals
-    const sdrIds = [...new Set([...Object.keys(sdrCounts), ...((goals || []) as any[]).map((g: any) => g.target_user_id as string)])];
-
-    if (sdrIds.length === 0) return;
-
-    const { data: profiles } = await (supabase.from("profiles").select("id, name") as any).in("id", sdrIds);
-    const nameMap: Record<string, string> = {};
-    for (const p of (profiles || []) as any[]) nameMap[p.id as string] = (p.name || "Sem nome") as string;
-
-    // 4) Count meetings this month — filtered by SDR role + upper bound
+    // 4) Count meetings this month — by meeting_datetime (actual scheduled date)
+    // Using meeting_datetime instead of created_at so rescheduled meetings
+    // count for the month they're scheduled in, not when the record was first created.
     const startOfMonth = `${spYear}-${spMonth.padStart(2, "0")}-01T00:00:00-03:00`;
+    const endOfMonth = `${spYear}-${spMonth.padStart(2, "0")}-31T23:59:59-03:00`;
     const { data: monthMeetings } = await (supabase
       .from("meetings")
       .select("user_id") as any)
       .in("user_id", sdrIdsArray)
-      .gte("created_at", startOfMonth)
-      .lte("created_at", endOfDay);
+      .gte("meeting_datetime", startOfMonth)
+      .lte("meeting_datetime", endOfMonth);
 
     const monthCounts: Record<string, number> = {};
     let totalMonth = 0;
@@ -661,8 +655,18 @@ async function resolveSDRMetrics(
       totalGoal += g.meetings_scheduled_goal as number;
     }
 
-    const allSdrIds = [...new Set([...Object.keys(sdrCounts), ...Object.keys(goalMap)])];
+    // Include ALL SDRs with today's activity, goals, OR monthly activity in breakdown
+    const allSdrIds = [...new Set([
+      ...Object.keys(sdrCounts),
+      ...Object.keys(goalMap),
+      ...Object.keys(monthCounts),
+    ])];
     allSdrIds.sort((a, b) => (sdrCounts[b] || 0) - (sdrCounts[a] || 0));
+
+    // Fetch profiles for all SDRs that will appear in the breakdown
+    const { data: profiles } = await (supabase.from("profiles").select("id, name") as any).in("id", allSdrIds);
+    const nameMap: Record<string, string> = {};
+    for (const p of (profiles || []) as any[]) nameMap[p.id as string] = (p.name || "Sem nome") as string;
 
     const lines: string[] = [];
     for (const sdrId of allSdrIds) {

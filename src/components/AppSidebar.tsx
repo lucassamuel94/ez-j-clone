@@ -1,8 +1,9 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { KeyboardShortcutsDialog, useShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
@@ -63,7 +64,8 @@ import {
    FileSearch,
    History,
    UserCheck,
-   Keyboard } from
+   Keyboard,
+   ChevronRight } from
  "lucide-react";
 import ezsoftLogo from "@/assets/ez-journey-logo-color.svg";
 import ezsoftLogoWhite from "@/assets/ez-journey-logo-white.svg";
@@ -121,12 +123,65 @@ interface NavItem {
   children?: NavItem[];
 }
 
-function SectionLabel({ label, collapsed }: {label: string;collapsed: boolean;}) {
+const SIDEBAR_SECTIONS_KEY = 'sidebar_sections_state';
+
+function useSectionCollapse() {
+  const [sections, setSections] = useState<Record<string, boolean>>(() => {
+    try {
+      const stored = sessionStorage.getItem(SIDEBAR_SECTIONS_KEY);
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const isSectionOpen = useCallback((key: string) => {
+    return sections[key] !== false; // default open
+  }, [sections]);
+
+  const toggleSection = useCallback((key: string) => {
+    setSections(prev => {
+      const next = { ...prev, [key]: prev[key] === false };
+      sessionStorage.setItem(SIDEBAR_SECTIONS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  return { isSectionOpen, toggleSection };
+}
+
+function SectionLabel({ label, collapsed, sectionKey, isOpen, onToggle }: {
+  label: string;
+  collapsed: boolean;
+  sectionKey?: string;
+  isOpen?: boolean;
+  onToggle?: (key: string) => void;
+}) {
   if (collapsed) return <div className="my-2 mx-2 border-t border-border/40" />;
+  
+  const clickable = sectionKey && onToggle;
+  
   return (
-    <div className="px-3 pt-4 pb-1">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">{label}</span>
-    </div>);
+    <CollapsibleTrigger asChild>
+      <button
+        type="button"
+        className={cn(
+          "px-3 pt-4 pb-1 flex items-center gap-1 w-full text-left",
+          clickable && "cursor-pointer hover:opacity-80 transition-opacity group"
+        )}
+      >
+        {clickable && (
+          <ChevronRight
+            className={cn(
+              "h-3 w-3 text-muted-foreground/60 transition-transform duration-200 group-hover:text-muted-foreground",
+              isOpen && "rotate-90"
+            )}
+          />
+        )}
+        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">{label}</span>
+      </button>
+    </CollapsibleTrigger>
+  );
 }
 
 function NavLinkItem({ item, collapsed, isActive, onNavigate }: {item: NavItem;collapsed: boolean;isActive: boolean;onNavigate?: () => void;}) {
@@ -194,6 +249,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { data: phaseCounts } = usePhaseProjectCounts();
   const navigate = useNavigate();
   const [simDialogOpen, setSimDialogOpen] = useState(false);
+  const { isSectionOpen, toggleSection } = useSectionCollapse();
 
   // In mobile sheet, never show as "collapsed"
   const isCollapsed = isMobile ? false : collapsed;
@@ -238,8 +294,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       { to: "/leads", icon: <Inbox className="h-3.5 w-3.5" />, label: "Leads" },
       { to: "/sdr/call-intelligence", icon: <TrendingUp className="h-3.5 w-3.5" />, label: "Call Intelligence" },
       { to: "/sdr/icp", icon: <PieChart className="h-3.5 w-3.5" />, label: "Análise de ICP" },
-      { to: "/sdr/indicadores", icon: <BarChart3 className="h-3.5 w-3.5" />, label: "Dashboard" },
-      { to: "/sdr/meus-clientes", icon: <UserCheck className="h-3.5 w-3.5" />, label: "Meus Clientes" }]
+      { to: "/sdr/indicadores", icon: <BarChart3 className="h-3.5 w-3.5" />, label: "Dashboard" }]
     });
   }
   if (canAccessCloser) {
@@ -253,9 +308,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       { to: "/closer/api-oficial", icon: <ShieldCheck className="h-3.5 w-3.5" />, label: "API Oficial" },
       { to: "/proposals", icon: <FileTextIcon className="h-3.5 w-3.5" />, label: "Propostas" },
       { to: "/sdr/icp", icon: <PieChart className="h-3.5 w-3.5" />, label: "Análise de ICP" },
-      { to: "/accounts", icon: <Building2 className="h-3.5 w-3.5" />, label: "Gestão de Contas" },
       { to: "/closer/call-intelligence", icon: <TrendingUp className="h-3.5 w-3.5" />, label: "Call Intelligence" },
-      { to: "/closer/indicadores", icon: <BarChart3 className="h-3.5 w-3.5" />, label: "Dashboard" }]
+      { to: "/closer/indicadores", icon: <BarChart3 className="h-3.5 w-3.5" />, label: "Dashboard" },
+      { to: "/sdr/meus-clientes", icon: <UserCheck className="h-3.5 w-3.5" />, label: "Meus Clientes" },
+      { to: "/closer/parceiros", icon: <Handshake className="h-3.5 w-3.5" />, label: "Parceiros" }]
     });
   }
 
@@ -289,117 +345,127 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* Nav */}
       <nav className="flex-1 flex flex-col overflow-y-auto py-1 px-2 gap-y-0.5">
-        <SectionLabel label="Acesso Rápido" collapsed={isCollapsed} />
-        {quickAccess.map((item) =>
-        <NavLinkItem key={item.label} item={item} collapsed={isCollapsed} isActive={isLinkActive(item.to)} onNavigate={onNavigate} />
-        )}
+        <Collapsible open={isSectionOpen('quickAccess')} onOpenChange={() => toggleSection('quickAccess')}>
+          <SectionLabel label="Acesso Rápido" collapsed={isCollapsed} sectionKey="quickAccess" isOpen={isSectionOpen('quickAccess')} onToggle={toggleSection} />
+          <CollapsibleContent className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-top-1 data-[state=open]:slide-in-from-top-1 overflow-hidden">
+            {quickAccess.map((item) =>
+              <NavLinkItem key={item.label} item={item} collapsed={isCollapsed} isActive={isLinkActive(item.to)} onNavigate={onNavigate} />
+            )}
+          </CollapsibleContent>
+        </Collapsible>
 
         {canAccessCommercial &&
-        <>
-            <SectionLabel label="Comercial" collapsed={isCollapsed} />
-            {commercialLinks.map((item) => {
-            if (item.children && !isCollapsed) {
-              return (
-                <div key={item.label}>
-                    <div className={cn("px-3 pb-1", item.label === 'SDR' ? 'pt-1' : 'pt-4')}>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">{item.label}</span>
-                    </div>
-                    <div className="space-y-0.5">
-                      {item.children.map((child) =>
-                      <Link key={child.label} to={child.to} onClick={onNavigate}>
+          <Collapsible open={isSectionOpen('commercial')} onOpenChange={() => toggleSection('commercial')}>
+            <SectionLabel label="Comercial" collapsed={isCollapsed} sectionKey="commercial" isOpen={isSectionOpen('commercial')} onToggle={toggleSection} />
+            <CollapsibleContent className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-top-1 data-[state=open]:slide-in-from-top-1 overflow-hidden">
+              {commercialLinks.map((item) => {
+                if (item.children && !isCollapsed) {
+                  return (
+                    <div key={item.label}>
+                      <div className={cn("px-3 pb-1", item.label === 'SDR' ? 'pt-1' : 'pt-4')}>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">{item.label}</span>
+                      </div>
+                      <div className="space-y-0.5">
+                        {item.children.map((child) =>
+                          <Link key={child.label} to={child.to} onClick={onNavigate}>
                             <Button
-                          variant="ghost"
-                          className={cn(
-                            "w-full h-7 rounded-md justify-start gap-2.5 pl-7 pr-3 transition-all",
-                            location.pathname === child.to ?
-                            "bg-accent text-primary hover:bg-accent font-semibold" :
-                            "text-muted-foreground hover:text-foreground hover:bg-muted/30"
-                          )}>
+                              variant="ghost"
+                              className={cn(
+                                "w-full h-7 rounded-md justify-start gap-2.5 pl-7 pr-3 transition-all",
+                                location.pathname === child.to ?
+                                "bg-accent text-primary hover:bg-accent font-semibold" :
+                                "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                              )}>
                               <span className="opacity-70 flex-shrink-0">{child.icon}</span>
                               <span className="text-[12px] font-medium truncate">{child.label}</span>
                             </Button>
                           </Link>
-                      )}
-                    </div>
-                  </div>);
-            }
-            if (item.children && isCollapsed) {
-              return (
-                <NavLinkItem key={item.label} item={{ ...item, to: item.children[0].to }} collapsed={isCollapsed} isActive={item.children.some((c) => isLinkActive(c.to))} onNavigate={onNavigate} />);
-            }
-            return (
-              <NavLinkItem key={item.label} item={item} collapsed={isCollapsed} isActive={isLinkActive(item.to)} onNavigate={onNavigate} />);
-          })}
-          </>
+                        )}
+                      </div>
+                    </div>);
+                }
+                if (item.children && isCollapsed) {
+                  return (
+                    <NavLinkItem key={item.label} item={{ ...item, to: item.children[0].to }} collapsed={isCollapsed} isActive={item.children.some((c) => isLinkActive(c.to))} onNavigate={onNavigate} />);
+                }
+                return (
+                  <NavLinkItem key={item.label} item={item} collapsed={isCollapsed} isActive={isLinkActive(item.to)} onNavigate={onNavigate} />);
+              })}
+            </CollapsibleContent>
+          </Collapsible>
         }
 
         {canAccessProjects &&
-        <>
-            <SectionLabel label="Gestão de Projetos" collapsed={isCollapsed} />
-            <NavLinkItem
-            item={{ to: "/projects", icon: <FolderKanban className="h-4 w-4" />, label: "Visão Geral" }}
-            collapsed={isCollapsed}
-            isActive={location.pathname === "/projects"}
-            onNavigate={onNavigate} />
+          <Collapsible open={isSectionOpen('projects')} onOpenChange={() => toggleSection('projects')}>
+            <SectionLabel label="Gestão de Projetos" collapsed={isCollapsed} sectionKey="projects" isOpen={isSectionOpen('projects')} onToggle={toggleSection} />
+            <CollapsibleContent className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-top-1 data-[state=open]:slide-in-from-top-1 overflow-hidden">
+              <NavLinkItem
+                item={{ to: "/projects", icon: <FolderKanban className="h-4 w-4" />, label: "Visão Geral" }}
+                collapsed={isCollapsed}
+                isActive={location.pathname === "/projects"}
+                onNavigate={onNavigate} />
 
-            {!isCollapsed && PROJECT_PHASES_ORDER.map((phase) => {
-            const count = phaseCounts?.find((p) => p.phase_name === phase)?.count || 0;
-            const isComingSoon = COMING_SOON_PHASES.has(phase);
-            const phaseActive = location.pathname === `/projects/phase/${phase}`;
-            return (
-              <Link key={phase} to={`/projects/phase/${phase}`} onClick={onNavigate}>
-                  <Button
-                  variant="ghost"
-                  className={cn(
-                    "w-full h-7 rounded-md justify-start gap-2.5 pl-7 pr-3 transition-all",
-                    phaseActive ?
-                    "bg-accent text-primary hover:bg-accent font-semibold" :
-                    "text-muted-foreground hover:text-foreground hover:bg-muted/30"
-                  )}>
-                    <span className="opacity-70 flex-shrink-0">{PHASE_ICONS[phase]}</span>
-                    <span className="text-[12px] font-medium truncate flex-1 text-left">
-                      {PHASE_LABELS[phase]}
-                    </span>
-                    {isComingSoon ?
-                  <Badge
-                    variant="outline"
-                    className="text-[8px] px-1 py-0 h-3.5 leading-none font-medium border-warning/20 text-warning bg-warning/10 ml-auto flex-shrink-0">
-                        Breve
-                      </Badge> :
-                  count > 0 ?
-                  <span className="text-[10px] font-medium text-muted-foreground ml-auto flex-shrink-0">
-                        {count}
-                      </span> :
-                  null}
-                  </Button>
-                </Link>);
-          })}
-          </>
+              {!isCollapsed && PROJECT_PHASES_ORDER.map((phase) => {
+                const count = phaseCounts?.find((p) => p.phase_name === phase)?.count || 0;
+                const isComingSoon = COMING_SOON_PHASES.has(phase);
+                const phaseActive = location.pathname === `/projects/phase/${phase}`;
+                return (
+                  <Link key={phase} to={`/projects/phase/${phase}`} onClick={onNavigate}>
+                    <Button
+                      variant="ghost"
+                      className={cn(
+                        "w-full h-7 rounded-md justify-start gap-2.5 pl-7 pr-3 transition-all",
+                        phaseActive ?
+                        "bg-accent text-primary hover:bg-accent font-semibold" :
+                        "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                      )}>
+                      <span className="opacity-70 flex-shrink-0">{PHASE_ICONS[phase]}</span>
+                      <span className="text-[12px] font-medium truncate flex-1 text-left">
+                        {PHASE_LABELS[phase]}
+                      </span>
+                      {isComingSoon ?
+                        <Badge
+                          variant="outline"
+                          className="text-[8px] px-1 py-0 h-3.5 leading-none font-medium border-warning/20 text-warning bg-warning/10 ml-auto flex-shrink-0">
+                          Breve
+                        </Badge> :
+                        count > 0 ?
+                        <span className="text-[10px] font-medium text-muted-foreground ml-auto flex-shrink-0">
+                          {count}
+                        </span> :
+                        null}
+                    </Button>
+                  </Link>);
+              })}
+            </CollapsibleContent>
+          </Collapsible>
         }
 
         {(hasPermission('view_integrations') || hasPermission('view_deliveries')) &&
-        <>
-            <SectionLabel label="Material de Apoio" collapsed={isCollapsed} />
-            {hasPermission('view_integrations') &&
+          <Collapsible open={isSectionOpen('support')} onOpenChange={() => toggleSection('support')}>
+            <SectionLabel label="Material de Apoio" collapsed={isCollapsed} sectionKey="support" isOpen={isSectionOpen('support')} onToggle={toggleSection} />
+            <CollapsibleContent className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-top-1 data-[state=open]:slide-in-from-top-1 overflow-hidden">
+              {hasPermission('view_integrations') &&
+                <NavLinkItem
+                  item={{ to: "/integrations", icon: <Plug className="h-4 w-4" />, label: "Catálogo de Integrações" }}
+                  collapsed={isCollapsed}
+                  isActive={isLinkActive("/integrations")}
+                  onNavigate={onNavigate} />
+              }
+              {hasPermission('view_deliveries') &&
+                <NavLinkItem
+                  item={{ to: "/deliveries", icon: <PackageCheck className="h-4 w-4" />, label: "Projetos Entregues" }}
+                  collapsed={isCollapsed}
+                  isActive={isLinkActive("/deliveries")}
+                  onNavigate={onNavigate} />
+              }
               <NavLinkItem
-                item={{ to: "/integrations", icon: <Plug className="h-4 w-4" />, label: "Catálogo de Integrações" }}
+                item={{ to: "/api-analysis", icon: <FileSearch className="h-4 w-4" />, label: "Análise de API" }}
                 collapsed={isCollapsed}
-                isActive={isLinkActive("/integrations")}
+                isActive={isLinkActive("/api-analysis")}
                 onNavigate={onNavigate} />
-            }
-            {hasPermission('view_deliveries') &&
-              <NavLinkItem
-                item={{ to: "/deliveries", icon: <PackageCheck className="h-4 w-4" />, label: "Projetos Entregues" }}
-                collapsed={isCollapsed}
-                isActive={isLinkActive("/deliveries")}
-                onNavigate={onNavigate} />
-            }
-            <NavLinkItem
-              item={{ to: "/api-analysis", icon: <FileSearch className="h-4 w-4" />, label: "Análise de API" }}
-              collapsed={isCollapsed}
-              isActive={isLinkActive("/api-analysis")}
-              onNavigate={onNavigate} />
-          </>
+            </CollapsibleContent>
+          </Collapsible>
         }
 
         <div className="flex-1" />

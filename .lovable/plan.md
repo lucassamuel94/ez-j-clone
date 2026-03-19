@@ -1,32 +1,14 @@
-## Transcrição em massa — correção definitiva (v3)
 
-### Problema original
-`transcribe-call` era **síncrono** — esperava o Deepgram terminar a transcrição inteira dentro do mesmo request HTTP. Com áudios de 9-28 min, o edge function dava timeout e nada era concluído.
 
-### Correções aplicadas
+## Fix: Collapsible sidebar sections not toggling
 
-1. **`transcribe-call` agora é assíncrono** (igual `transcribe-video`)
-   - Envia áudio ao Deepgram com `callback` URL
-   - Retorna imediatamente com `status: "processing"`
-   - Deepgram envia resultado para `deepgram-webhook?type=sdr`
+### Root cause
+The `SectionLabel` component has a **double-toggle bug**. It uses `CollapsibleTrigger` (which triggers `Collapsible`'s `onOpenChange` → calls `toggleSection`) AND has its own `onClick` handler that also calls `toggleSection`. Both fire on the same click, so the section toggles open then immediately toggles closed again — appearing to do nothing.
 
-2. **`bulk-process-queue` processa 1 item por invocação**
-   - Busca 1 `queued`, baixa, faz upload, despacha transcrição
-   - Retorna em ~5-10s (não espera transcrição terminar)
-   - Timeouts explícitos (45s download, 10s login)
+### Fix (single file: `src/components/AppSidebar.tsx`)
 
-3. **`recover-stuck-call-analyses` corrigido**
-   - Usa `media_type` para rotear: áudio → `transcribe-call`, vídeo → `transcribe-video`
-   - Usa `analysis_context` para rotear: `demo` → `analyze-demo`, `sdr_call` → `analyze-call`
+1. **Remove the `onClick` handler from the button inside `SectionLabel`** — let `CollapsibleTrigger` + `Collapsible.onOpenChange` handle the toggle exclusively.
+2. Clean up the unused `onToggle` prop from `SectionLabel` since the toggle is now fully managed by Radix's `Collapsible` component.
 
-4. **`auto-analyze-calls` corrigido**
-   - Payload corrigido: `{ analysis_id, audio_path }` (era `{ analysisId }`)
-   - Auth corrigida: usa `serviceKey` (era `anonKey`)
+This is a ~5 line change in the `SectionLabel` component.
 
-5. **UI (`BulkCallAnalysisPanel`) redesenhada**
-   - Mostra contadores separados: fila / transcrevendo / despachadas / erros
-   - Não depende da transcrição terminar no mesmo ciclo
-   - Botão "Atualizar contadores" para ver progresso background
-
-### Status
-✅ Implementado e deployado. 84 chamadas prontas para despacho.

@@ -33,6 +33,7 @@ import {
   Megaphone,
   MessageCircle,
   Link as LinkIcon,
+  BrainCircuit,
 } from 'lucide-react';
 
 interface SettingsNavItem {
@@ -107,6 +108,9 @@ function SettingsNavContent({ onNavigate }: { onNavigate?: () => void }) {
   if (hasPermission('manage_goals')) {
     pipelineItems.push({ to: '/settings/goals', icon: <Target className="h-4 w-4" />, label: 'Metas' });
   }
+  if (hasPermission('access_admin')) {
+    pipelineItems.push({ to: '/settings/team-phases', icon: <Cog className="h-4 w-4" />, label: 'Equipe → Fases' });
+  }
 
   // ── Comunicação ─────────────────────────────────────────────────────────
   const comItems: SettingsNavItem[] = [];
@@ -135,6 +139,7 @@ function SettingsNavContent({ onNavigate }: { onNavigate?: () => void }) {
   }
   if (hasPermission('access_admin')) {
     intelItems.push({ to: '/settings/integrations-catalog', icon: <Blocks className="h-4 w-4" />, label: 'Catálogo de Integrações' });
+    intelItems.push({ to: '/settings/business-chat', icon: <BrainCircuit className="h-4 w-4" />, label: 'Regras de Negócio' });
   }
 
   // ── Marketing ───────────────────────────────────────────────────────────
@@ -150,15 +155,11 @@ function SettingsNavContent({ onNavigate }: { onNavigate?: () => void }) {
 
   // ── Sistema ─────────────────────────────────────────────────────────────
   const systemItems: SettingsNavItem[] = [];
-  if (hasPermission('access_admin')) {
-    systemItems.push({ to: '/settings/clients', icon: <Building2 className="h-4 w-4" />,    label: 'Base de Clientes' });
-  }
   if (hasPermission('manage_import')) {
     systemItems.push({ to: '/settings/import',  icon: <FileSpreadsheet className="h-4 w-4" />, label: 'Importação' });
   }
   if (hasPermission('access_admin')) {
     systemItems.push({ to: '/settings/trash',  icon: <Trash2 className="h-4 w-4" />,     label: 'Lixeira' });
-    systemItems.push({ to: '/settings/team-phases', icon: <Cog className="h-4 w-4" />,    label: 'Equipe → Fases' });
   }
 
   return (

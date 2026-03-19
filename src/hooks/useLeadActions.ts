@@ -297,13 +297,22 @@ export function useLeadActions({
         title: meetingData.meetingTitle,
         executiveName: meetingData.executiveName,
       });
-      // UPDATE existing opportunity
+      // UPDATE existing opportunity or CREATE new one
       if (existing.opportunity_id) {
         await updateExistingOpportunity({
           opportunityId: existing.opportunity_id,
           meetingDatetime: meetingDatetime.toISOString(),
           assignedToUserId: meetingData.executiveUserId || undefined,
         });
+      } else {
+        await createOpportunityFromMeeting(
+          lead.id,
+          userInfo.id,
+          meetingData.executiveUserId || null,
+          meetingDatetime.toISOString(),
+          'Demonstração',
+          true,
+        );
       }
     } else {
       // INSERT new meeting
@@ -678,14 +687,7 @@ export function useLeadActions({
       });
       const { data: updatedLead } = await supabase.from('leads').select('*').eq('id', lead.id).single();
       if (updatedLead) {
-        const enrichedLead = {
-          ...updatedLead,
-          last_contact_at: updatedLead.last_contact_at ? new Date(updatedLead.last_contact_at) : null,
-          next_action_at: new Date(updatedLead.next_action_at),
-          created_at: new Date(updatedLead.created_at),
-          updated_at: new Date(updatedLead.updated_at),
-        } as unknown as Lead;
-        onUpdateLead(enrichedLead);
+        onUpdateLead(updatedLead as unknown as Lead);
       }
       setEnrichDialog(false);
     } catch (error) {

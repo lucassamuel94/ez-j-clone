@@ -407,15 +407,17 @@ export const createLead = async (lead: Omit<Lead, 'id' | 'created_at' | 'updated
 
 // Update a lead
 export const updateLead = async (id: string, updates: Partial<Lead>): Promise<Lead> => {
-  // Capture old status before update for automation trigger
+  // Capture old values before update for automation trigger and CNPJ comparison
   let oldStatus: string | undefined;
-  if (updates.status !== undefined) {
-    const { data: currentLead } = await supabase.from('leads').select('status').eq('id', id).single();
+  let currentCnpj: string | undefined;
+  if (updates.status !== undefined || updates.cnpj !== undefined) {
+    const { data: currentLead } = await supabase.from('leads').select('status, cnpj').eq('id', id).single();
     oldStatus = currentLead?.status || undefined;
+    currentCnpj = currentLead?.cnpj || undefined;
   }
 
   const updateData: any = {};
-  
+
   // Basic lead fields
   if (updates.status !== undefined) updateData.status = updates.status;
   if (updates.temperature !== undefined) updateData.temperature = updates.temperature;
@@ -441,10 +443,11 @@ export const updateLead = async (id: string, updates: Partial<Lead>): Promise<Le
   if (updates.list_reason !== undefined) updateData.list_reason = updates.list_reason;
   if (updates.cadence_id !== undefined) updateData.cadence_id = updates.cadence_id;
   
-  // Company data fields - check CNPJ uniqueness before updating
+  // Company data fields - check CNPJ uniqueness only when the value actually changed
   if (updates.cnpj !== undefined) {
     const cleanCnpj = updates.cnpj?.replace(/\D/g, '') || '';
-    if (cleanCnpj.length === 14) {
+    const cleanCurrentCnpj = currentCnpj?.replace(/\D/g, '') || '';
+    if (cleanCnpj.length === 14 && cleanCnpj !== cleanCurrentCnpj) {
       const duplicateCheck = await checkCnpjDuplicate(updates.cnpj, id);
       if (duplicateCheck.isDuplicate) {
         const label = duplicateCheck.reason === 'lead'

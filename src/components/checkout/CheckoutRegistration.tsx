@@ -152,6 +152,12 @@ const CheckoutRegistration = ({ proposalId, companyName, onComplete }: CheckoutR
         p_fin_phone: d.fin_phone.replace(/\D/g, ''),
       });
       if (error) throw error;
+
+      // Trigger automatic messages for proposal acceptance (fire-and-forget)
+      supabase.functions.invoke('trigger-automatic-message', {
+        body: { trigger_key: 'proposal_accepted', context: { proposal_id: proposalId } },
+      }).catch(console.error);
+
       toast.success('Cadastro realizado com sucesso!');
       onComplete();
     } catch (err) {

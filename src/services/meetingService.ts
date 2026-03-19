@@ -27,7 +27,7 @@ export async function findExistingActiveMeeting(leadId: string): Promise<Existin
     .from('opportunities')
     .select('id, stage')
     .eq('lead_id', leadId)
-    .not('stage', 'in', '(Perdida,Ganha)')
+    .not('stage', 'in', '(Perdido,Ganho)')
     .order('created_at', { ascending: false })
     .limit(1)
     .single();
@@ -82,6 +82,8 @@ interface UpdateOpportunityParams {
 export async function updateExistingOpportunity(params: UpdateOpportunityParams): Promise<void> {
   const updateData: Record<string, unknown> = {
     meeting_datetime: params.meetingDatetime,
+    stage: 'Demonstração',
+    returned_to_sdr: false,
   };
   if (params.assignedToUserId) {
     updateData.assigned_to_user_id = params.assignedToUserId;

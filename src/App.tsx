@@ -57,6 +57,7 @@ const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const CalendarPage = lazy(() => import("./pages/CalendarPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const AccountsPage = lazy(() => import("./pages/AccountsPage"));
+const CloserPartnersPage = lazy(() => import("./pages/CloserPartnersPage"));
 
 const AccessDeniedPage = lazy(() => import("./pages/AccessDeniedPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -167,6 +168,11 @@ const App = () => {
               <Route path="/closer/indicadores" element={
                 <ProtectedRoute requiredPermission="view_closer_indicators">
                   <CloserIndicadoresPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/closer/parceiros" element={
+                <ProtectedRoute requiredPermission="view_closer_pipeline">
+                  <CloserPartnersPage />
                 </ProtectedRoute>
               } />
               <Route path="/simulator" element={

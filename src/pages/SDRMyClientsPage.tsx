@@ -1,103 +1,17 @@
-import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useState, useMemo, useCallback } from 'react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useUserRole } from '@/hooks/useUserRole';
+import { useMyClients, type MyClient } from '@/hooks/useMyClients';
+import { ClientPortfolioModal } from '@/components/clients/ClientPortfolioModal';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { PageHeader } from '@/components/PageHeader';
-import { Loader2, Search, UserCheck, Building2, MapPin, ExternalLink } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-
-interface QualifiedClient {
-  id: string;
-  company_name: string;
-  cnpj: string | null;
-  city: string | null;
-  state: string | null;
-  lifecycle_stage: string;
-  account_owner_name: string | null;
-  won_at: string | null;
-  sdr_name: string | null;
-  deal_value: number | null;
-  situacao_cadastral: string | null;
-}
-
-function useSdrQualifiedClients(sdrUserId: string | null, isAdminOrManager: boolean) {
-  return useQuery<QualifiedClient[]>({
-    queryKey: ['sdr-qualified-clients', sdrUserId, isAdminOrManager],
-    queryFn: async () => {
-      // Fetch accounts with lifecycle_stage = 'client' filtered by sdr
-      // Plus their winning opportunity info (won_at, deal_value, sdr name)
-      let query = supabase
-        .from('accounts')
-        .select(`
-          id,
-          company_name,
-          cnpj,
-          city,
-          state,
-          lifecycle_stage,
-          situacao_cadastral,
-          account_owner:profiles!accounts_account_owner_id_profiles_fkey(name)
-        `)
-        .eq('lifecycle_stage', 'client')
-        .order('created_at', { ascending: false });
-
-      const { data: accounts, error } = await query;
-      if (error) throw error;
-      if (!accounts || accounts.length === 0) return [];
-
-      const accountIds = accounts.map((a: any) => a.id);
-
-      // Fetch winning opportunities to get won_at, deal_value and sdr info
-      const { data: wonOpps } = await supabase
-        .from('opportunities')
-        .select('account_id, won_at, deal_value, sdr_user_id, sdr:profiles!opportunities_sdr_user_id_fkey(name)')
-        .in('account_id', accountIds)
-        .eq('stage', 'Ganho')
-        .order('won_at', { ascending: false });
-
-      // Build a map: account_id → best (latest) won opportunity
-      const oppMap = new Map<string, any>();
-      for (const opp of wonOpps || []) {
-        if (!oppMap.has(opp.account_id)) {
-          oppMap.set(opp.account_id, opp);
-        }
-      }
-
-      // If not admin/manager, filter to accounts where current user is the SDR
-      const result: QualifiedClient[] = accounts
-        .filter((a: any) => {
-          if (isAdminOrManager) return true;
-          const opp = oppMap.get(a.id);
-          return opp?.sdr_user_id === sdrUserId;
-        })
-        .map((a: any) => {
-          const opp = oppMap.get(a.id);
-          return {
-            id: a.id,
-            company_name: a.company_name,
-            cnpj: a.cnpj,
-            city: a.city,
-            state: a.state,
-            lifecycle_stage: a.lifecycle_stage,
-            situacao_cadastral: a.situacao_cadastral,
-            account_owner_name: (a.account_owner as any)?.name || null,
-            won_at: opp?.won_at || null,
-            sdr_name: (opp?.sdr as any)?.name || null,
-            deal_value: opp?.deal_value || null,
-          };
-        });
-
-      return result;
-    },
-    enabled: isAdminOrManager || !!sdrUserId,
-  });
-}
+import { AppLayout } from '@/components/AppLayout';
+import { cn } from '@/lib/utils';
+import { Loader2, Search, UserCheck, Building2, MapPin, FolderKanban, Rocket } from 'lucide-react';
 
 const formatCnpj = (cnpj: string) => {
   const d = cnpj.replace(/\D/g, '');
@@ -111,18 +25,26 @@ const formatCurrency = (value: number) =>
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
+const formatRelative = (days: number | null) => {
+  if (days === null) return '—';
+  if (days === 0) return 'Hoje';
+  if (days === 1) return 'Ontem';
+  if (days < 30) return `${days}d`;
+  return `${Math.floor(days / 30)}m`;
+};
+
 export default function SDRMyClientsPage() {
   const { user } = useCurrentUser();
   const { hasPermission } = usePermissions();
+  const { isCloser, isSdr } = useUserRole();
   const isAdminOrManager = hasPermission('access_admin');
-  const navigate = useNavigate();
+
+  const viewMode = isAdminOrManager ? 'admin' : isCloser ? 'closer' : 'sdr';
 
   const [search, setSearch] = useState('');
+  const [selectedClient, setSelectedClient] = useState<MyClient | null>(null);
 
-  const { data: clients = [], isLoading } = useSdrQualifiedClients(
-    user?.id ?? null,
-    isAdminOrManager,
-  );
+  const { data: clients = [], isLoading } = useMyClients(user?.id ?? null, viewMode);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -131,162 +53,228 @@ export default function SDRMyClientsPage() {
       c.company_name?.toLowerCase().includes(q) ||
       c.cnpj?.includes(q) ||
       c.city?.toLowerCase().includes(q) ||
-      c.account_owner_name?.toLowerCase().includes(q) ||
+      c.closer_name?.toLowerCase().includes(q) ||
       c.sdr_name?.toLowerCase().includes(q),
     );
   }, [clients, search]);
 
-  const totalValue = useMemo(
-    () => filtered.reduce((sum, c) => sum + (c.deal_value || 0), 0),
+  const totalRevenue = useMemo(
+    () => filtered.reduce((sum, c) => sum + c.total_revenue, 0),
     [filtered],
   );
 
-  return (
-    <div className="flex flex-col h-full">
-      <PageHeader
-        title="Meus Clientes"
-        subtitle={
-          isAdminOrManager
-            ? 'Clientes ganhos por todos os SDRs'
-            : 'Clientes originados de leads que você qualificou'
-        }
-        icon={<UserCheck className="h-5 w-5" />}
-      />
+  const avgHealth = useMemo(() => {
+    if (filtered.length === 0) return 0;
+    return Math.round(filtered.reduce((sum, c) => sum + c.health_score, 0) / filtered.length);
+  }, [filtered]);
 
-      <div className="flex-1 overflow-auto p-6 space-y-4">
-        {/* Stats row */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <Card>
-            <CardContent className="py-3 px-4">
-              <p className="text-xs text-muted-foreground">Total de clientes</p>
-              <p className="text-2xl font-bold">{isLoading ? '—' : filtered.length}</p>
-            </CardContent>
-          </Card>
-          {totalValue > 0 && (
+  const handleRowClick = useCallback((client: MyClient) => {
+    setSelectedClient(client);
+  }, []);
+
+  const subtitle = viewMode === 'admin'
+    ? 'Todos os clientes ativos da base'
+    : viewMode === 'closer'
+      ? 'Clientes da sua carteira'
+      : 'Clientes originados de leads que você qualificou';
+
+  const colSpan = isAdminOrManager ? 10 : 9;
+
+  return (
+    <AppLayout>
+      <div className="flex flex-col h-full">
+        <PageHeader
+          title="Meus Clientes"
+          subtitle={subtitle}
+          icon={<UserCheck className="h-5 w-5" />}
+        />
+
+        <div className="flex-1 overflow-auto p-6 space-y-4">
+          {/* Stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Card>
               <CardContent className="py-3 px-4">
-                <p className="text-xs text-muted-foreground">Valor total captado</p>
-                <p className="text-2xl font-bold text-success">{formatCurrency(totalValue)}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Clientes</p>
+                <p className="text-2xl font-bold">{isLoading ? '—' : filtered.length}</p>
               </CardContent>
             </Card>
-          )}
-        </div>
+            <Card>
+              <CardContent className="py-3 px-4">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Receita total</p>
+                <p className="text-2xl font-bold text-success">{isLoading ? '—' : formatCurrency(totalRevenue)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="py-3 px-4">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Saúde média</p>
+                <div className="flex items-center gap-2">
+                  <div className={cn('h-3 w-3 rounded-full', {
+                    'bg-success': avgHealth >= 70,
+                    'bg-warning': avgHealth >= 40 && avgHealth < 70,
+                    'bg-destructive': avgHealth < 40,
+                  })} />
+                  <p className="text-2xl font-bold">{isLoading ? '—' : avgHealth}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="py-3 px-4">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Evoluções ativas</p>
+                <p className="text-2xl font-bold">{isLoading ? '—' : filtered.reduce((s, c) => s + c.evolution_count, 0)}</p>
+              </CardContent>
+            </Card>
+          </div>
 
-        {/* Search */}
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar empresa, CNPJ, cidade..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-9 h-9"
-          />
-        </div>
+          {/* Search */}
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar empresa, CNPJ, cidade, closer..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9 h-9"
+            />
+          </div>
 
-        {/* Table */}
-        <div className="border rounded-xl overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="text-xs">Empresa</TableHead>
-                <TableHead className="text-xs">CNPJ</TableHead>
-                <TableHead className="text-xs">Cidade/UF</TableHead>
-                <TableHead className="text-xs">Closer</TableHead>
-                {isAdminOrManager && <TableHead className="text-xs">SDR</TableHead>}
-                <TableHead className="text-xs">Data da venda</TableHead>
-                <TableHead className="text-xs text-right">Valor</TableHead>
-                <TableHead className="text-xs w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={isAdminOrManager ? 8 : 7} className="text-center py-10">
-                    <Loader2 className="h-4 w-4 animate-spin inline mr-2 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Carregando...</span>
-                  </TableCell>
+          {/* Table */}
+          <div className="border rounded-xl overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="text-xs w-5" />
+                  <TableHead className="text-xs">Empresa</TableHead>
+                  <TableHead className="text-xs">Cidade/UF</TableHead>
+                  <TableHead className="text-xs">Closer</TableHead>
+                  {isAdminOrManager && <TableHead className="text-xs">SDR</TableHead>}
+                  <TableHead className="text-xs">Produtos</TableHead>
+                  <TableHead className="text-xs text-center">Projetos</TableHead>
+                  <TableHead className="text-xs text-center">Evoluções</TableHead>
+                  <TableHead className="text-xs text-center">Atividade</TableHead>
+                  <TableHead className="text-xs text-right">Receita</TableHead>
                 </TableRow>
-              ) : filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={isAdminOrManager ? 8 : 7} className="text-center py-14">
-                    <Building2 className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">
-                      {search ? 'Nenhum resultado para esta busca' : 'Nenhum cliente qualificado ainda'}
-                    </p>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filtered.map(client => (
-                  <TableRow key={client.id} className="group">
-                    <TableCell className="py-2.5">
-                      <div>
-                        <p className="text-sm font-medium">{client.company_name}</p>
-                        {client.situacao_cadastral && (
-                          <Badge
-                            variant="outline"
-                            className={`text-[9px] h-3.5 px-1 mt-0.5 ${
-                              client.situacao_cadastral.toLowerCase() === 'ativa'
-                                ? 'border-success/40 text-success'
-                                : 'border-muted-foreground/30 text-muted-foreground'
-                            }`}
-                          >
-                            {client.situacao_cadastral}
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs font-mono text-muted-foreground py-2.5">
-                      {client.cnpj ? formatCnpj(client.cnpj) : '—'}
-                    </TableCell>
-                    <TableCell className="text-xs py-2.5">
-                      {client.city && client.state ? (
-                        <span className="flex items-center gap-1 text-muted-foreground">
-                          <MapPin className="h-3 w-3 shrink-0" />
-                          {client.city}/{client.state}
-                        </span>
-                      ) : '—'}
-                    </TableCell>
-                    <TableCell className="text-xs py-2.5">
-                      {client.account_owner_name || <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    {isAdminOrManager && (
-                      <TableCell className="text-xs py-2.5">
-                        {client.sdr_name || <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                    )}
-                    <TableCell className="text-xs py-2.5 text-muted-foreground">
-                      {client.won_at ? formatDate(client.won_at) : '—'}
-                    </TableCell>
-                    <TableCell className="text-xs py-2.5 text-right font-medium">
-                      {client.deal_value ? (
-                        <span className="text-success">{formatCurrency(client.deal_value)}</span>
-                      ) : '—'}
-                    </TableCell>
-                    <TableCell className="py-2.5">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => navigate(`/accounts`)}
-                        title="Ver na base de clientes"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                      </Button>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={colSpan} className="text-center py-10">
+                      <Loader2 className="h-4 w-4 animate-spin inline mr-2 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Carregando...</span>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={colSpan} className="text-center py-14">
+                      <Building2 className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">
+                        {search ? 'Nenhum resultado para esta busca' : 'Nenhum cliente na carteira'}
+                      </p>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filtered.map(client => (
+                    <TableRow
+                      key={client.id}
+                      className="group cursor-pointer hover:bg-accent/30 transition-colors"
+                      onClick={() => handleRowClick(client)}
+                    >
+                      {/* Health dot */}
+                      <TableCell className="py-2.5 pr-0">
+                        <div className={cn('h-2.5 w-2.5 rounded-full mx-auto', {
+                          'bg-success': client.health_label === 'green',
+                          'bg-warning': client.health_label === 'yellow',
+                          'bg-destructive': client.health_label === 'red',
+                        })} title={`Saúde: ${client.health_score}`} />
+                      </TableCell>
+                      {/* Empresa */}
+                      <TableCell className="py-2.5">
+                        <div>
+                          <p className="text-sm font-medium">{client.company_name}</p>
+                          {client.cnpj && (
+                            <p className="text-[10px] font-mono text-muted-foreground">{formatCnpj(client.cnpj)}</p>
+                          )}
+                        </div>
+                      </TableCell>
+                      {/* Cidade */}
+                      <TableCell className="text-xs py-2.5">
+                        {client.city && client.state ? (
+                          <span className="flex items-center gap-1 text-muted-foreground">
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            {client.city}/{client.state}
+                          </span>
+                        ) : '—'}
+                      </TableCell>
+                      {/* Closer */}
+                      <TableCell className="text-xs py-2.5">
+                        {client.closer_name || '—'}
+                      </TableCell>
+                      {/* SDR (admin only) */}
+                      {isAdminOrManager && (
+                        <TableCell className="text-xs py-2.5">
+                          {client.sdr_name || '—'}
+                        </TableCell>
+                      )}
+                      {/* Produtos */}
+                      <TableCell className="py-2.5">
+                        <div className="flex flex-wrap gap-1">
+                          {client.products.length > 0 ? client.products.map(p => (
+                            <Badge key={p} variant="outline" className="text-[9px] h-4 px-1.5">{p}</Badge>
+                          )) : <span className="text-xs text-muted-foreground">—</span>}
+                        </div>
+                      </TableCell>
+                      {/* Projetos */}
+                      <TableCell className="text-center py-2.5">
+                        {client.active_projects_count > 0 ? (
+                          <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-1 border-info/30 text-info">
+                            <FolderKanban className="h-2.5 w-2.5" />{client.active_projects_count}
+                          </Badge>
+                        ) : <span className="text-xs text-muted-foreground">—</span>}
+                      </TableCell>
+                      {/* Evoluções */}
+                      <TableCell className="text-center py-2.5">
+                        {client.evolution_count > 0 ? (
+                          <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-1 border-primary/30 text-primary">
+                            <Rocket className="h-2.5 w-2.5" />{client.evolution_count}
+                          </Badge>
+                        ) : <span className="text-xs text-muted-foreground">—</span>}
+                      </TableCell>
+                      {/* Última atividade */}
+                      <TableCell className="text-center py-2.5">
+                        <span className={cn('text-xs', {
+                          'text-success': client.days_since_last_activity !== null && client.days_since_last_activity <= 7,
+                          'text-warning': client.days_since_last_activity !== null && client.days_since_last_activity > 7 && client.days_since_last_activity <= 30,
+                          'text-destructive': client.days_since_last_activity !== null && client.days_since_last_activity > 30,
+                          'text-muted-foreground': client.days_since_last_activity === null,
+                        })}>
+                          {formatRelative(client.days_since_last_activity)}
+                        </span>
+                      </TableCell>
+                      {/* Receita */}
+                      <TableCell className="text-xs py-2.5 text-right font-medium">
+                        {client.total_revenue > 0 ? (
+                          <span className="text-success">{formatCurrency(client.total_revenue)}</span>
+                        ) : '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
 
-        {!isLoading && filtered.length > 0 && (
-          <p className="text-[10px] text-muted-foreground text-right pr-1">
-            {filtered.length} cliente{filtered.length !== 1 ? 's' : ''}
-            {search ? ` encontrado${filtered.length !== 1 ? 's' : ''}` : ''}
-          </p>
-        )}
+          {!isLoading && filtered.length > 0 && (
+            <p className="text-[10px] text-muted-foreground text-right pr-1">
+              {filtered.length} cliente{filtered.length !== 1 ? 's' : ''}
+              {search ? ` encontrado${filtered.length !== 1 ? 's' : ''}` : ''}
+            </p>
+          )}
+        </div>
       </div>
-    </div>
+
+      <ClientPortfolioModal
+        client={selectedClient}
+        open={!!selectedClient}
+        onClose={() => setSelectedClient(null)}
+      />
+    </AppLayout>
   );
 }

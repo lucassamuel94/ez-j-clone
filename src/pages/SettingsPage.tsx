@@ -26,6 +26,7 @@ import { ProjectTrashView } from '@/components/projects/ProjectTrashView';
 import { ReportsMarketingSection } from '@/components/admin/ReportsMarketingSection';
 import { IntegrationsCatalogSection } from '@/components/admin/IntegrationsCatalogSection';
 import { UTMLinkGeneratorSection } from '@/components/admin/UTMLinkGeneratorSection';
+import { BusinessRulesChatSection } from '@/components/settings/BusinessRulesChatSection';
 function EnrichSection() {
   return (
     <div className="space-y-6">
@@ -67,6 +68,7 @@ export default function SettingsPage() {
         <Route path="trash" element={<ProjectTrashView />} />
         <Route path="integrations-catalog" element={<IntegrationsCatalogSection />} />
         <Route path="utm-generator" element={<UTMLinkGeneratorSection />} />
+        <Route path="business-chat" element={<BusinessRulesChatSection />} />
         <Route path="system" element={<Navigate to="/settings/permissions" replace />} />
         <Route path="*" element={<Navigate to="/settings" replace />} />
       </Routes>

@@ -558,6 +558,22 @@ const LeadInbox = () => {
           meetingDatetime: meetingDate.toISOString(),
           assignedToUserId: data.executiveUserId,
         });
+      } else if (currentUser?.id) {
+        const { error: oppError } = await supabase.from('opportunities').insert({
+          lead_id: quickActionLead.id,
+          created_by_user_id: currentUser.id,
+          assigned_to_user_id: data.executiveUserId,
+          sdr_user_id: currentUser.id,
+          meeting_datetime: meetingDate.toISOString(),
+          stage: 'Demonstração',
+        });
+        if (oppError) {
+          console.error('Error creating opportunity for existing meeting:', oppError);
+          toast.error('Erro ao criar oportunidade no pipeline do Closer. Tente novamente.');
+        } else {
+          queryClient.invalidateQueries({ queryKey: ['leads-paginated'] });
+          queryClient.invalidateQueries({ queryKey: ['lead-tab-counts'] });
+        }
       }
     } else {
       const { data: meetingRow } = await supabase.from('meetings').insert({

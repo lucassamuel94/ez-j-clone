@@ -191,7 +191,7 @@ export const NewLeadDialog = ({ open, onOpenChange, onLeadCreated }: NewLeadDial
         status: 'Novo',
         owner_user_id: '',
         last_contact_at: null,
-        next_action_at: new Date(),
+        next_action_at: new Date().toISOString(),
         attempts_count: 0,
       };
 

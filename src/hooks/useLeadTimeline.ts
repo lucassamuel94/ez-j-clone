@@ -243,7 +243,11 @@ export const useLeadTimeline = (leadId: string | null) => {
       queryClient.invalidateQueries({ queryKey: ['lead-timeline-logs', leadId] });
       queryClient.invalidateQueries({ queryKey: ['notes', leadId] });
     },
-    onError: () => toast.error('Erro ao salvar comentário'),
+    onError: (error: any) => {
+      console.error('Erro ao salvar comentário:', error);
+      const msg = error?.message || error?.details || 'Erro desconhecido';
+      toast.error(`Erro ao salvar comentário: ${msg}`);
+    },
   });
 
   // Update note mutation
