@@ -58,10 +58,10 @@ const PosVendaTravadosTab = memo(function PosVendaTravadosTab({ data }: Props) {
       {/* Reason bars */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <PosVendaChartCard title="Motivos de pausa">
-          <PosVendaHorizontalBars data={pausedBars} colorFn={() => 'hsl(38,100%,30%)'} />
+          <PosVendaHorizontalBars data={pausedBars} colorFn={() => 'hsl(var(--warning))'} />
         </PosVendaChartCard>
         <PosVendaChartCard title="Motivos de cancelamento">
-          <PosVendaHorizontalBars data={cancelledBars} colorFn={() => 'hsl(0,56%,46%)'} />
+          <PosVendaHorizontalBars data={cancelledBars} colorFn={() => 'hsl(var(--destructive))'} />
         </PosVendaChartCard>
       </div>
 
@@ -114,13 +114,13 @@ const PosVendaTravadosTab = memo(function PosVendaTravadosTab({ data }: Props) {
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={history_6m} barCategoryGap="20%">
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(0,0%,90%)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
               <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px' }} />
               <Legend wrapperStyle={{ fontSize: '12px' }} />
-              <Bar dataKey="paused_count" name="Pausados" fill="hsl(38,100%,30%)" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="cancelled_count" name="Cancelados" fill="hsl(0,56%,46%)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="paused_count" name="Pausados" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="cancelled_count" name="Cancelados" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

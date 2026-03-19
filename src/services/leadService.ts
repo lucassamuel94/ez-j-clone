@@ -121,11 +121,11 @@ const mapDbLeadToLead = (row: any): Lead => ({
   owner_user_id: row.owner_user_id || '',
   owner_name: row.owner_name || row.profiles?.name || (row.owner_user_id ? 'Usuário indisponível' : 'Não atribuído'),
   priority_score: row.priority_score,
-  last_contact_at: row.last_contact_at ? new Date(row.last_contact_at) : null,
-  next_action_at: new Date(row.next_action_at),
+  last_contact_at: row.last_contact_at || null,
+  next_action_at: row.next_action_at,
   attempts_count: row.attempts_count,
-  created_at: new Date(row.created_at),
-  updated_at: new Date(row.updated_at),
+  created_at: row.created_at,
+  updated_at: row.updated_at,
   initial_message: row.initial_message,
   entry_channel: row.entry_channel as Channel | undefined,
   icp_fit: row.icp_fit,
@@ -361,8 +361,8 @@ export const createLead = async (lead: Omit<Lead, 'id' | 'created_at' | 'updated
       source: lead.source || null,
       status: lead.status,
       owner_user_id: user?.id || null,
-      last_contact_at: lead.last_contact_at?.toISOString() || null,
-      next_action_at: lead.next_action_at.toISOString(),
+      last_contact_at: lead.last_contact_at || null,
+      next_action_at: lead.next_action_at,
       attempts_count: lead.attempts_count,
       initial_message: lead.initial_message || null,
       entry_channel: lead.entry_channel || null,
@@ -419,8 +419,8 @@ export const updateLead = async (id: string, updates: Partial<Lead>): Promise<Le
   // Basic lead fields
   if (updates.status !== undefined) updateData.status = updates.status;
   if (updates.temperature !== undefined) updateData.temperature = updates.temperature;
-  if (updates.last_contact_at !== undefined) updateData.last_contact_at = updates.last_contact_at?.toISOString() || null;
-  if (updates.next_action_at !== undefined) updateData.next_action_at = updates.next_action_at.toISOString();
+  if (updates.last_contact_at !== undefined) updateData.last_contact_at = updates.last_contact_at || null;
+  if (updates.next_action_at !== undefined) updateData.next_action_at = updates.next_action_at;
   if (updates.attempts_count !== undefined) updateData.attempts_count = updates.attempts_count;
   if (updates.priority_score !== undefined) updateData.priority_score = updates.priority_score;
   if (updates.current_cadence_step !== undefined) updateData.current_cadence_step = updates.current_cadence_step;
@@ -554,8 +554,8 @@ export const fetchLeadInteractions = async (leadId: string): Promise<Interaction
     direction: row.direction as 'inbound' | 'outbound',
     outcome: row.outcome as InteractionOutcome,
     message_summary: row.message_summary || '',
-    occurred_at: new Date(row.occurred_at),
-    created_at: new Date(row.created_at),
+    occurred_at: row.occurred_at,
+    created_at: row.created_at,
   }));
 };
 
@@ -570,7 +570,7 @@ export const createInteraction = async (interaction: Omit<Interaction, 'id' | 'c
       direction: interaction.direction,
       outcome: interaction.outcome,
       message_summary: interaction.message_summary,
-      occurred_at: interaction.occurred_at.toISOString(),
+      occurred_at: interaction.occurred_at,
     })
     .select()
     .single();
@@ -588,8 +588,8 @@ export const createInteraction = async (interaction: Omit<Interaction, 'id' | 'c
     direction: data.direction as 'inbound' | 'outbound',
     outcome: data.outcome as InteractionOutcome,
     message_summary: data.message_summary || '',
-    occurred_at: new Date(data.occurred_at),
-    created_at: new Date(data.created_at),
+    occurred_at: data.occurred_at,
+    created_at: data.created_at,
   };
 };
 
@@ -611,7 +611,7 @@ export const fetchLeadNotes = async (leadId: string): Promise<LeadNote[]> => {
     lead_id: row.lead_id,
     user_id: row.user_id,
     note: row.note,
-    created_at: new Date(row.created_at),
+    created_at: row.created_at,
     attachments: (row as any).attachments || [],
   }));
 };
@@ -646,7 +646,7 @@ export const createLeadNote = async (note: { lead_id: string; note: string; user
     lead_id: data.lead_id,
     user_id: data.user_id,
     note: data.note,
-    created_at: new Date(data.created_at),
+    created_at: data.created_at,
     attachments: (data as any).attachments || [],
   };
 };
@@ -670,7 +670,7 @@ export const updateLeadNote = async (noteId: string, noteText: string): Promise<
     lead_id: data.lead_id,
     user_id: data.user_id,
     note: data.note,
-    created_at: new Date(data.created_at),
+    created_at: data.created_at,
   };
 };
 

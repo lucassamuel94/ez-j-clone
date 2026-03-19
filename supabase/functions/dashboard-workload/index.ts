@@ -114,12 +114,12 @@ Deno.serve(async (req) => {
       const created = new Date(p.created_at as string);
       const rangeEnd = new Date(endStr + "T23:59:59Z");
       if (created > rangeEnd) return false;
-      if (p.overall_status === "entregue" && p.delivered_at) {
+      if (p.overall_status === "concluido" && p.delivered_at) {
         const delivered = new Date(p.delivered_at as string);
         const rangeStart = new Date(startStr + "T00:00:00Z");
         if (delivered < rangeStart) return false;
       }
-      if (p.overall_status !== "ativo" && p.overall_status !== "entregue") return false;
+      if (p.overall_status !== "ativo" && p.overall_status !== "concluido") return false;
       return true;
     }
 
@@ -196,7 +196,7 @@ Deno.serve(async (req) => {
       // wip_end: active projects at end of this week
       const wipEnd = projects.filter((p: Record<string, unknown>) =>
         isActiveInRange(p, monthStart, w.end_date) &&
-        (p.overall_status === "ativo" || (p.overall_status === "entregue" && p.delivered_at && new Date(p.delivered_at as string) > wEnd))
+        (p.overall_status === "ativo" || (p.overall_status === "concluido" && p.delivered_at && new Date(p.delivered_at as string) > wEnd))
       ).length;
 
       weeklyFlow.push({

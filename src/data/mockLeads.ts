@@ -1,8 +1,8 @@
 import { Lead, Interaction, CadenceStep, LeadNote } from '@/types/lead';
 
 // Helper to create dates relative to now
-const hoursAgo = (hours: number) => new Date(Date.now() - hours * 60 * 60 * 1000);
-const hoursFromNow = (hours: number) => new Date(Date.now() + hours * 60 * 60 * 1000);
+const hoursAgo = (hours: number) => new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+const hoursFromNow = (hours: number) => new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 
 export const mockLeads: Lead[] = [
   // INBOUND - Atrasados (highest priority)

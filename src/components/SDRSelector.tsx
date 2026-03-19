@@ -37,6 +37,7 @@ export const SDRSelector = ({
 }: SDRSelectorProps) => {
   const [open, setOpen] = useState(false);
   const [sdrList, setSdrList] = useState<Profile[]>([]);
+  const [roleUserIds, setRoleUserIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [search, setSearch] = useState('');
@@ -47,7 +48,6 @@ export const SDRSelector = ({
       setIsLoading(true);
       
       if (selfAssignOnly) {
-        // Only show current user
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           const { data: profile } = await supabase
@@ -56,30 +56,36 @@ export const SDRSelector = ({
             .eq('id', user.id)
             .single();
           setSdrList(profile ? [profile] : []);
+          setRoleUserIds(new Set(profile ? [profile.id] : []));
         }
       } else if (sdrOnly) {
-        // SDR reassigning own lead: show only active SDRs
-        const { data: roleRows } = await supabase
-          .from('user_roles')
-          .select('user_id')
-          .in('role', ['sdr', 'admin', 'manager']);
-        const userIds = [...new Set((roleRows || []).map(r => r.user_id))];
-        if (userIds.length > 0) {
+        const [{ data: roleRows }, { data: assignedRows }] = await Promise.all([
+          supabase.from('user_roles').select('user_id').in('role', ['sdr', 'admin', 'manager']),
+          supabase.from('leads').select('owner_user_id').not('owner_user_id', 'is', null),
+        ]);
+        const roleIds = new Set((roleRows || []).map(r => r.user_id));
+        const assignedIds = (assignedRows || []).map(r => r.owner_user_id).filter(Boolean) as string[];
+        const allIds = [...new Set([...roleIds, ...assignedIds])];
+        if (allIds.length > 0) {
           const { data: profiles } = await supabase
             .from('profiles')
             .select('id, name, active')
-            .in('id', userIds)
+            .in('id', allIds)
             .eq('active', true)
             .order('name');
           if (profiles) setSdrList(profiles);
         }
+        setRoleUserIds(roleIds);
       } else {
         const { data: profiles } = await supabase
           .from('profiles')
           .select('id, name, active')
           .eq('active', true)
           .order('name');
-        if (profiles) setSdrList(profiles);
+        if (profiles) {
+          setSdrList(profiles);
+          setRoleUserIds(new Set(profiles.map(p => p.id)));
+        }
       }
       
       setIsLoading(false);
@@ -216,7 +222,12 @@ export const SDRSelector = ({
                   )}
                 >
                   <User className="h-4 w-4 text-muted-foreground" />
-                  <span className="flex-1 text-left">{sdr.name}</span>
+                  <span className="flex-1 text-left">
+                    {sdr.name}
+                    {!roleUserIds.has(sdr.id) && (
+                      <span className="ml-1 text-[10px] text-muted-foreground font-normal">(atribuído)</span>
+                    )}
+                  </span>
                   {currentOwnerId === sdr.id && (
                     <Check className="h-4 w-4 text-primary" />
                   )}

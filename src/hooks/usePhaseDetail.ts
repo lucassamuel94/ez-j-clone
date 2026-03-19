@@ -79,7 +79,7 @@ export const usePhaseDetail = (phaseName: string | undefined, onlyMine: boolean,
       return (data || []).filter((item: unknown) => {
         const item_ = item as { project: { overall_status: string; deleted_at: string | null; current_phase: string | null } | null; status: string; is_active: boolean; phase_name: string };
         if (!item_.project) return false;
-        if (item_.project.overall_status === 'cancelado' || item_.project.overall_status === 'concluido' || item_.project.overall_status === 'entregue') return false;
+        if (item_.project.overall_status === 'cancelado' || item_.project.overall_status === 'concluido') return false;
         if (item_.project.deleted_at) return false;
         // Hide inactive phases that the project has already moved past
         if (!item_.is_active && item_.project.current_phase !== item_.phase_name) return false;

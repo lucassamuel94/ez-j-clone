@@ -9,18 +9,18 @@ import type { ProjectRow } from '@/hooks/usePosVendaDashboard';
 const PAGE_SIZE = 10;
 
 const PILL_STYLES: Record<string, { label: string; cls: string }> = {
-  on_time: { label: 'No prazo', cls: 'bg-[hsl(135,50%,33%)]/10 text-[hsl(135,50%,33%)]' },
-  at_risk: { label: 'Em risco', cls: 'bg-[hsl(38,100%,30%)]/10 text-[hsl(38,100%,30%)]' },
-  overdue: { label: 'Atrasado', cls: 'bg-[hsl(0,56%,46%)]/10 text-[hsl(0,56%,46%)]' },
+  on_time: { label: 'No prazo', cls: 'bg-success/10 text-success' },
+  at_risk: { label: 'Em risco', cls: 'bg-warning/10 text-warning' },
+  overdue: { label: 'Atrasado', cls: 'bg-destructive/10 text-destructive' },
   paused: { label: 'Pausado', cls: 'bg-muted text-muted-foreground' },
   cancelled: { label: 'Cancelado', cls: 'bg-muted/70 text-muted-foreground/70' },
-  waiting: { label: 'Aguardando início', cls: 'bg-[hsl(220,79%,48%)]/10 text-[hsl(220,79%,48%)]' },
+  waiting: { label: 'Aguardando início', cls: 'bg-info/10 text-info' },
 };
 
 const TYPE_BADGES: Record<string, string> = {
-  Implantação: 'bg-[hsl(135,50%,33%)]/10 text-[hsl(135,50%,33%)]',
-  Evolução: 'bg-[hsl(220,79%,48%)]/10 text-[hsl(220,79%,48%)]',
-  Migração: 'bg-[hsl(38,100%,30%)]/10 text-[hsl(38,100%,30%)]',
+  Implantação: 'bg-success/10 text-success',
+  Evolução: 'bg-info/10 text-info',
+  Migração: 'bg-warning/10 text-warning',
   'API Oficial': 'bg-muted text-muted-foreground',
 };
 
@@ -105,7 +105,7 @@ const PosVendaFilaTab = memo(function PosVendaFilaTab({ rows, queueKpis }: Props
                 const pill = PILL_STYLES[r.situationPill] || PILL_STYLES.on_time;
                 const typeBadge = TYPE_BADGES[r.type] || 'bg-muted text-muted-foreground';
                 const progressLabel = r.overdueDays > 0 ? `+${r.overdueDays}d` : `${Math.min(r.deadlinePercent, 100)}%`;
-                const progressColor = r.overdueDays > 0 ? 'text-[hsl(0,56%,46%)]' : r.deadlinePercent > 80 ? 'text-[hsl(38,100%,30%)]' : 'text-[hsl(135,50%,33%)]';
+                const progressColor = r.overdueDays > 0 ? 'text-destructive' : r.deadlinePercent > 80 ? 'text-warning' : 'text-success';
 
                 return (
                   <tr key={r.id} className={cn('border-b border-border/30 hover:bg-muted/20 transition-colors', i % 2 === 1 && 'bg-muted/5')}>

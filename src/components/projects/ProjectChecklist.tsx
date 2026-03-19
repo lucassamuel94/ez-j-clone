@@ -74,6 +74,9 @@ export const ProjectChecklist = ({ open, onOpenChange, opportunity, onSuccess, d
   // Section 5 — Descrição
   const [descricaoProjeto, setDescricaoProjeto] = useState('');
 
+  // Complexidade
+  const [complexityLevel, setComplexityLevel] = useState<'baixa' | 'media' | 'alta' | ''>('');
+
   const handleSubmit = async () => {
     let checklistData: ChecklistData;
 
@@ -138,6 +141,7 @@ export const ProjectChecklist = ({ open, onOpenChange, opportunity, onSuccess, d
       sdr_user_id: opportunity.sdr_user_id || undefined,
       closer_name: opportunity.closer_name || undefined,
       sdr_name: opportunity.sdr_name || undefined,
+      complexity_level: complexityLevel || undefined,
     });
 
     onSuccess();
@@ -154,6 +158,7 @@ export const ProjectChecklist = ({ open, onOpenChange, opportunity, onSuccess, d
 
     if (!razaoSocial.trim()) return false;
     if (!responsavelNome.trim()) return false;
+    if (!complexityLevel) return false;
     if ((projectType === 'venda' || projectType === 'migracao') && !tempoArmazenamento) return false;
 
     return true;
@@ -164,7 +169,7 @@ export const ProjectChecklist = ({ open, onOpenChange, opportunity, onSuccess, d
       <DialogContent className="bg-card max-w-[1000px] max-h-[90vh] p-0">
         <DialogHeader className="px-6 pt-6 pb-2">
           <DialogTitle className="flex items-center gap-2 text-lg">
-            <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400">
+            <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-success/15 text-success dark:bg-success/15 dark:text-success">
               <Trophy className="h-4 w-4" />
             </div>
             Checklist de Projeto — Ganho
@@ -276,7 +281,23 @@ export const ProjectChecklist = ({ open, onOpenChange, opportunity, onSuccess, d
                     </Select>
                   </div>
 
-                  {/* Tempo de Armazenamento - only for Venda */}
+                  {/* Nível de Complexidade - for non-api_oficial */}
+                  {projectType !== 'api_oficial' && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Nível de Complexidade <span className="text-destructive">*</span></Label>
+                      <Select value={complexityLevel} onValueChange={(v) => setComplexityLevel(v as 'baixa' | 'media' | 'alta')}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Selecionar complexidade..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="baixa">Baixa</SelectItem>
+                          <SelectItem value="media">Média</SelectItem>
+                          <SelectItem value="alta">Alta</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
                   {(projectType === 'venda' || projectType === 'migracao') && (
                     <div className="space-y-1.5">
                       <Label className="text-xs font-medium">Tempo de Armazenamento <span className="text-destructive">*</span></Label>

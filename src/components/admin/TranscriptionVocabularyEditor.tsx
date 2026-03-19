@@ -121,7 +121,7 @@ const RowEditor = ({ initial, onSave, onCancel, saving }: RowEditorProps) => {
           <Button
             size="icon"
             variant="ghost"
-            className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+            className="h-7 w-7 text-success hover:text-success hover:bg-success/5 dark:hover:bg-success/5"
             onClick={() => onSave(v)}
             disabled={saving || !v.from_text.trim() || !v.to_text.trim()}
           >
@@ -249,13 +249,13 @@ export const TranscriptionVocabularyEditor = () => {
       </div>
 
       {/* Info card */}
-      <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-800/50 dark:bg-blue-950/20">
+      <Card className="border-info/20 bg-info/5 dark:border-info/20 dark:bg-info/10">
         <CardContent className="py-3 px-4">
-          <div className="flex gap-2 text-xs text-blue-700 dark:text-blue-300">
+          <div className="flex gap-2 text-xs text-info dark:text-info">
             <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <p><strong>Literal:</strong> substitui a palavra exata (case-insensitive). Ex: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">Easy Chat</code> → <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">EZ Chat</code></p>
-              <p><strong>Regex:</strong> usa expressão regular. Ex: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">\bEasy\b</code> substitui "Easy" como palavra isolada.</p>
+              <p><strong>Literal:</strong> substitui a palavra exata (case-insensitive). Ex: <code className="bg-info/15 dark:bg-info/10 px-1 rounded">Easy Chat</code> → <code className="bg-info/15 dark:bg-info/10 px-1 rounded">EZ Chat</code></p>
+              <p><strong>Regex:</strong> usa expressão regular. Ex: <code className="bg-info/15 dark:bg-info/10 px-1 rounded">\bEasy\b</code> substitui "Easy" como palavra isolada.</p>
               <p><strong>Prioridade:</strong> menor número = aplicado primeiro. Coloque regras compostas (ex: "Easy Chat") antes das simples (ex: "Easy").</p>
             </div>
           </div>
@@ -334,7 +334,7 @@ export const TranscriptionVocabularyEditor = () => {
                     <TableCell className="text-xs">
                       <div className="flex items-center gap-1.5">
                         <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
-                        <span className="font-mono bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded">{rule.to_text}</span>
+                        <span className="font-mono bg-success/5 dark:bg-success/5 text-success dark:text-success px-1.5 py-0.5 rounded">{rule.to_text}</span>
                       </div>
                     </TableCell>
                     <TableCell className="text-center">

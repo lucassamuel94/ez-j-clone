@@ -589,10 +589,25 @@ async function resolveSDRMetrics(
       timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hour12: false,
     }).format(now);
 
-    // Count meetings today (same source as the SDR Execution Dashboard)
+    // 1) Fetch actual SDR user IDs from user_roles (aligned with Admin Reports)
+    const { data: sdrRoleRows } = await (supabase
+      .from("user_roles")
+      .select("user_id") as any)
+      .eq("role", "sdr");
+    const sdrRoleIds = new Set(((sdrRoleRows || []) as any[]).map((r: any) => r.user_id as string));
+
+    if (sdrRoleIds.size === 0) {
+      console.log("[resolveSDRMetrics] No SDR roles found, skipping");
+      return;
+    }
+
+    const sdrIdsArray = [...sdrRoleIds];
+
+    // 2) Count meetings today — filtered by SDR role
     const { data: todayMeetings } = await (supabase
       .from("meetings")
       .select("user_id") as any)
+      .in("user_id", sdrIdsArray)
       .gte("created_at", startOfDay)
       .lte("created_at", endOfDay);
 
@@ -604,14 +619,16 @@ async function resolveSDRMetrics(
       totalToday++;
     }
 
+    // 3) Fetch goals for SDRs
     const { data: goals } = await (supabase
       .from("goals")
       .select("target_user_id, meetings_scheduled_goal") as any)
       .eq("goal_type", "sdr")
       .eq("period_month", parseInt(spMonth))
       .eq("period_year", parseInt(spYear))
-      .not("target_user_id", "is", null);
+      .in("target_user_id", sdrIdsArray);
 
+    // Build allSdrIds from SDRs that have meetings today or goals
     const sdrIds = [...new Set([...Object.keys(sdrCounts), ...((goals || []) as any[]).map((g: any) => g.target_user_id as string)])];
 
     if (sdrIds.length === 0) return;
@@ -620,12 +637,14 @@ async function resolveSDRMetrics(
     const nameMap: Record<string, string> = {};
     for (const p of (profiles || []) as any[]) nameMap[p.id as string] = (p.name || "Sem nome") as string;
 
-    // Count meetings this month
+    // 4) Count meetings this month — filtered by SDR role + upper bound
     const startOfMonth = `${spYear}-${spMonth.padStart(2, "0")}-01T00:00:00-03:00`;
     const { data: monthMeetings } = await (supabase
       .from("meetings")
       .select("user_id") as any)
-      .gte("created_at", startOfMonth);
+      .in("user_id", sdrIdsArray)
+      .gte("created_at", startOfMonth)
+      .lte("created_at", endOfDay);
 
     const monthCounts: Record<string, number> = {};
     let totalMonth = 0;

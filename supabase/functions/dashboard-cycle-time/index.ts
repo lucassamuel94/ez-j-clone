@@ -6,7 +6,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const DONE = new Set(["entregue", "concluido"]);
+const DONE = new Set(["concluido"]);
 const INACTIVE = new Set(["em_pausa", "cancelado"]);
 
 function daysBetween(a: Date, b: Date): number {
@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
     const { data: projects, error: pErr } = await (admin.from("projects") as any)
       .select("id, project_type, head_user_id, dev_user_id, ux_po_user_id, updated_at")
       .is("deleted_at", null)
-      .in("overall_status", ["entregue", "concluido"])
+      .in("overall_status", ["concluido"])
       .gte("updated_at", start)
       .lte("updated_at", end)
       .limit(5000);
@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
         (admin.from("team_members") as any).select("user_id, team_id").in("user_id", [...userIds]),
         (admin.from("teams") as any).select("id, name"),
       ]);
-      const teamNames = new Map((teamsRes.data || []).map((t: any) => [String(t.id), t.name]));
+      const teamNames = new Map<string, string>((teamsRes.data || []).map((t: any) => [String(t.id), String(t.name)]));
       for (const m of (membersRes.data || [])) {
         const mUserId = (m as any).user_id as string;
         if (!userTeamMap.has(mUserId)) {

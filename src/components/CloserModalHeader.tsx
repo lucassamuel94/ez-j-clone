@@ -3,7 +3,8 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { Lead } from '@/types/lead';
 import { LeadTypeBadge } from './LeadBadge';
 import { CloserSelector } from './CloserSelector';
-import { CloserOpportunity, updateOpportunityDealValue, OpportunityType } from '@/services/closerService';
+import { OpportunitySDRSelector } from './OpportunitySDRSelector';
+import { CloserOpportunity, updateOpportunityDealValue, OpportunityType, returnLeadToSdr } from '@/services/closerService';
 import { calculateClosingProbability, isDealStuck } from '@/utils/behavioralScore';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -12,19 +13,28 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { createActivityLog } from '@/services/activityLogService';
 import { toast } from 'sonner';
 import {
   DollarSign,
-  Clock,
   Pencil,
   UserCheck,
   Repeat,
   Save,
   Briefcase,
   Building2,
+  RotateCcw,
+  User,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 import { ContactChipPanel } from './ContactChipPanel';
 
@@ -79,6 +89,25 @@ export const CloserModalHeader = ({ lead, opportunity, opportunityId, currentClo
       toast.success('Tipo de negociação atualizado');
     },
     onError: () => toast.error('Erro ao atualizar tipo'),
+  });
+
+  const [pipelinePopoverOpen, setPipelinePopoverOpen] = useState(false);
+  const [moveToPrevendaOpen,   setMoveToPrevendaOpen]   = useState(false);
+  const [prevendaReason,       setPrevendaReason]       = useState('');
+
+  const moveToPrevenda = useMutation({
+    mutationFn: (reason: string) =>
+      returnLeadToSdr(opportunity.id, reason || 'Reciclagem administrativa'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['closer-kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['closer-opportunities-paginated'] });
+      queryClient.invalidateQueries({ queryKey: ['closer-tab-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['closer-opportunities'] });
+      toast.success('Cliente movido para Pré-vendas');
+      setMoveToPrevendaOpen(false);
+      setPipelinePopoverOpen(false);
+    },
+    onError: () => toast.error('Erro ao mover cliente'),
   });
 
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -272,7 +301,7 @@ export const CloserModalHeader = ({ lead, opportunity, opportunityId, currentClo
       </div>
 
       {/* Row 2 — Metrics grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-px bg-border/40 rounded-xl overflow-hidden border border-border/40">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-px bg-border/40 rounded-xl overflow-hidden border border-border/40">
 
         {/* Setup */}
         <Popover open={popoverOpen} onOpenChange={handleOpenPopover}>
@@ -333,16 +362,16 @@ export const CloserModalHeader = ({ lead, opportunity, opportunityId, currentClo
         {/* Probabilidade — arc SVG */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className="flex items-center gap-3 px-4 py-3 bg-[#f4f3f9] dark:bg-accent/20 cursor-help">
+            <div className="flex items-center gap-3 px-4 py-3 bg-accent/20 cursor-help">
               <svg width="40" height="40" viewBox="0 0 44 44" className="flex-shrink-0">
                 <circle cx="22" cy="22" r="18" fill="none" stroke="currentColor" strokeWidth="3.5" className="text-border" />
                 <circle cx="22" cy="22" r="18" fill="none" strokeWidth="3.5" strokeLinecap="round"
-                  stroke={probability >= 71 ? 'hsl(142 71% 45%)' : probability >= 41 ? 'hsl(36 100% 50%)' : 'hsl(4 90% 58%)'}
+                  stroke={probability >= 71 ? 'hsl(var(--success))' : probability >= 41 ? 'hsl(var(--warning))' : 'hsl(var(--destructive))'}
                   strokeDasharray={`${(probability / 100) * (2 * Math.PI * 18)} ${2 * Math.PI * 18}`}
                   style={{ transformOrigin: '22px 22px', transform: 'rotate(-90deg)' }}
                 />
                 <text x="22" y="26" textAnchor="middle" fontSize="10" fontWeight="700" fontFamily="var(--font-display, sans-serif)"
-                  fill={probability >= 71 ? 'hsl(142 71% 45%)' : probability >= 41 ? 'hsl(36 100% 50%)' : 'hsl(4 90% 58%)'}>
+                  fill={probability >= 71 ? 'hsl(var(--success))' : probability >= 41 ? 'hsl(var(--warning))' : 'hsl(var(--destructive))'}>
                   {probability}%
                 </text>
               </svg>
@@ -358,14 +387,78 @@ export const CloserModalHeader = ({ lead, opportunity, opportunityId, currentClo
         </Tooltip>
 
         {/* Pipeline */}
+        {canManage ? (
+          <Popover open={pipelinePopoverOpen} onOpenChange={setPipelinePopoverOpen}>
+            <PopoverTrigger asChild>
+              <div className="space-y-1 px-4 py-3 bg-[#f4f3f9] dark:bg-accent/20 cursor-pointer group hover:bg-[#eceaf5] dark:hover:bg-accent/30 transition-colors">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide flex items-center gap-1 whitespace-nowrap">
+                  <Briefcase className="h-3 w-3 shrink-0" /> Pipeline
+                  <ChevronDown className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-primary ml-auto" />
+                </p>
+                <p className="text-sm font-semibold text-primary whitespace-nowrap">
+                  {opportunityTypeLabel}
+                </p>
+                <p className={cn("text-[10px] whitespace-nowrap",
+                  daysInPipeline > 14 ? 'text-destructive' : daysInPipeline > 7 ? 'text-[hsl(var(--chart-2))]' : 'text-muted-foreground')}>
+                  {daysInPipeline} dias
+                </p>
+              </div>
+            </PopoverTrigger>
+            <PopoverContent side="bottom" align="start" className="w-48 p-1">
+              <button
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs rounded hover:bg-accent transition-colors"
+                onClick={() => { changeTypeMutation.mutate('new_business'); setPipelinePopoverOpen(false); }}
+              >
+                <Briefcase className="h-3.5 w-3.5 shrink-0 text-primary" />
+                <span className="flex-1 text-left">Novo Negócio</span>
+                {(opportunity.opportunity_type || 'new_business') === 'new_business' && <Check className="h-3 w-3 text-primary" />}
+              </button>
+              <button
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs rounded hover:bg-accent transition-colors"
+                onClick={() => { changeTypeMutation.mutate('evolution'); setPipelinePopoverOpen(false); }}
+              >
+                <Repeat className="h-3.5 w-3.5 shrink-0 text-primary" />
+                <span className="flex-1 text-left">Evolução</span>
+                {opportunity.opportunity_type === 'evolution' && <Check className="h-3 w-3 text-primary" />}
+              </button>
+              <Separator className="my-1" />
+              <button
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs rounded hover:bg-destructive/10 transition-colors text-destructive"
+                onClick={() => { setPipelinePopoverOpen(false); setPrevendaReason(''); setMoveToPrevendaOpen(true); }}
+              >
+                <RotateCcw className="h-3.5 w-3.5 shrink-0" />
+                <span className="flex-1 text-left">Pré-vendas (Reciclagem)</span>
+              </button>
+            </PopoverContent>
+          </Popover>
+        ) : (
+          <div className="space-y-1 px-4 py-3 bg-[#f4f3f9] dark:bg-accent/20">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide flex items-center gap-1 whitespace-nowrap">
+              <Briefcase className="h-3 w-3 shrink-0" /> Pipeline
+            </p>
+            <p className="text-sm font-semibold text-primary whitespace-nowrap">
+              {opportunityTypeLabel}
+            </p>
+            <p className={cn("text-[10px] whitespace-nowrap",
+              daysInPipeline > 14 ? 'text-destructive' : daysInPipeline > 7 ? 'text-[hsl(var(--chart-2))]' : 'text-muted-foreground')}>
+              {daysInPipeline} dias
+            </p>
+          </div>
+        )}
+
+        {/* SDR */}
         <div className="space-y-1 px-4 py-3 bg-[#f4f3f9] dark:bg-accent/20">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wide flex items-center gap-1 whitespace-nowrap">
-            <Clock className="h-3 w-3 shrink-0" /> Pipeline
+            <User className="h-3 w-3 shrink-0" /> SDR
           </p>
-          <p className={cn("text-sm font-semibold whitespace-nowrap",
-            daysInPipeline > 14 ? 'text-destructive' : daysInPipeline > 7 ? 'text-[hsl(var(--chart-2))]' : 'text-foreground')}>
-            {daysInPipeline} dias
-          </p>
+          <div onClick={(e) => e.stopPropagation()}>
+            <OpportunitySDRSelector
+              opportunityId={opportunity.id}
+              currentSdrId={opportunity.sdr_user_id ?? null}
+              currentSdrName={opportunity.sdr_name ?? null}
+              disabled={!canManage}
+            />
+          </div>
         </div>
 
         {/* Closer */}
@@ -376,11 +469,39 @@ export const CloserModalHeader = ({ lead, opportunity, opportunityId, currentClo
             </p>
             <div onClick={(e) => e.stopPropagation()}>
               <CloserSelector opportunityId={opportunityId} currentCloserId={currentCloserId ?? null}
-                currentCloserName={closerName ?? null} disabled={!canEditCloser} closerOnly={!canManage} />
+                currentCloserName={closerName ?? null} disabled={!canEditCloser} closerOnly={true} />
             </div>
           </div>
         )}
       </div>
+
+      {/* AlertDialog — confirm move to Pré-vendas */}
+      <AlertDialog open={moveToPrevendaOpen} onOpenChange={setMoveToPrevendaOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mover para Pré-vendas?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O cliente será devolvido ao pipeline do SDR para reciclagem.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            placeholder="Motivo (opcional): ex: reciclagem, sem budget agora..."
+            value={prevendaReason}
+            onChange={(e) => setPrevendaReason(e.target.value)}
+            className="mt-1"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => moveToPrevenda.mutate(prevendaReason)}
+              disabled={moveToPrevenda.isPending}
+            >
+              {moveToPrevenda.isPending ? 'Movendo...' : 'Confirmar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

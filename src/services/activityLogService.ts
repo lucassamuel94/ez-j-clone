@@ -10,7 +10,7 @@ export interface ActivityLog {
   old_value: string | null;
   new_value: string | null;
   description: string;
-  created_at: Date;
+  created_at: string;
 }
 
 export type ActionType = 
@@ -27,6 +27,7 @@ export type ActionType =
   | 'cadence_started'
   | 'cadence_step_changed'
   | 'meeting_scheduled'
+  | 'meeting_rescheduled'
   | 'opportunity_created'
   | 'interaction_registered';
 
@@ -43,7 +44,7 @@ export const fetchActivityLogs = async (leadId: string): Promise<ActivityLog[]> 
     throw error;
   }
 
-  return (data || []).map(row => ({
+  return (data || []).map((row: any) => ({
     id: row.id,
     lead_id: row.lead_id,
     user_id: row.user_id,
@@ -53,7 +54,7 @@ export const fetchActivityLogs = async (leadId: string): Promise<ActivityLog[]> 
     old_value: row.old_value,
     new_value: row.new_value,
     description: row.description,
-    created_at: new Date(row.created_at),
+    created_at: row.created_at,
   }));
 };
 
@@ -97,7 +98,7 @@ export const createActivityLog = async (log: {
     old_value: data?.old_value || null,
     new_value: data?.new_value || null,
     description: data?.description || log.description,
-    created_at: data?.created_at ? new Date(data.created_at) : new Date(),
+    created_at: data?.created_at || new Date().toISOString(),
   };
 };
 

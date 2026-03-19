@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { useCtrlEnter } from '@/hooks/useCtrlEnter';
+import { useCloserUsers } from '@/hooks/useCloserUsers';
 import {
   Dialog,
   DialogContent,
@@ -8,12 +10,20 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, PartyPopper } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { CheckCircle, PartyPopper, Loader2 } from 'lucide-react';
 
 interface MeetingConfirmedDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
+  onConfirm: (closerId: string) => void;
   companyName: string;
 }
 
@@ -23,29 +33,34 @@ export const MeetingConfirmedDialog = ({
   onConfirm,
   companyName,
 }: MeetingConfirmedDialogProps) => {
+  const [selectedCloserId, setSelectedCloserId] = useState('');
+  const { data: closers = [], isLoading } = useCloserUsers();
+
   const handleConfirm = () => {
-    onConfirm();
+    if (!selectedCloserId) return;
+    onConfirm(selectedCloserId);
     onOpenChange(false);
+    setSelectedCloserId('');
   };
 
-  useCtrlEnter(() => handleConfirm(), open);
+  useCtrlEnter(() => handleConfirm(), open && !!selectedCloserId);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setSelectedCloserId(''); }}>
       <DialogContent className="bg-card max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <PartyPopper className="h-5 w-5 text-[hsl(160,84%,39%)]" />
+            <PartyPopper className="h-5 w-5 text-status-created-solid" />
             Reunião Realizada
           </DialogTitle>
           <DialogDescription>
-            Confirme que a reunião foi realizada com o cliente
+            Confirme que a reunião foi realizada e selecione o Closer responsável
           </DialogDescription>
         </DialogHeader>
 
-        <div className="py-6">
-          <div className="bg-[hsl(160,84%,39%)]/10 border border-[hsl(160,84%,39%)]/30 rounded-lg p-4 text-center">
-            <CheckCircle className="h-12 w-12 text-[hsl(160,84%,39%)] mx-auto mb-3" />
+        <div className="py-4 space-y-4">
+          <div className="bg-status-created-solid/10 border border-status-created-solid/30 rounded-lg p-4 text-center">
+            <CheckCircle className="h-12 w-12 text-status-created-solid mx-auto mb-3" />
             <p className="text-lg font-medium mb-2">
               {companyName}
             </p>
@@ -53,6 +68,22 @@ export const MeetingConfirmedDialog = ({
               A reunião foi realizada com sucesso. 
               A oportunidade seguirá o fluxo no pipeline de vendas.
             </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Closer responsável *</Label>
+            <Select value={selectedCloserId} onValueChange={setSelectedCloserId}>
+              <SelectTrigger>
+                <SelectValue placeholder={isLoading ? 'Carregando…' : 'Selecione o Closer'} />
+              </SelectTrigger>
+              <SelectContent>
+                {closers.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -62,8 +93,8 @@ export const MeetingConfirmedDialog = ({
           </Button>
           <Button
             onClick={handleConfirm}
-            style={{ backgroundColor: 'hsl(160, 84%, 39%)', color: 'white' }}
-            className="hover:opacity-90"
+            disabled={!selectedCloserId}
+            className="bg-status-created-solid text-white hover:opacity-90"
           >
             <CheckCircle className="h-4 w-4 mr-2" />
             Confirmar e Enviar para Closer

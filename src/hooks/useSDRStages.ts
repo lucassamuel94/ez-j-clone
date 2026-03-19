@@ -1,60 +1,14 @@
 import { useMemo } from 'react';
 import { usePipelineStatuses } from '@/hooks/usePipelineStatuses';
 import type { LeadStatus } from '@/types/lead';
-
-// ── Hardcoded fallbacks (used when DB has no SDR statuses) ──
-
-const SDR_KANBAN_FALLBACK: LeadStatus[] = [
-  'Novo', 'Em contato', 'Lead Quente', 'Reunião agendada',
-  'Reunião Confirmada', 'Oportunidade Futura', 'Reciclagem',
-  'Ocupado', 'Agendar retorno', 'Sem retorno',
-  'Oportunidade criada', 'Descartado',
-];
-
-interface FunnelStep {
-  key: string;
-  label: string;
-}
-
-const FUNNEL_FALLBACK: FunnelStep[] = [
-  { key: 'novo', label: 'Novo' },
-  { key: 'em_contato', label: 'Em contato' },
-  { key: 'lead_quente', label: 'Lead quente' },
-  { key: 'reuniao', label: 'Reunião agendada' },
-  { key: 'sqo', label: 'Reunião Confirmada' },
-  { key: 'oportunidade_futura', label: 'Oportunidade futura' },
-  { key: 'reciclagem', label: 'Reciclagem' },
-  { key: 'perdido', label: 'Perdido' },
-];
-
-const STATUS_TO_STEP_FALLBACK: Record<string, string> = {
-  'Novo': 'novo',
-  'Devolvido pelo Closer': 'novo',
-  'Em contato': 'em_contato',
-  'Ocupado': 'em_contato',
-  'Agendar retorno': 'em_contato',
-  'Sem retorno': 'em_contato',
-  'Interesse': 'lead_quente',
-  'Reagendar Reunião': 'em_contato',
-  'Reunião agendada': 'reuniao',
-  'Interesse/Agendar Retorno': 'oportunidade_futura',
-  'Oportunidade criada': 'sqo',
-  'Descartado': 'perdido',
-  'Reciclagem': 'reciclagem',
-};
-
-const LINEAR_STEPS_FALLBACK = ['novo', 'em_contato', 'lead_quente', 'reuniao', 'sqo'];
-
-const STEP_SHORT_FALLBACK: Record<string, string> = {
-  novo: 'Novo',
-  em_contato: 'Em contato',
-  lead_quente: 'Lead quente',
-  reuniao: 'Reunião',
-  sqo: 'Confirmada',
-  oportunidade_futura: 'Op. Futura',
-  reciclagem: 'Reciclagem',
-  perdido: 'Perdido',
-};
+import {
+  SDR_KANBAN_STATUSES as SDR_KANBAN_FALLBACK,
+  SDR_FUNNEL_STEPS as FUNNEL_FALLBACK,
+  SDR_STATUS_TO_STEP as STATUS_TO_STEP_FALLBACK,
+  SDR_LINEAR_STEPS as LINEAR_STEPS_FALLBACK,
+  SDR_STEP_SHORT_LABELS as STEP_SHORT_FALLBACK,
+  type FunnelStep,
+} from '@/constants/stages';
 
 // ── Slug helper ──
 

@@ -125,3 +125,6 @@ verify_jwt = false
 
 [functions.bulk-process-queue]
 verify_jwt = false
+
+[functions.export-opportunities-report]
+verify_jwt = false

@@ -440,14 +440,14 @@ export const SQOValidationSection = ({ lead, onUpdateLead, readOnly = false }: S
           filledCount === 0
             ? 'border-muted bg-muted/30'
             : verdict.approved
-              ? 'border-[hsl(160,84%,39%)]/50 bg-[hsl(160,84%,39%)]/10'
+              ? 'border-[hsl(var(--status-created-solid))]/50 bg-[hsl(var(--status-created-solid))]/10'
               : 'border-destructive/50 bg-destructive/10'
         )}>
           <div className="flex items-center gap-2 mb-1">
             {filledCount === 0 ? (
               <AlertTriangle className="h-5 w-5 text-muted-foreground" />
             ) : verdict.approved ? (
-              <CheckCircle2 className="h-5 w-5 text-[hsl(160,84%,39%)]" />
+              <CheckCircle2 className="h-5 w-5 text-[hsl(var(--status-created-solid))]" />
             ) : (
               <XCircle className="h-5 w-5 text-destructive" />
             )}
@@ -456,7 +456,7 @@ export const SQOValidationSection = ({ lead, onUpdateLead, readOnly = false }: S
               filledCount === 0
                 ? 'text-muted-foreground'
                 : verdict.approved
-                  ? 'text-[hsl(160,84%,39%)]'
+                  ? 'text-[hsl(var(--status-created-solid))]'
                   : 'text-destructive'
             )}>
               {filledCount === 0

@@ -163,7 +163,9 @@ export function useMarketingReport({ dateRange, leadType, utmMedium, utmSource }
         else if (isMeeting) reuniao++;
         else outros++;
 
-        if (lead.sqo_approved_at) sqo++;
+        // SQO conta pela data de qualificação, não de criação
+        const sqoDate = lead.sqo_approved_at;
+        if (sqoDate && sqoDate >= dateRange.start && sqoDate <= dateRange.end) sqo++;
 
         const camp = (lead as Record<string, unknown>).utm_campaign as string | null;
         if (!camp) semUtm++;
@@ -213,7 +215,8 @@ export function useMarketingReport({ dateRange, leadType, utmMedium, utmSource }
       let reuniao = 0, sqo = 0, ganho = 0, receita = 0;
       for (const lead of leads) {
         if (MEETING_STATUSES.includes(lead.status)) reuniao++;
-        if (lead.sqo_approved_at) sqo++;
+        const sqoDate = lead.sqo_approved_at;
+        if (sqoDate && sqoDate >= dateRange.start && sqoDate <= dateRange.end) sqo++;
         const opps = oppsMap.get(lead.id) || [];
         for (const opp of opps) {
           if (opp.stage === 'Ganho') {

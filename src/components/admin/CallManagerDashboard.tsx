@@ -153,8 +153,8 @@ export const CallManagerDashboard = () => {
   const hasFeedbackData = feedbackCharts.strengths.length > 0 || feedbackCharts.improvements.length > 0 || feedbackCharts.recommendations.length > 0;
 
   const scoreColor = (s: number) =>
-    s >= 70 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-    : s >= 40 ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+    s >= 70 ? 'bg-success/10 text-success dark:text-success'
+    : s >= 40 ? 'bg-warning/10 text-warning dark:text-warning'
     : 'bg-destructive/10 text-destructive';
 
   const truncateLabel = (value: string, maxLen = 22) =>
@@ -304,7 +304,7 @@ export const CallManagerDashboard = () => {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <ThumbsUp className="h-4 w-4 text-emerald-500" />
+                  <ThumbsUp className="h-4 w-4 text-success" />
                   Pontos Fortes
                 </CardTitle>
               </CardHeader>
@@ -332,7 +332,7 @@ export const CallManagerDashboard = () => {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <Target className="h-4 w-4 text-amber-500" />
+                  <Target className="h-4 w-4 text-warning" />
                   Pontos de Melhoria
                 </CardTitle>
               </CardHeader>

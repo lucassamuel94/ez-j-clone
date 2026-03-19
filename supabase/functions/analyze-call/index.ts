@@ -299,6 +299,7 @@ serve(async (req) => {
 
       if (sdrEmail) {
         const { sendNotificationEmail, buildEmailCard, buildEmailButton } = await import("../_shared/email-sender.ts");
+        const { formatFeedbackHtml, buildScoreCircle } = await import("../_shared/format-feedback-html.ts");
 
         const score = parsed.call_score ?? 0;
         const scoreColor = score >= 70 ? "#22c55e" : score >= 40 ? "#f59e0b" : "#ef4444";
@@ -311,22 +312,24 @@ serve(async (req) => {
           <p style="color:#555; font-size:13px;">A análise da sua ligação foi concluída. Confira os resultados:</p>
 
           ${buildEmailCard(`
-            <div style="display:flex; align-items:center; gap:12px;">
-              <div style="width:56px; height:56px; border-radius:50%; background:${scoreColor}; display:flex; align-items:center; justify-content:center;">
-                <span style="color:#fff; font-size:20px; font-weight:700;">${score}</span>
-              </div>
-              <div>
-                <p style="margin:0; font-weight:600; font-size:15px; color:#1a1a2e;">Score da Ligação</p>
-                <p style="margin:2px 0 0; font-size:12px; color:#666;">Nível de interesse: <strong>${parsed.interest_level ?? "—"}</strong></p>
-              </div>
-            </div>
+            <table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+              <tr>
+                <td style="vertical-align:middle; padding-right:12px;">
+                  ${buildScoreCircle(score, scoreColor)}
+                </td>
+                <td style="vertical-align:middle;">
+                  <p style="margin:0; font-weight:600; font-size:15px; color:#1a1a2e;">Score da Ligação</p>
+                  <p style="margin:2px 0 0; font-size:12px; color:#666;">Nível de interesse: <strong>${parsed.interest_level ?? "—"}</strong></p>
+                </td>
+              </tr>
+            </table>
           `)}
 
           <h3 style="font-size:13px; color:#1a1a2e; margin:20px 0 8px;">📋 Resumo Executivo</h3>
           <p style="color:#555; font-size:13px; line-height:1.6;">${parsed.executive_summary ?? "Não disponível"}</p>
 
           <h3 style="font-size:13px; color:#1a1a2e; margin:20px 0 8px;">💡 Feedback</h3>
-          <p style="color:#555; font-size:13px; line-height:1.6;">${parsed.feedback ?? "Não disponível"}</p>
+          ${formatFeedbackHtml(parsed.feedback ?? "")}
 
           <h3 style="font-size:13px; color:#1a1a2e; margin:20px 0 8px;">🎯 Próximo passo definido?</h3>
           <p style="color:#555; font-size:13px;">${parsed.next_step_defined ? "✅ Sim" : "❌ Não"}</p>

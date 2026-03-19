@@ -101,12 +101,16 @@ export const useUpdatePhaseStatus = () => {
 
       // Contextual toast for evolution curadoria_ia completion
       if (vars.phaseName === 'curadoria_ia' && vars.newStatus === 'CONCLUÍDO') {
-        toast.success('Projeto concluído e entregue com sucesso 🎉');
+        toast.success('Projeto concluído com sucesso 🎉');
       } else {
         toast.success('Status atualizado');
       }
     },
-    onError: () => toast.error('Erro ao atualizar status'),
+    onError: (err: Error) => {
+      // Don't show toast for complexity error — handled by dialog
+      if (err?.message?.includes('complexidade')) return;
+      toast.error(err?.message || 'Erro ao atualizar status');
+    },
   });
 };
 
@@ -187,7 +191,7 @@ export const useFinalizeEvolution = () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['phase-detail'] });
       queryClient.invalidateQueries({ queryKey: ['phase-project-counts'] });
-      toast.success('Projeto de Evolução entregue com sucesso');
+      toast.success('Projeto de Evolução concluído com sucesso');
     },
     onError: () => toast.error('Erro ao finalizar projeto'),
   });

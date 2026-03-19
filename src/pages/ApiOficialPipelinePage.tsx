@@ -186,7 +186,7 @@ const ApiOficialPipelinePage = () => {
   const { user: currentUser } = useCurrentUser();
   const { hasPermission } = usePermissions();
   const canFilterByCloser = hasPermission('access_admin');
-  const canBulkSelect = hasPermission('access_admin');
+  const canBulkSelect = hasPermission('access_admin') || hasPermission('reassign_ownership');
 
   const { moveStage, lostMutation, updateNotes, createDeal, deleteDeal, invalidateAll } = useApiOficialMutations();
   const { getStatusesForPipeline, getColorMap } = usePipelineStatuses();

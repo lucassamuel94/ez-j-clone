@@ -2400,6 +2400,7 @@ export type Database = {
         Row: {
           created_at: string
           executive_name: string
+          google_calendar_event_id: string | null
           id: string
           lead_id: string
           meet_link: string | null
@@ -2413,6 +2414,7 @@ export type Database = {
         Insert: {
           created_at?: string
           executive_name: string
+          google_calendar_event_id?: string | null
           id?: string
           lead_id: string
           meet_link?: string | null
@@ -2426,6 +2428,7 @@ export type Database = {
         Update: {
           created_at?: string
           executive_name?: string
+          google_calendar_event_id?: string | null
           id?: string
           lead_id?: string
           meet_link?: string | null
@@ -3156,6 +3159,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           notes: string | null
+          paused_at: string | null
           phase_name: string
           project_id: string
           sort_order: number
@@ -3172,6 +3176,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           notes?: string | null
+          paused_at?: string | null
           phase_name: string
           project_id: string
           sort_order?: number
@@ -3188,6 +3193,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           notes?: string | null
+          paused_at?: string | null
           phase_name?: string
           project_id?: string
           sort_order?: number
@@ -3695,6 +3701,7 @@ export type Database = {
           plan_price: number
           product_type: string
           project_objective: string | null
+          razao_social: string | null
           sdr_name: string | null
           setup_installments: number
           setup_payment_method: string
@@ -3738,6 +3745,7 @@ export type Database = {
           plan_price?: number
           product_type?: string
           project_objective?: string | null
+          razao_social?: string | null
           sdr_name?: string | null
           setup_installments?: number
           setup_payment_method?: string
@@ -3781,6 +3789,7 @@ export type Database = {
           plan_price?: number
           product_type?: string
           project_objective?: string | null
+          razao_social?: string | null
           sdr_name?: string | null
           setup_installments?: number
           setup_payment_method?: string
@@ -4071,6 +4080,35 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "team_members_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_phase_map: {
+        Row: {
+          created_at: string
+          id: string
+          phase_name: string
+          team_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          phase_name: string
+          team_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          phase_name?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_phase_map_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
@@ -4538,12 +4576,16 @@ export type Database = {
       search_opportunities_kanban: {
         Args: {
           p_closer_id?: string
+          p_meeting_from?: string
+          p_meeting_to?: string
           p_opportunity_type?: string
           p_page?: number
           p_page_size?: number
           p_search?: string
           p_sort?: string
           p_stage: string
+          p_won_from?: string
+          p_won_to?: string
         }
         Returns: Json
       }

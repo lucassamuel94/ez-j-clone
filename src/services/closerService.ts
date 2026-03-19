@@ -1,64 +1,17 @@
 import { supabase } from '@/integrations/supabase/client';
 import { createActivityLog } from '@/services/activityLogService';
+import {
+  CLOSER_STAGES,
+  CLOSER_STAGES_DISPLAY,
+  EVOLUTION_STAGES,
+  EVOLUTION_STAGES_DISPLAY,
+  CloserStage,
+} from '@/constants/stages';
 
+// Re-export stage constants for backward compatibility
+export { CLOSER_STAGES, CLOSER_STAGES_DISPLAY, EVOLUTION_STAGES, EVOLUTION_STAGES_DISPLAY };
+export type { CloserStage };
 export type OpportunityType = 'new_business' | 'evolution';
-
-export const CLOSER_STAGES = [
-  'Demonstração',
-  'Apresentar proposta',
-  'Proposta enviada',
-  'Negociação',
-  'Oportunidade Quente',
-  'Oportunidade Futura',
-  'Oportunidade Fria',
-  'Contrato enviado',
-  'Aguardando pagamento',
-  'Ganho',
-  'Perdido',
-] as const;
-
-// Display order includes "Devolver ao SDR" as a virtual stage
-export const CLOSER_STAGES_DISPLAY = [
-  'Demonstração',
-  'Devolver ao SDR',
-  'Apresentar proposta',
-  'Proposta enviada',
-  'Negociação',
-  'Oportunidade Quente',
-  'Oportunidade Futura',
-  'Oportunidade Fria',
-  'Contrato enviado',
-  'Aguardando pagamento',
-  'Ganho',
-  'Perdido',
-] as const;
-
-// Simplified stages for Evolution pipeline
-export const EVOLUTION_STAGES = [
-  'Proposta enviada',
-  'Negociação',
-  'Oportunidade Quente',
-  'Oportunidade Futura',
-  'Oportunidade Fria',
-  'Contrato enviado',
-  'Aguardando pagamento',
-  'Ganho',
-  'Perdido',
-] as const;
-
-export const EVOLUTION_STAGES_DISPLAY = [
-  'Proposta enviada',
-  'Negociação',
-  'Oportunidade Quente',
-  'Oportunidade Futura',
-  'Oportunidade Fria',
-  'Contrato enviado',
-  'Aguardando pagamento',
-  'Ganho',
-  'Perdido',
-] as const;
-
-export type CloserStage = typeof CLOSER_STAGES[number] | 'Negociação';
 
 // Build a case-insensitive lookup to normalize DB stage values to canonical constants
 const _ALL_CANONICAL_STAGES: string[] = [...CLOSER_STAGES, ...EVOLUTION_STAGES];
@@ -108,6 +61,49 @@ export interface CloserOpportunity {
   lead_website?: string | null;
   sdr_name?: string;
   closer_name?: string;
+}
+
+/** Maps a raw RPC row to a typed CloserOpportunity. Shared by kanban and table hooks. */
+export function mapRpcRowToOpportunity(row: any): CloserOpportunity {
+  return {
+    id: row.id,
+    lead_id: row.lead_id,
+    stage: normalizeStage(row.stage) as CloserStage,
+    created_by_user_id: row.created_by_user_id,
+    assigned_to_user_id: row.assigned_to_user_id,
+    sdr_user_id: row.sdr_user_id,
+    closer_notes: row.closer_notes,
+    returned_to_sdr: row.returned_to_sdr || false,
+    return_reason: row.return_reason,
+    lost_reason: row.lost_reason,
+    meeting_datetime: row.meeting_datetime,
+    deal_value: Number(row.deal_value) || 0,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    active_objection: row.active_objection || null,
+    expected_close_date: row.expected_close_date || null,
+    decision_maker_identified: row.decision_maker_identified || false,
+    won_at: row.won_at || null,
+    opportunity_type: row.opportunity_type || 'new_business',
+    lead_name: row.lead_name,
+    lead_company: row.lead_company,
+    lead_razao_social: row.lead_razao_social,
+    lead_nome_fantasia: row.lead_nome_fantasia,
+    lead_cnpj: row.lead_cnpj,
+    lead_whatsapp: row.lead_whatsapp,
+    lead_phone: row.lead_phone,
+    lead_phone_2: row.lead_phone_2,
+    lead_phone_3: row.lead_phone_3,
+    lead_phone_4: row.lead_phone_4,
+    lead_email: row.lead_email,
+    lead_temperature: row.lead_temperature,
+    lead_last_contact_at: row.lead_last_contact_at,
+    lead_next_action_at: row.lead_next_action_at,
+    lead_status: row.lead_status,
+    lead_website: row.lead_website,
+    sdr_name: row.sdr_name,
+    closer_name: row.closer_name,
+  };
 }
 
 export const fetchCloserOpportunities = async (): Promise<CloserOpportunity[]> => {
@@ -254,15 +250,16 @@ export const returnLeadToSdr = async (id: string, reason: string): Promise<void>
   if (fetchError) throw fetchError;
 
   // Mark opportunity as returned (without marking as Perdido)
-  const { error } = await supabase
+  const { error, count } = await supabase
     .from('opportunities')
-    .update({ 
-      returned_to_sdr: true, 
+    .update({
+      returned_to_sdr: true,
       return_reason: reason,
-    })
+    }, { count: 'exact' })
     .eq('id', id);
 
   if (error) throw error;
+  if (count === 0) throw new Error('Nenhuma oportunidade foi atualizada. Verifique suas permissões.');
 
   // Log activity
   if (opp?.lead_id) {
@@ -416,6 +413,7 @@ export const createOpportunityFromMeeting = async (
           .select('id, stage')
           .in('lead_id', dupeIds)
           .not('stage', 'eq', 'Perdido')
+          .eq('returned_to_sdr', false)
           .neq('opportunity_type', 'evolution')
           .limit(1);
 
@@ -433,18 +431,48 @@ export const createOpportunityFromMeeting = async (
     createdBy = session?.user?.id ?? null;
   }
 
-  const { error } = await supabase
+  // Check if an active new_business opportunity already exists for this lead.
+  // opportunity_type NULL means new_business (the default), so we check for both.
+  const { data: existingOpp } = await supabase
     .from('opportunities')
-    .insert({
-      lead_id: leadId,
-      created_by_user_id: createdBy!,
-      assigned_to_user_id: closerUserId,
-      sdr_user_id: sdrUserId,
-      stage,
-      meeting_datetime: meetingDatetime,
-    });
+    .select('id')
+    .eq('lead_id', leadId)
+    .eq('returned_to_sdr', false)
+    .not('stage', 'eq', 'Perdido')
+    .or('opportunity_type.is.null,opportunity_type.neq.evolution')
+    .limit(1)
+    .maybeSingle();
 
-  if (error) throw error;
+  if (existingOpp) {
+    // Rescheduling or closer change: update the existing opportunity instead of
+    // creating a duplicate. This prevents double-counting in productivity reports.
+    const updatePayload: Record<string, unknown> = {
+      assigned_to_user_id: closerUserId,
+      meeting_datetime: meetingDatetime,
+      stage,
+    };
+    if (sdrUserId) updatePayload.sdr_user_id = sdrUserId;
+
+    const { error } = await supabase
+      .from('opportunities')
+      .update(updatePayload)
+      .eq('id', existingOpp.id);
+
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from('opportunities')
+      .insert({
+        lead_id: leadId,
+        created_by_user_id: createdBy!,
+        assigned_to_user_id: closerUserId,
+        sdr_user_id: sdrUserId,
+        stage,
+        meeting_datetime: meetingDatetime,
+      });
+
+    if (error) throw error;
+  }
 
   // Trigger automatic messages
   supabase.functions.invoke('trigger-automatic-message', {

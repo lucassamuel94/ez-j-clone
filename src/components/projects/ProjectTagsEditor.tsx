@@ -8,24 +8,6 @@ import { Plus, X, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 
-// Predefined color palette for tags (using design tokens)
-const TAG_COLORS = [
-  "bg-primary/10 text-primary border-primary/20",
-  "bg-chart-1/10 text-chart-1 border-chart-1/20",
-  "bg-chart-2/10 text-chart-2 border-chart-2/20",
-  "bg-chart-3/10 text-chart-3 border-chart-3/20",
-  "bg-chart-4/10 text-chart-4 border-chart-4/20",
-  "bg-chart-5/10 text-chart-5 border-chart-5/20",
-  "bg-destructive/10 text-destructive border-destructive/20",
-];
-
-function getTagColor(tag: string): string {
-  let hash = 0;
-  for (let i = 0; i < tag.length; i++) {
-    hash = tag.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
-}
 
 const fetchAllProjectTags = async (): Promise<string[]> => {
   const { data } = await supabase
@@ -122,10 +104,7 @@ export function ProjectTagsEditor({ projectId, tags, canEdit, onUpdate }: Projec
         <Badge
           key={tag}
           variant="outline"
-          className={cn(
-            "text-[10px] px-1.5 py-0 h-[18px] rounded-md font-medium border cursor-default group/tag",
-            getTagColor(tag),
-          )}
+          className="text-[10px] px-2 py-0.5 h-6 rounded-md font-medium border cursor-default group/tag bg-primary/8 text-primary border-primary/20"
         >
           {tag}
           {canEdit && (

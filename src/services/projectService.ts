@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
-import { ChecklistData, PHASES_BY_TYPE, ALL_PHASES, PHASE_LABELS, PROJECT_TYPE_LABELS, ProjectType } from '@/types/project';
+import { ChecklistData, PHASES_BY_TYPE, ALL_PHASES, PHASE_LABELS, PROJECT_TYPE_LABELS, ProjectType, PHASE_DEADLINES_BY_COMPLEXITY } from '@/types/project';
+import { addBusinessDays, countBusinessDays } from '@/utils/businessDays';
 
 import { resolveAutoAssignments } from '@/services/projectAssignmentService';
 
@@ -12,20 +13,11 @@ export interface CreateProjectInput {
   sdr_user_id?: string;
   closer_name?: string;
   sdr_name?: string;
+  complexity_level?: string;
 }
 
-const addBusinessDays = (startDate: Date, days: number): Date => {
-  const result = new Date(startDate);
-  let added = 0;
-  while (added < days) {
-    result.setDate(result.getDate() + 1);
-    const dayOfWeek = result.getDay();
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      added++;
-    }
-  }
-  return result;
-};
+// Re-export addBusinessDays for backward compatibility
+export { addBusinessDays } from '@/utils/businessDays';
 
 /** Auto-create a companion api_oficial project with verificacao_bm phase */
 const createCompanionBMProject = async (params: {
@@ -154,6 +146,7 @@ export const createProjectFromChecklist = async (input: CreateProjectInput): Pro
     sdr_name: input.sdr_name || null,
     start_date: now.toISOString().split('T')[0],
     due_date: dueDate.toISOString().split('T')[0],
+    complexity_level: input.complexity_level || null,
   };
 
   if (checklist.type === 'venda' || checklist.type === 'migracao') {
@@ -419,6 +412,79 @@ export const fetchProjectTransitions = async (projectId: string) => {
   return data;
 };
 
+// --- Calculate and apply deadlines based on complexity ---
+export const calculateAndApplyDeadlines = async (
+  projectId: string,
+  complexityLevel: string,
+  startDate: Date,
+): Promise<void> => {
+  const normalized = complexityLevel.toLowerCase();
+  const deadlines = PHASE_DEADLINES_BY_COMPLEXITY[normalized];
+  if (!deadlines) return;
+
+  const { data: phases } = await supabase
+    .from('project_phases')
+    .select('id, phase_name')
+    .eq('project_id', projectId)
+    .order('sort_order');
+
+  if (!phases || phases.length === 0) return;
+
+  // Get project to know which phases are in its type
+  const { data: proj } = await supabase
+    .from('projects')
+    .select('project_type')
+    .eq('id', projectId)
+    .single();
+
+  const projectType = proj?.project_type as ProjectType | undefined;
+  const typePhases = projectType ? PHASES_BY_TYPE[projectType] : [];
+
+  // Delivery phases for project due_date calculation
+  const deliveryPhases = ['validacao', 'ux_po', 'dev_chatbot', 'treinamento', 'ativacao'];
+
+  let cursor = new Date(startDate);
+  let totalDeliveryDays = 0;
+
+  for (const phaseName of typePhases) {
+    const days = deadlines[phaseName];
+    if (!days) continue;
+
+    const phaseDueDate = addBusinessDays(cursor, days);
+    const matchingPhase = phases.find((p: { phase_name: string }) => p.phase_name === phaseName);
+
+    if (matchingPhase) {
+      await supabase
+        .from('project_phases')
+        .update({ due_date: phaseDueDate.toISOString().split('T')[0] } as any)
+        .eq('id', matchingPhase.id);
+    }
+
+    if (deliveryPhases.includes(phaseName)) {
+      totalDeliveryDays += days;
+    }
+
+    cursor = phaseDueDate;
+  }
+
+  // Project due_date = sum of delivery phases from start
+  const projectDueDate = addBusinessDays(startDate, totalDeliveryDays);
+  const dueDateStr = projectDueDate.toISOString().split('T')[0];
+
+  await supabase
+    .from('projects')
+    .update({ due_date: dueDateStr } as any)
+    .eq('id', projectId);
+
+  const { data: { user } } = await supabase.auth.getUser();
+  await supabase.from('project_activity_logs').insert({
+    project_id: projectId,
+    user_id: user?.id || null,
+    action_type: 'deadlines_calculated',
+    description: `Prazos calculados automaticamente — complexidade ${normalized} — entrega prevista: ${dueDateStr}`,
+  } as any);
+};
+
 export const updatePhaseStatus = async (
   phaseId: string,
   projectId: string,
@@ -430,7 +496,74 @@ export const updatePhaseStatus = async (
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Usuário não autenticado');
 
-  // Close current transition
+  // --- BLOQUEIO: validação sem complexidade ---
+  if (phaseName === 'validacao' && newStatus === 'CONCLUÍDO') {
+    const { data: proj } = await supabase
+      .from('projects')
+      .select('complexity_level')
+      .eq('id', projectId)
+      .single();
+    if (!proj?.complexity_level) {
+      throw new Error('Defina o nível de complexidade antes de concluir a validação.');
+    }
+  }
+
+  // --- PAUSADO: registrar paused_at ao entrar ---
+  const PAUSE_ENTRY = ['PAUSADO', 'EM PAUSA'];
+  const newUpper = newStatus.toUpperCase();
+  const oldUpper = oldStatus.toUpperCase();
+
+  if (PAUSE_ENTRY.includes(newUpper) && !PAUSE_ENTRY.includes(oldUpper)) {
+    await supabase
+      .from('project_phases')
+      .update({ paused_at: new Date().toISOString() } as any)
+      .eq('id', phaseId);
+  }
+
+  // --- PAUSADO: estender prazo ao sair ---
+  if (PAUSE_ENTRY.includes(oldUpper) && !PAUSE_ENTRY.includes(newUpper)) {
+    const { data: phaseRow } = await supabase
+      .from('project_phases')
+      .select('paused_at, due_date')
+      .eq('id', phaseId)
+      .single();
+
+    if ((phaseRow as any)?.paused_at && (phaseRow as any)?.due_date) {
+      const pausedAt = new Date((phaseRow as any).paused_at);
+      const now = new Date();
+      const pausedDays = countBusinessDays(pausedAt, now);
+
+      if (pausedDays > 0) {
+        const oldDueDate = new Date((phaseRow as any).due_date);
+        const newDueDate = addBusinessDays(oldDueDate, pausedDays);
+        const newDueDateStr = newDueDate.toISOString().split('T')[0];
+
+        await supabase
+          .from('project_phases')
+          .update({ paused_at: null, due_date: newDueDateStr } as any)
+          .eq('id', phaseId);
+
+        await supabase.from('project_activity_logs').insert({
+          project_id: projectId,
+          user_id: user.id,
+          action_type: 'deadline_extended',
+          phase_name: phaseName,
+          description: `Fase pausada por ${pausedDays} dias úteis — prazo estendido para ${newDueDateStr}`,
+        } as any);
+      } else {
+        await supabase
+          .from('project_phases')
+          .update({ paused_at: null } as any)
+          .eq('id', phaseId);
+      }
+    } else {
+      await supabase
+        .from('project_phases')
+        .update({ paused_at: null } as any)
+        .eq('id', phaseId);
+    }
+  }
+
   const { data: currentTransition } = await supabase
     .from('project_status_transitions')
     .select('id, entered_at')
@@ -568,39 +701,77 @@ export const updatePhaseStatus = async (
     // Get the project type to determine the full phase sequence
     const { data: projectData } = await supabase
       .from('projects')
-      .select('project_type, ux_po_user_id, dev_user_id, treinamento_user_id, head_user_id, ativacao_user_id, has_ai')
+      .select('project_type, ux_po_user_id, dev_user_id, treinamento_user_id, head_user_id, ativacao_user_id, has_ai, complexity_level')
       .eq('id', projectId)
       .single();
 
     const projectType = projectData?.project_type as ProjectType | undefined;
     const allPhasesForType = projectType ? PHASES_BY_TYPE[projectType] : null;
 
-    // --- REGRA ESPECIAL: curadoria_ia concluída para Evolução — finaliza projeto ---
-    if (projectType === 'evolucao' && phaseName === 'curadoria_ia') {
-      await finalizeEvolutionFromCuradoria(projectId, user.id);
+    // --- CALCULAR PRAZOS ao concluir validação ---
+    if (phaseName === 'validacao' && (projectData as any)?.complexity_level) {
+      const completedPhase = await supabase
+        .from('project_phases')
+        .select('completed_at')
+        .eq('id', phaseId)
+        .single();
+      const startForDeadlines = (completedPhase.data as any)?.completed_at
+        ? new Date((completedPhase.data as any).completed_at)
+        : new Date();
+      try {
+        await calculateAndApplyDeadlines(projectId, (projectData as any).complexity_level, startForDeadlines);
+      } catch (e) {
+        console.error('Erro ao calcular prazos:', e);
+      }
+    }
+
+    // --- REGRA ESPECIAL: curadoria_ia concluída para Evolução/Venda/Migração — finaliza projeto ---
+    if ((projectType === 'evolucao' || projectType === 'venda' || projectType === 'migracao') && phaseName === 'curadoria_ia') {
+      await finalizeProjectAsDelivered(projectId, user.id, 'curadoria_ia', projectType);
       return;
     }
 
-    // --- REGRA ESPECIAL: automação concluída — decisão baseada em has_ai ---
-    if (phaseName === 'automacao') {
+    // --- REGRA ESPECIAL: go_live_assistido concluído para Venda — finaliza projeto ---
+    if (projectType === 'venda' && phaseName === 'go_live_assistido') {
+      await finalizeProjectAsDelivered(projectId, user.id, 'go_live_assistido', projectType);
+      return;
+    }
+
+    // --- REGRA ESPECIAL: dev_chatbot concluído para Evolução — decisão baseada em has_ai ---
+    if (projectType === 'evolucao' && phaseName === 'dev_chatbot') {
+      const hasAI = (projectData as Record<string, unknown>)?.has_ai === true;
+      if (hasAI) {
+        // Com IA → avançar para curadoria_ia via função dedicada
+        await advanceEvolutionToAICuration(projectId, currentSortOrder);
+        return;
+      } else {
+        // Sem IA → finalizar projeto como concluído
+        await finalizeEvolutionFromCuradoria(projectId, user.id);
+        return;
+      }
+    }
+
+    // --- REGRA ESPECIAL: ativação concluída para API Oficial — finaliza projeto como concluído ---
+    if (projectType === 'api_oficial' && phaseName === 'ativacao') {
+      await finalizeApiOficialProject(projectId, user.id);
+      return;
+    }
+
+    // --- REGRA ESPECIAL: automação concluída (Venda/Migração) — decisão baseada em has_ai ---
+    if (phaseName === 'automacao' && (projectType === 'venda' || projectType === 'migracao')) {
       const hasAI = (projectData as Record<string, unknown>)?.has_ai === true;
       if (!hasAI) {
-        if (projectType === 'evolucao') {
-          // Evolução sem IA → finalizar projeto como entregue
-          await finalizeEvolutionFromCuradoria(projectId, user.id);
-          return;
-        } else {
-          // Venda/Migração sem IA → pular curadoria_ia, ir direto para go_live_assistido
+        if (projectType === 'venda') {
+          // Venda sem IA → pular curadoria_ia, ir para go_live_assistido
           const headFallback = (projectData as Record<string, unknown>)?.head_user_id as string | null;
-          const goLiveAssignee = headFallback || null;
 
           const { error: phaseInsertError } = await supabase.from('project_phases').insert({
             project_id: projectId,
             phase_name: 'go_live_assistido',
             status: 'BACKLOG',
-            sort_order: currentSortOrder + 2, // +2 to skip curadoria_ia slot
+            sort_order: currentSortOrder + 2,
             is_active: true,
-            assigned_user_id: goLiveAssignee,
+            assigned_user_id: headFallback,
           } as any);
           if (phaseInsertError) {
             throw new Error(`Falha ao criar fase go_live_assistido: ${phaseInsertError.message}`);
@@ -625,9 +796,13 @@ export const updatePhaseStatus = async (
             phase_name: 'go_live_assistido',
             old_value: 'automacao',
             new_value: 'go_live_assistido',
-            description: 'Projeto sem IA — avançou de Automação direto para Go-Live Assistido (Curadoria de IA pulada)',
+            description: 'Projeto de Venda sem IA — avançou de Automação para Go-Live Assistido (Curadoria de IA pulada)',
           } as any);
 
+          return;
+        } else {
+          // Migração sem IA → finaliza projeto direto
+          await finalizeProjectAsDelivered(projectId, user.id, 'automacao', 'migracao');
           return;
         }
       }
@@ -861,14 +1036,14 @@ export const forceMovePhaseTo = async (
 
 };
 
-// --- Finalizar projeto Evolução como "Entregue" (sem IA) ---
+// --- Finalizar projeto Evolução como "Concluído" (sem IA) ---
 export const finalizeEvolutionProject = async (projectId: string) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Não autenticado');
 
   await supabase
     .from('projects')
-    .update({ overall_status: 'entregue', current_phase: 'entregue' } as any)
+    .update({ overall_status: 'concluido', current_phase: 'concluido' } as any)
     .eq('id', projectId);
 
   await supabase.from('project_activity_logs').insert({
@@ -876,7 +1051,7 @@ export const finalizeEvolutionProject = async (projectId: string) => {
     user_id: user.id,
     action_type: 'project_delivered',
     phase_name: 'dev_chatbot',
-    description: 'Projeto de Evolução entregue (sem IA) após conclusão do Dev Chatbot',
+    description: 'Projeto de Evolução concluído (sem IA) após conclusão do Dev Chatbot',
   } as any);
 
   supabase.functions.invoke('trigger-automatic-message', {
@@ -960,9 +1135,8 @@ export const advanceEvolutionToAICuration = async (
   return { dueDateApplied: dueDateStr, usedFallback };
 };
 
-// --- Finalizar projeto Evolução ao concluir Curadoria de IA ---
-const finalizeEvolutionFromCuradoria = async (projectId: string, userId: string) => {
-  // Check if delivered_at already exists — don't overwrite
+// --- Finalizar qualquer projeto como "Concluído" ---
+const finalizeProjectAsDelivered = async (projectId: string, userId: string, phaseName: string, projectType: string) => {
   const { data: proj } = await supabase
     .from('projects')
     .select('delivered_at')
@@ -970,8 +1144,8 @@ const finalizeEvolutionFromCuradoria = async (projectId: string, userId: string)
     .single();
 
   const updatePayload: Record<string, unknown> = {
-    overall_status: 'entregue',
-    current_phase: 'entregue',
+    overall_status: 'concluido',
+    current_phase: 'concluido',
   };
 
   if (!(proj as any)?.delivered_at) {
@@ -983,15 +1157,28 @@ const finalizeEvolutionFromCuradoria = async (projectId: string, userId: string)
     .update(updatePayload as any)
     .eq('id', projectId);
 
+  const typeLabel = PROJECT_TYPE_LABELS[projectType as ProjectType] || projectType;
+  const phaseLabel = PHASE_LABELS[phaseName] || phaseName;
+
   await supabase.from('project_activity_logs').insert({
     project_id: projectId,
     user_id: userId,
     action_type: 'project_delivered',
-    phase_name: 'curadoria_ia',
-    description: 'Projeto de Evolução concluído e entregue após Curadoria de IA 🎉',
+    phase_name: phaseName,
+    description: `Projeto de ${typeLabel} concluído após ${phaseLabel} 🎉`,
   } as any);
 
   supabase.functions.invoke('trigger-automatic-message', {
     body: { trigger_key: 'project_delivered', project_id: projectId },
   }).catch(console.error);
+};
+
+// --- Finalizar projeto Evolução ao concluir Curadoria de IA (legacy wrapper) ---
+const finalizeEvolutionFromCuradoria = async (projectId: string, userId: string) => {
+  await finalizeProjectAsDelivered(projectId, userId, 'curadoria_ia', 'evolucao');
+};
+
+// --- Finalizar projeto API Oficial como "Concluído" ao concluir ativação ---
+const finalizeApiOficialProject = async (projectId: string, userId: string) => {
+  await finalizeProjectAsDelivered(projectId, userId, 'ativacao', 'api_oficial');
 };

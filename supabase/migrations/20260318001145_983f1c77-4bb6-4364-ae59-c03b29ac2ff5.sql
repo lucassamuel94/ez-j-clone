@@ -1,0 +1,1 @@
+ALTER TABLE public.project_phases ADD COLUMN IF NOT EXISTS paused_at timestamptz;

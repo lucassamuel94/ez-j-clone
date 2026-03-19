@@ -19,6 +19,7 @@ import EmailSequencesPage from '@/pages/EmailSequencesPage';
 import { ActiveClientsSection } from '@/components/clients/ActiveClientsSection';
 import { ICPAnalysisSection } from '@/components/clients/ICPAnalysisSection';
 import { PhaseStatusManager } from '@/components/settings/PhaseStatusManager';
+import { TeamPhaseMapSection } from '@/components/settings/TeamPhaseMapSection';
 import { PipelineStatusManager } from '@/components/settings/PipelineStatusManager';
 import { EdgeFunctionsSection } from '@/components/settings/EdgeFunctionsSection';
 import { ProjectTrashView } from '@/components/projects/ProjectTrashView';
@@ -60,6 +61,7 @@ export default function SettingsPage() {
         <Route path="clients" element={<ActiveClientsSection />} />
         <Route path="icp" element={<ICPAnalysisSection />} />
         <Route path="phase-statuses" element={<PhaseStatusManager />} />
+        <Route path="team-phases" element={<TeamPhaseMapSection />} />
         <Route path="pipeline-statuses" element={<PipelineStatusManager />} />
         <Route path="edge-functions" element={<EdgeFunctionsSection />} />
         <Route path="trash" element={<ProjectTrashView />} />

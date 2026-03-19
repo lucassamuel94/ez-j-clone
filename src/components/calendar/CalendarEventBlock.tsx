@@ -12,10 +12,10 @@ interface CalendarEventBlockProps {
 }
 
 const COLOR_PALETTE = [
-  { bg: 'bg-emerald-100/90 dark:bg-emerald-500/20', border: 'border-l-emerald-500 dark:border-l-emerald-400', text: 'text-emerald-800 dark:text-emerald-200', time: 'text-emerald-600/70 dark:text-emerald-300/70' },
-  { bg: 'bg-blue-100/90 dark:bg-blue-500/20', border: 'border-l-blue-500 dark:border-l-blue-400', text: 'text-blue-800 dark:text-blue-200', time: 'text-blue-600/70 dark:text-blue-300/70' },
+  { bg: 'bg-success/15 dark:bg-success/20', border: 'border-l-success dark:border-l-success', text: 'text-success dark:text-success', time: 'text-success/70 dark:text-success/70' },
+  { bg: 'bg-info/15 dark:bg-info/20', border: 'border-l-info dark:border-l-info', text: 'text-info dark:text-info', time: 'text-info/70 dark:text-info/70' },
   { bg: 'bg-violet-100/90 dark:bg-violet-500/20', border: 'border-l-violet-500 dark:border-l-violet-400', text: 'text-violet-800 dark:text-violet-200', time: 'text-violet-600/70 dark:text-violet-300/70' },
-  { bg: 'bg-amber-100/90 dark:bg-amber-500/20', border: 'border-l-amber-500 dark:border-l-amber-400', text: 'text-amber-800 dark:text-amber-200', time: 'text-amber-600/70 dark:text-amber-300/70' },
+  { bg: 'bg-warning/15 dark:bg-warning/20', border: 'border-l-warning dark:border-l-warning', text: 'text-warning dark:text-amber-200', time: 'text-warning/70 dark:text-warning/70' },
   { bg: 'bg-rose-100/90 dark:bg-rose-500/20', border: 'border-l-rose-500 dark:border-l-rose-400', text: 'text-rose-800 dark:text-rose-200', time: 'text-rose-600/70 dark:text-rose-300/70' },
   { bg: 'bg-cyan-100/90 dark:bg-cyan-500/20', border: 'border-l-cyan-500 dark:border-l-cyan-400', text: 'text-cyan-800 dark:text-cyan-200', time: 'text-cyan-600/70 dark:text-cyan-300/70' },
   { bg: 'bg-orange-100/90 dark:bg-orange-500/20', border: 'border-l-orange-500 dark:border-l-orange-400', text: 'text-orange-800 dark:text-orange-200', time: 'text-orange-600/70 dark:text-orange-300/70' },

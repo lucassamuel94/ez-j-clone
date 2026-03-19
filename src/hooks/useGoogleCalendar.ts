@@ -104,7 +104,6 @@ export const useGoogleCalendar = () => {
     setIsConnecting(true);
     try {
       const callbackUri = `${window.location.origin}/google-calendar-callback`;
-      console.log('[GoogleCalendar] Connecting with redirect_uri:', callbackUri);
       const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
         body: {
           action: 'get_auth_url',

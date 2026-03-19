@@ -1,10 +1,10 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FileVideo, Loader2, Trash2, Video, Zap, CheckCircle2, AlertCircle, Upload, Sparkles } from 'lucide-react';
+import { FileVideo, Loader2, Trash2, Video, Zap, CheckCircle2, AlertCircle, Upload, Sparkles, X } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useUploadCallAnalysis } from '@/hooks/useCallAnalyses';
 import { useCloserUsers } from '@/hooks/useCloserUsers';
@@ -368,20 +368,70 @@ interface VideoQueueRowProps {
 
 const VideoQueueRow = ({ item, closers, isProcessing, onUpdate, onRemove }: VideoQueueRowProps) => {
   const isEditable = item.status === 'pending' && !isProcessing;
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [localSearch, setLocalSearch] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Use localSearch for querying when popover is open, otherwise item.leadSearch
+  const searchTerm = popoverOpen ? localSearch : '';
 
   const { data: leads = [] } = useQuery({
-    queryKey: ['leads-search-video-row', item.id, item.leadSearch],
+    queryKey: ['leads-search-video-row', item.id, searchTerm],
     queryFn: async () => {
-      if (!item.leadSearch || item.leadSearch.length < 2) return [];
+      if (!searchTerm || searchTerm.length < 2) return [];
       const { data } = await supabase
         .from('leads')
         .select('id, name, company')
-        .or(`name.ilike.%${item.leadSearch}%,company.ilike.%${item.leadSearch}%`)
+        .or(`name.ilike.%${searchTerm}%,company.ilike.%${searchTerm}%`)
         .limit(8);
       return data || [];
     },
-    enabled: item.leadSearch.length >= 2 && !item.leadId,
+    enabled: searchTerm.length >= 2,
   });
+
+  // Open popover when we have results
+  useEffect(() => {
+    if (leads.length > 0 && localSearch.length >= 2) {
+      setPopoverOpen(true);
+    }
+  }, [leads, localSearch]);
+
+  const handleInputFocus = useCallback(() => {
+    if (!isEditable) return;
+    // Clear everything so user can type fresh
+    setLocalSearch('');
+    setPopoverOpen(false);
+  }, [isEditable]);
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setLocalSearch(val);
+    // Clear lead selection on any change
+    if (item.leadId) {
+      onUpdate(item.id, { leadId: '', leadSearch: val, autoFilled: { ...item.autoFilled, lead: false } });
+    } else {
+      onUpdate(item.id, { leadSearch: val });
+    }
+    if (val.length < 2) setPopoverOpen(false);
+  }, [item.id, item.leadId, item.autoFilled, onUpdate]);
+
+  const handleSelectLead = useCallback((lead: { id: string; name: string; company: string }) => {
+    const displayName = `${lead.name} — ${lead.company}`;
+    onUpdate(item.id, { leadId: lead.id, leadSearch: displayName, autoFilled: { ...item.autoFilled, lead: false } });
+    setPopoverOpen(false);
+    setLocalSearch('');
+  }, [item.id, item.autoFilled, onUpdate]);
+
+  const handleClearLead = useCallback(() => {
+    onUpdate(item.id, { leadId: '', leadSearch: '', autoFilled: { ...item.autoFilled, lead: false } });
+    setLocalSearch('');
+    setPopoverOpen(false);
+    // Focus input after clearing
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }, [item.id, item.autoFilled, onUpdate]);
+
+  // Display value: show item.leadSearch when a lead is selected, otherwise show localSearch
+  const displayValue = item.leadId ? item.leadSearch : localSearch;
 
   return (
     <TableRow className={cn(
@@ -424,16 +474,33 @@ const VideoQueueRow = ({ item, closers, isProcessing, onUpdate, onRemove }: Vide
       {/* Lead */}
       <TableCell className="py-2">
         <div className="relative">
-        <Popover open={leads.length > 0 && !item.leadId && isEditable} modal={false}>
+        <Popover open={popoverOpen} onOpenChange={setPopoverOpen} modal={false}>
           <PopoverTrigger asChild>
-            <Input
-              placeholder="Buscar lead..."
-              value={item.leadSearch}
-              onFocus={() => { if (item.leadId && isEditable) onUpdate(item.id, { leadId: '', autoFilled: { ...item.autoFilled, lead: false } }); }}
-              onChange={(e) => onUpdate(item.id, { leadSearch: e.target.value, leadId: '', autoFilled: { ...item.autoFilled, lead: false } })}
-              className={cn('h-8 text-xs', item.autoFilled?.lead && 'border-primary/40')}
-              disabled={!isEditable}
-            />
+            <div className="relative">
+              <Input
+                ref={inputRef}
+                placeholder="Buscar lead..."
+                value={displayValue}
+                onFocus={handleInputFocus}
+                onChange={handleInputChange}
+                className={cn(
+                  'h-8 text-xs pr-7',
+                  item.autoFilled?.lead && 'border-primary/40',
+                  item.leadId && 'text-foreground',
+                )}
+                disabled={!isEditable}
+              />
+              {item.leadId && isEditable && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); handleClearLead(); }}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded-sm hover:bg-muted transition-colors"
+                  title="Limpar seleção"
+                >
+                  <X className="h-3 w-3 text-muted-foreground" />
+                </button>
+              )}
+            </div>
           </PopoverTrigger>
           <PopoverContent
             className="p-0 w-[var(--radix-popover-trigger-width)] max-h-36 overflow-y-auto"
@@ -441,16 +508,21 @@ const VideoQueueRow = ({ item, closers, isProcessing, onUpdate, onRemove }: Vide
             sideOffset={4}
             onOpenAutoFocus={(e) => e.preventDefault()}
           >
-            {leads.map((l: { id: string; name: string; company: string }) => (
+            {leads.length > 0 ? leads.map((l: { id: string; name: string; company: string }) => (
               <button
                 key={l.id}
                 className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors"
-                onClick={() => onUpdate(item.id, { leadId: l.id, leadSearch: `${l.name} — ${l.company}` })}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleSelectLead(l)}
               >
                 <span className="font-medium">{l.name}</span>
                 <span className="text-muted-foreground"> — {l.company}</span>
               </button>
-            ))}
+            )) : (
+              localSearch.length >= 2 && (
+                <p className="text-xs text-muted-foreground text-center py-2">Nenhum lead encontrado</p>
+              )
+            )}
           </PopoverContent>
         </Popover>
         {item.autoFilled?.lead && (

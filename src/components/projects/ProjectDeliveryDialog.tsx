@@ -243,7 +243,7 @@ export function ProjectDeliveryDialog({ open, onOpenChange, project, onDelivered
                         variant="ghost"
                         size="icon"
                         title={item.isNew ? 'Marcar como existente' : 'Marcar como nova integração'}
-                        className={`h-8 w-8 shrink-0 ${item.isNew ? 'text-amber-500 hover:text-amber-600' : 'text-muted-foreground hover:text-amber-500'}`}
+                        className={`h-8 w-8 shrink-0 ${item.isNew ? 'text-warning hover:text-warning' : 'text-muted-foreground hover:text-warning'}`}
                         onClick={() => {
                           const updated = [...integrationsList];
                           updated[idx] = { ...updated[idx], isNew: !updated[idx].isNew };

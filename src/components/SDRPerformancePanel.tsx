@@ -153,7 +153,7 @@ export const SDRPerformancePanel = ({ selectedSdrId, dateRange }: SDRPerformance
       // Get meetings scheduled in period
       const { data: scheduledMeetings } = await supabase
         .from('meetings')
-        .select('id, user_id')
+        .select('id, user_id, lead_id')
         .in('user_id', sdrOnlyIds)
         .gte('created_at', filterStart)
         .lte('created_at', filterEnd);
@@ -172,7 +172,9 @@ export const SDRPerformancePanel = ({ selectedSdrId, dateRange }: SDRPerformance
         const myLeads = (allLeads || []).filter(l => l.owner_user_id === p.id);
         const stalled = myLeads.filter(l => l.updated_at && l.updated_at < fiveDaysAgo).length;
         const sqo = (sqoLeads || []).filter(l => l.owner_user_id === p.id).length;
-        const agendados = (scheduledMeetings || []).filter(m => m.user_id === p.id).length;
+        const myMeetings = (scheduledMeetings || []).filter(m => m.user_id === p.id);
+        const uniqueMeetingLeads = new Set(myMeetings.map(m => m.lead_id));
+        const agendados = uniqueMeetingLeads.size;
         const confirmedLeadIds = new Set((confirmedLogs || []).filter(l => l.user_id === p.id).map(l => l.lead_id));
         const confirmados = confirmedLeadIds.size;
         return { id: p.id, name: p.name, totalLeads: myLeads.length, stalledLeads: stalled, sqo, agendados, confirmados };

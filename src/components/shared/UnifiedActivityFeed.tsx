@@ -88,12 +88,12 @@ function TimelineEntry({
   const isMeeting = item.action_type === 'calendar_event' || item.action_type === 'meeting_scheduled' || item.action_type === 'meeting';
 
   const semanticAvatar = isTask ? (
-    <div className="h-[30px] w-[30px] rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
-      <ListChecks className="h-3.5 w-3.5 text-amber-500" />
+    <div className="h-[30px] w-[30px] rounded-full bg-warning/15 border border-warning/30 flex items-center justify-center flex-shrink-0">
+      <ListChecks className="h-3.5 w-3.5 text-warning" />
     </div>
   ) : isEmail ? (
-    <div className="h-[30px] w-[30px] rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
-      <Mail className="h-3.5 w-3.5 text-blue-500" />
+    <div className="h-[30px] w-[30px] rounded-full bg-info/15 border border-info/30 flex items-center justify-center flex-shrink-0">
+      <Mail className="h-3.5 w-3.5 text-info" />
     </div>
   ) : isMeeting ? (
     <div className="h-[30px] w-[30px] rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center flex-shrink-0">

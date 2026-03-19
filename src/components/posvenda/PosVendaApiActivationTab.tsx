@@ -10,7 +10,7 @@ interface Props {
   data: ApiActivationsData;
 }
 
-const STATUS_COLORS = ['hsl(220,79%,48%)', 'hsl(199,89%,48%)', 'hsl(45,93%,47%)', 'hsl(142,71%,45%)'];
+const STATUS_COLORS = ['hsl(var(--info))', 'hsl(var(--brand-accent))', 'hsl(var(--warning))', 'hsl(var(--success))'];
 
 const PosVendaApiActivationTab = memo(function PosVendaApiActivationTab({ data }: Props) {
   const { funnel, avg_days_to_activate, blocked_reasons, awaiting, history_6m } = data;
@@ -48,14 +48,14 @@ const PosVendaApiActivationTab = memo(function PosVendaApiActivationTab({ data }
         <PosVendaChartCard title="Funil de ativação">
           <PosVendaHorizontalBars
             data={funnelBars}
-            colorFn={(_v, i) => STATUS_COLORS[i] || 'hsl(220,79%,48%)'}
+            colorFn={(_v, i) => STATUS_COLORS[i] || 'hsl(var(--info))'}
           />
         </PosVendaChartCard>
 
         {/* Blocked reasons */}
         <PosVendaChartCard title="Motivos de bloqueio">
           {blockedBars.length > 0 ? (
-            <PosVendaHorizontalBars data={blockedBars} colorFn={() => 'hsl(0,72%,51%)'} />
+            <PosVendaHorizontalBars data={blockedBars} colorFn={() => 'hsl(var(--destructive))'} />
           ) : (
             <p className="text-xs text-muted-foreground text-center py-6">Nenhum bloqueio registrado</p>
           )}
@@ -79,7 +79,7 @@ const PosVendaApiActivationTab = memo(function PosVendaApiActivationTab({ data }
                 }}
                 formatter={(v: number) => [`${v} dias`, 'Média']}
               />
-              <Bar dataKey="avg_days" fill="hsl(220,79%,48%)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="avg_days" fill="hsl(var(--info))" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </PosVendaChartCard>

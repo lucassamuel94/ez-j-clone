@@ -249,7 +249,7 @@ const EvolutionPipelinePage = () => {
   const [notes, setNotes] = useState('');
   const [detectedProjectType, setDetectedProjectType] = useState<string | null>(null);
 
-  const canBulkSelect = hasPermission('access_admin');
+  const canBulkSelect = hasPermission('access_admin') || hasPermission('reassign_ownership');
   const [selectedOppIds, setSelectedOppIds] = useState<Set<string>>(new Set());
   const [allFilteredSelected, setAllFilteredSelected] = useState(false);
   const [isLoadingSelection, setIsLoadingSelection] = useState(false);
@@ -592,7 +592,7 @@ const EvolutionPipelinePage = () => {
                 isMoving={moveStage.isPending}
                 isLoading={kanbanLoading}
                 currentUserId={currentUser?.id ?? null}
-                canManage={hasPermission('access_admin')}
+                canManage={hasPermission('access_admin') || hasPermission('reassign_ownership')}
                 pipelineKey="evolution"
                 onLoadMore={handleKanbanLoadMore}
               />
@@ -603,7 +603,7 @@ const EvolutionPipelinePage = () => {
                 <CloserTableView
                   opportunities={paginatedOpps}
                   canBulkSelect={canBulkSelect}
-                  canManage={hasPermission('access_admin')}
+                  canManage={hasPermission('access_admin') || hasPermission('reassign_ownership')}
                   selectedOppIds={selectedOppIds}
                   onOppCheckChange={handleOppCheckChange}
                   onCheckAllChange={handleCheckAllChange}

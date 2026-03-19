@@ -117,29 +117,29 @@ export function ActivityContentRenderer({ activity, config, onEditTask, onToggle
     const isDone = taskData?.status === 'concluida';
 
     return (
-      <div className="mt-1 rounded-lg border bg-amber-500/8 border-amber-500/20 px-3 py-2.5 transition-colors duration-200 shadow-sm">
+      <div className="mt-1 rounded-lg border bg-warning/8 border-warning/20 px-3 py-2.5 transition-colors duration-200 shadow-sm">
         {isDone && (
           <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-full">
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-warning bg-warning/10 px-2 py-0.5 rounded-full">
               ✓ Concluída
             </span>
           </div>
         )}
         <p className={cn(
           "text-[11px] whitespace-pre-line leading-relaxed uppercase font-semibold",
-          isDone ? "text-muted-foreground line-through" : "text-amber-700 dark:text-amber-400",
+          isDone ? "text-muted-foreground line-through" : "text-warning dark:text-warning",
         )}>{title}</p>
         {details.length > 0 && (
-          <p className="text-[10px] mt-0.5 text-amber-600/80 dark:text-amber-500/70">{details.join(' · ')}</p>
+          <p className="text-[10px] mt-0.5 text-warning/80 dark:text-warning/70">{details.join(' · ')}</p>
         )}
         {taskData && (
-          <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-amber-500/15">
+          <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-warning/15">
             <Checkbox
               checked={isDone}
               onCheckedChange={() => onToggleTask?.(taskData)}
-              className={cn("h-3.5 w-3.5", isDone && "border-amber-500 data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500")}
+              className={cn("h-3.5 w-3.5", isDone && "border-amber-500 data-[state=checked]:bg-warning data-[state=checked]:border-warning")}
             />
-            <span className={cn("text-[10px]", isDone ? "text-amber-600 font-medium" : "text-muted-foreground")}>
+            <span className={cn("text-[10px]", isDone ? "text-warning font-medium" : "text-muted-foreground")}>
               {isDone ? 'Concluída' : 'Marcar concluída'}
             </span>
             <Button variant="ghost" size="icon" className="h-5 w-5 ml-auto text-muted-foreground hover:text-foreground"
@@ -160,8 +160,8 @@ export function ActivityContentRenderer({ activity, config, onEditTask, onToggle
     const corpoIdx = lines.findIndex(l => l.startsWith('Corpo:'));
     const corpo = corpoIdx >= 0 ? lines.slice(corpoIdx + 1).join('\n').trim() : '';
     return (
-      <div className="mt-1.5 rounded-lg border bg-blue-500/8 border-blue-500/20 overflow-hidden">
-        <div className="px-3 py-2 space-y-1 border-b border-blue-500/15">
+      <div className="mt-1.5 rounded-lg border bg-info/8 border-info/20 overflow-hidden">
+        <div className="px-3 py-2 space-y-1 border-b border-info/15">
           {para && <p className="text-[11px] text-muted-foreground"><span className="font-semibold text-foreground/70">Para:</span> {para}</p>}
           {assunto && <p className="text-[11px] text-muted-foreground"><span className="font-semibold text-foreground/70">Assunto:</span> {assunto}</p>}
         </div>

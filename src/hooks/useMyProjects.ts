@@ -35,7 +35,7 @@ export function useMyProjects() {
         .from('projects')
         .select('id, company_name, project_type, current_phase, due_date, priority, overall_status, complexity_level')
         .is('deleted_at', null)
-        .not('overall_status', 'in', '("entregue","cancelado","concluido")');
+        .not('overall_status', 'in', '("cancelado","concluido")');
 
       if (!isHead) {
         query = query.or(`ux_po_user_id.eq.${uid},dev_user_id.eq.${uid},treinamento_user_id.eq.${uid},ativacao_user_id.eq.${uid}`);

@@ -319,8 +319,8 @@ export const CloserStrategicPanel = ({
     onUpdateLead({
       ...lead,
       status: status as any,
-      last_contact_at: new Date(),
-      next_action_at: nextAction,
+      last_contact_at: new Date().toISOString(),
+      next_action_at: nextAction.toISOString(),
     });
 
     const delayLabel = status === 'Sem retorno' ? '1 semana' : `${AUTO_SCHEDULE_HOURS[status]}h`;
@@ -439,8 +439,8 @@ export const CloserStrategicPanel = ({
 
           onUpdateLead({
             ...lead,
-            last_contact_at: new Date(),
-            next_action_at: nextActionDate,
+            last_contact_at: new Date().toISOString(),
+            next_action_at: nextActionDate.toISOString(),
           });
 
           if (pendingFutureOpportunity) {
@@ -461,8 +461,8 @@ export const CloserStrategicPanel = ({
             onUpdateLead({
               ...lead,
               status: 'Em contato' as any,
-              last_contact_at: new Date(),
-              next_action_at: nextActionDate,
+              last_contact_at: new Date().toISOString(),
+              next_action_at: nextActionDate.toISOString(),
             });
             toast.success('Retorno agendado', {
               description: `Agendado para ${dateStr} às ${timeStr}`,

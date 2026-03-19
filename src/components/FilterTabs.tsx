@@ -141,15 +141,15 @@ export const FilterTabs = ({ activeFilter, onFilterChange, stats }: FilterTabsPr
                 : filter.variant === 'destructive' && filter.count > 0
                   ? 'bg-destructive/20 text-destructive'
                   : filter.variant === 'new' && filter.count > 0
-                    ? 'bg-[hsl(45,100%,90%)] text-[hsl(45,100%,30%)] dark:bg-[hsl(45,80%,25%)] dark:text-[hsl(45,100%,85%)]'
+                    ? 'bg-status-ocupado-bg text-status-ocupado-text'
                     : filter.variant === 'inContact' && filter.count > 0
-                      ? 'bg-[hsl(270,60%,92%)] text-[hsl(270,60%,40%)] dark:bg-[hsl(270,50%,25%)] dark:text-[hsl(270,60%,80%)]'
+                      ? 'bg-status-return-bg text-status-return-text'
                       : filter.variant === 'scheduled' && filter.count > 0
-                        ? 'bg-[hsl(210,100%,92%)] text-[hsl(210,100%,40%)] dark:bg-[hsl(210,80%,25%)] dark:text-[hsl(210,100%,80%)]'
+                        ? 'bg-status-scheduled-bg text-status-scheduled-text'
                         : filter.variant === 'confirmed' && filter.count > 0
-                          ? 'bg-[hsl(160,84%,90%)] text-[hsl(160,84%,30%)] dark:bg-[hsl(160,60%,20%)] dark:text-[hsl(160,84%,80%)]'
+                          ? 'bg-status-confirmed-bg text-status-confirmed-text'
                           : filter.variant === 'futureOpportunity' && filter.count > 0
-                            ? 'bg-[hsl(30,90%,90%)] text-[hsl(30,90%,35%)] dark:bg-[hsl(30,70%,22%)] dark:text-[hsl(30,90%,80%)]'
+                            ? 'bg-status-future-bg text-status-future-text'
                             : 'bg-muted text-muted-foreground'
             )}
           >

@@ -158,6 +158,7 @@ function SettingsNavContent({ onNavigate }: { onNavigate?: () => void }) {
   }
   if (hasPermission('access_admin')) {
     systemItems.push({ to: '/settings/trash',  icon: <Trash2 className="h-4 w-4" />,     label: 'Lixeira' });
+    systemItems.push({ to: '/settings/team-phases', icon: <Cog className="h-4 w-4" />,    label: 'Equipe → Fases' });
   }
 
   return (

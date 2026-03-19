@@ -23,7 +23,6 @@ export const STATUS_COLORS_MAP: Record<string, string> = {
   em_pausa: 'hsl(var(--chart-2))',
   concluido: 'hsl(var(--chart-4))',
   cancelado: 'hsl(var(--chart-5))',
-  entregue: 'hsl(var(--chart-1))',
 };
 
 export const STATUS_LABELS: Record<string, string> = {
@@ -31,5 +30,4 @@ export const STATUS_LABELS: Record<string, string> = {
   em_pausa: 'Em Pausa',
   concluido: 'Concluído',
   cancelado: 'Cancelado',
-  entregue: 'Entregue',
 };

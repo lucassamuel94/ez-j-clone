@@ -360,7 +360,7 @@ export const BulkCallAnalysisPanel = ({ processingCount = 0, analyzingCount = 0 
               <p className="text-xs text-muted-foreground">Despachadas</p>
             </div>
             <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
-              <p className="text-2xl font-bold text-amber-500">{counts.processing + processingCount}</p>
+              <p className="text-2xl font-bold text-warning">{counts.processing + processingCount}</p>
               <p className="text-xs text-muted-foreground">Transcrevendo</p>
             </div>
             <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">

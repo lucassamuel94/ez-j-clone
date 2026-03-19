@@ -433,7 +433,7 @@ export const ContactChipPanel = memo(function ContactChipPanel({
                           type="button"
                           title="Definir como principal"
                           onClick={(e) => { e.stopPropagation(); handleSetPrimary(i); }}
-                          className="inline-flex items-center gap-1 h-6 px-2 rounded-md text-[10px] font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+                          className="inline-flex items-center gap-1 h-6 px-2 rounded-md text-[10px] font-medium text-warning dark:text-warning hover:bg-warning/5 dark:hover:bg-warning/10 transition-colors"
                         >
                           <Star className="h-3 w-3" />
                           Definir como principal

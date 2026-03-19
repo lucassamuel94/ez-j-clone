@@ -9,13 +9,7 @@ interface CurrentUser {
   avatarUrl: string | null;
 }
 
-const isLovablePreview = typeof window !== 'undefined' &&
-  (window.location.hostname.includes('id-preview--') || window.location.hostname.endsWith('.lovableproject.com'));
-
 async function fetchCurrentUser(): Promise<CurrentUser | null> {
-  if (isLovablePreview) {
-    return { id: '00000000-0000-0000-0000-000000000000', name: 'Admin (Preview)', email: 'admin@preview.local', avatarUrl: null };
-  }
   const { data: { session } } = await supabase.auth.getSession();
   const authUser = session?.user ?? null;
   if (!authUser) return null;

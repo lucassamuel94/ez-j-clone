@@ -50,11 +50,11 @@ export interface Lead {
   owner_user_id: string;
   owner_name?: string;
   priority_score: number;
-  last_contact_at: Date | null;
-  next_action_at: Date;
+  last_contact_at: string | null;
+  next_action_at: string;
   attempts_count: number;
-  created_at: Date;
-  updated_at: Date;
+  created_at: string;
+  updated_at: string;
   // INBOUND specific
   initial_message?: string;
   entry_channel?: Channel;
@@ -89,7 +89,7 @@ export interface Lead {
   country?: string;
   // Qualification data
   product_interest?: string;
-  uses_platform?: boolean | null;
+  uses_platform?: string | null;
   daily_service_volume?: string;
   main_pain_point?: string;
   solution_urgency?: string;
@@ -142,8 +142,8 @@ export interface Interaction {
   direction: 'inbound' | 'outbound';
   outcome: InteractionOutcome;
   message_summary: string;
-  occurred_at: Date;
-  created_at: Date;
+  occurred_at: string;
+  created_at: string;
 }
 
 export interface CadenceStep {
@@ -176,7 +176,7 @@ export interface LeadNote {
   lead_id: string;
   user_id: string | null;
   note: string;
-  created_at: Date;
+  created_at: string;
   attachments?: LeadNoteAttachment[];
 }
 

@@ -12,11 +12,12 @@ import { PhoneInput } from '@/components/PhoneInput';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { ShieldCheck, Plus, Loader2, Building2, User, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Plus, Loader2, Building2, User, CheckCircle2, AlertCircle } from 'lucide-react';
 import { BrokerType } from '@/types/project';
 import { useSystemUsers } from '@/hooks/useSystemUsers';
 import { validateField } from '@/utils/fieldValidation';
 import { useCnpjaSearch } from '@/hooks/useCnpjaSearch';
+import { addBusinessDays } from '@/utils/businessDays';
 
 interface Props {
   open: boolean;
@@ -236,7 +237,16 @@ export function NewBMVerificationDialog({ open, onOpenChange }: Props) {
   const hasErrors = Object.values(errors).some(e => !!e);
 
   const isValid = () => {
-    return !!cnpj.trim() && !!razaoSocial.trim() && !!responsavel.trim() && !!telefone.trim() && !!responsavelVerificacao && !hasErrors;
+    const phoneDigits = telefone.replace(/\D/g, '');
+    return (
+      !!cnpj.trim() &&
+      !!razaoSocial.trim() &&
+      !!responsavel.trim() &&
+      phoneDigits.length >= 10 &&
+      !!versaoPlataforma &&
+      !!responsavelVerificacao &&
+      !hasErrors
+    );
   };
 
   const handleSubmit = async () => {
@@ -249,16 +259,7 @@ export function NewBMVerificationDialog({ open, onOpenChange }: Props) {
 
       const now = new Date();
       const startDate = now.toISOString().split('T')[0];
-      // Calculate due_date as +10 business days
-      const dueDate = (() => {
-        const d = new Date(now);
-        let added = 0;
-        while (added < 10) {
-          d.setDate(d.getDate() + 1);
-          if (d.getDay() !== 0 && d.getDay() !== 6) added++;
-        }
-        return d.toISOString().split('T')[0];
-      })();
+      const dueDate = addBusinessDays(now, 10).toISOString().split('T')[0];
 
       const projectData = {
         project_type: 'api_oficial' as const,
@@ -304,7 +305,8 @@ export function NewBMVerificationDialog({ open, onOpenChange }: Props) {
         cnpj,
         razao_social: razaoSocial,
         tipo_cliente: tipoCliente,
-        executivo,
+        executivo_user_id: executivo,
+        executivo: executivoUsers.find(u => u.id === executivo)?.name ?? executivo,
         responsavel,
         telefone,
         email,
@@ -354,9 +356,10 @@ export function NewBMVerificationDialog({ open, onOpenChange }: Props) {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       resetForm();
       onOpenChange(false);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error('Erro ao criar verificação');
+      const msg = err instanceof Error ? err.message : 'Erro ao criar verificação';
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
@@ -439,7 +442,7 @@ export function NewBMVerificationDialog({ open, onOpenChange }: Props) {
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Selecione o executivo..." /></SelectTrigger>
                     <SelectContent>
                       {executivoUsers.map((u) => (
-                        <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>
+                        <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -454,6 +457,12 @@ export function NewBMVerificationDialog({ open, onOpenChange }: Props) {
                       ))}
                     </SelectContent>
                   </Select>
+                  {verificacaoUsers.length === 0 && (
+                    <p className="text-xs text-destructive flex items-center gap-1 mt-1">
+                      <AlertCircle className="h-3 w-3" />
+                      Nenhum usuário com role "Verificação BM" cadastrado.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -501,7 +510,7 @@ export function NewBMVerificationDialog({ open, onOpenChange }: Props) {
                   {errors.site && <p className="text-xs text-destructive">{errors.site}</p>}
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Versão da Plataforma</Label>
+                  <Label className="text-xs font-medium">Versão da Plataforma <span className="text-destructive">*</span></Label>
                   <Select value={versaoPlataforma} onValueChange={(v) => setVersaoPlataforma(v as 'VP' | 'V2')}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                     <SelectContent>

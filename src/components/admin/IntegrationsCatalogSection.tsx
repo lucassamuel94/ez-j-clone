@@ -213,7 +213,7 @@ export function IntegrationsCatalogSection() {
                           variant="ghost"
                           size="icon"
                           title={editIsNew ? 'Marcar como existente' : 'Marcar como nova'}
-                          className={`h-8 w-8 ${editIsNew ? 'text-amber-500' : 'text-muted-foreground'}`}
+                          className={`h-8 w-8 ${editIsNew ? 'text-warning' : 'text-muted-foreground'}`}
                           onClick={() => setEditIsNew(!editIsNew)}
                         >
                           <Star className={`h-4 w-4 ${editIsNew ? 'fill-current' : ''}`} />
@@ -223,7 +223,7 @@ export function IntegrationsCatalogSection() {
                           variant="ghost"
                           size="icon"
                           title={entry.is_new ? 'Remover flag Nova' : 'Marcar como Nova'}
-                          className={`h-8 w-8 ${entry.is_new ? 'text-amber-500' : 'text-muted-foreground hover:text-amber-500'}`}
+                          className={`h-8 w-8 ${entry.is_new ? 'text-warning' : 'text-muted-foreground hover:text-warning'}`}
                           disabled={toggleNew.isPending}
                           onClick={() => toggleNew.mutate({ key: entry.key, isNew: !entry.is_new })}
                         >

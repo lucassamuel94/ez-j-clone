@@ -474,7 +474,7 @@ export const DatabaseStatsSection = ({ externalTeamFilter, externalUserIds, exte
     { label: 'Sem Telefone', value: stats.semTelefone, icon: Phone, color: 'text-destructive', key: 'semTelefone' },
     { label: 'Sem Email', value: stats.semEmail, icon: Users, color: 'text-destructive', key: 'semEmail' },
     { label: 'Sem Enriquecimento IA', value: stats.semEnriquecimentoIA, icon: Brain, color: 'text-primary', key: 'semEnriquecimentoIA' },
-    { label: 'Pendentes Perplexity (com CNPJ)', value: stats.semPerplexity, icon: Brain, color: 'text-amber-500', key: 'semPerplexity' },
+    { label: 'Pendentes Perplexity (com CNPJ)', value: stats.semPerplexity, icon: Brain, color: 'text-warning', key: 'semPerplexity' },
     { label: 'Sem Segmento', value: stats.semSegmento, icon: BarChart3, color: 'text-info', key: 'semSegmento' },
     { label: 'Sem CNAE', value: stats.semCnae, icon: BarChart3, color: 'text-info', key: 'semCnae' },
     { label: 'Sem Cidade', value: stats.semCidade, icon: MapPin, color: 'text-info', key: 'semCidade' },

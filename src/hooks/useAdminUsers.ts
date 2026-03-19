@@ -33,9 +33,6 @@ export interface UserInvitation {
   accepted_at: string | null;
 }
 
-const isLovablePreview = typeof window !== 'undefined' &&
-  (window.location.hostname.includes('id-preview--') || window.location.hostname.endsWith('.lovableproject.com'));
-
 export const useAdminUsers = () => {
   const queryClient = useQueryClient();
 
@@ -43,7 +40,6 @@ export const useAdminUsers = () => {
   const { data: roleFlags, isLoading: isCheckingRole } = useQuery({
     queryKey: ['adminManagerCheck'],
     queryFn: async () => {
-      if (isLovablePreview) return { isAdmin: true, isManager: false };
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return { isAdmin: false, isManager: false };

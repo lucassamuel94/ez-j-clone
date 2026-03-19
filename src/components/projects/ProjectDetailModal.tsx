@@ -35,6 +35,7 @@ import { ProjectAttachments } from "./ProjectAttachments";
 import { ProjectPhaseOwners } from "./ProjectPhaseOwners";
 import { useProjectPhases, useProjectTransitions, useUpdatePhaseStatus, useForcePhaseMove, useSoftDeleteProject } from "@/hooks/useProjects";
 import { PauseReasonDialog, type TransitionType } from "./PauseReasonDialog";
+import { ComplexityLevelDialog } from "./ComplexityLevelDialog";
 import {
   PROJECT_TYPE_LABELS,
   PHASE_LABELS,
@@ -60,6 +61,9 @@ import {
   Mail,
   FileText,
   Calendar as CalendarIcon,
+  CalendarRange,
+  ArrowRight,
+  BarChart2,
   Hash,
   Loader2,
   Pencil,
@@ -85,6 +89,8 @@ import {
   Trash2,
   ArrowRightLeft,
   Figma,
+  ShieldCheck,
+  Tag,
 } from "lucide-react";
 
 interface ProjectDetailModalProps {
@@ -99,7 +105,6 @@ const statusLabels: Record<string, string> = {
   em_pausa: "Pausado",
   concluido: "Concluído",
   cancelado: "Cancelado",
-  entregue: "Entregue",
 };
 
 const statusColors: Record<string, string> = {
@@ -107,7 +112,6 @@ const statusColors: Record<string, string> = {
   em_pausa: "bg-chart-5/10 text-chart-5 border-chart-5/20",
   concluido: "bg-primary/10 text-primary border-primary/20",
   cancelado: "bg-destructive/10 text-destructive border-destructive/20",
-  entregue: "bg-chart-1/10 text-chart-1 border-chart-1/20",
 };
 
 const priorityColors: Record<string, string> = {
@@ -209,6 +213,12 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
     [phases, currentPhase],
   );
   const phaseOwnerId = activePhase?.assigned_user_id || null;
+
+  const bmData = useMemo(() => {
+    if (!phases) return null;
+    const bmPhase = phases.find((p: any) => p.phase_name === 'verificacao_bm');
+    return (bmPhase?.bm_data as Record<string, unknown>) ?? null;
+  }, [phases]);
 
   // Use shared system users query (same cache as ProjectPhaseOwners)
   const { data: systemUsers = [] } = useSystemUsers();
@@ -351,6 +361,12 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
     phaseId: string; phaseName: string; newStatus: string; oldStatus: string;
   } | null>(null);
 
+  // Complexity level dialog state
+  const [complexityDialogOpen, setComplexityDialogOpen] = useState(false);
+  const [pendingComplexityRetry, setPendingComplexityRetry] = useState<{
+    phaseId: string; phaseName: string; newStatus: string; oldStatus: string;
+  } | null>(null);
+
   const handleStatusChange = useCallback(
     (phaseId: string, phaseName: string, newStatus: string, oldStatus: string) => {
       if (!project) return;
@@ -383,7 +399,17 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
           }
         }
       }
-      updatePhaseStatus.mutate({ phaseId, projectId: project.id, phaseName, newStatus, oldStatus });
+      updatePhaseStatus.mutate(
+        { phaseId, projectId: project.id, phaseName, newStatus, oldStatus },
+        {
+          onError: (err: Error) => {
+            if (err.message?.includes('complexidade')) {
+              setPendingComplexityRetry({ phaseId, phaseName, newStatus, oldStatus });
+              setComplexityDialogOpen(true);
+            }
+          },
+        },
+      );
     },
     [project, updatePhaseStatus],
   );
@@ -409,6 +435,13 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
     setPauseReasonOpen(false);
     setPendingPauseParams(null);
   }, []);
+
+  const handleComplexitySaved = useCallback(() => {
+    if (!project || !pendingComplexityRetry) return;
+    const { phaseId, phaseName, newStatus, oldStatus } = pendingComplexityRetry;
+    updatePhaseStatus.mutate({ phaseId, projectId: project.id, phaseName, newStatus, oldStatus });
+    setPendingComplexityRetry(null);
+  }, [project, pendingComplexityRetry, updatePhaseStatus]);
 
   const handleDeliveryCompleted = useCallback(() => {
     if (!project || !pendingDeliveryPhase) return;
@@ -871,6 +904,39 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
         )}
       </ListGroup>
 
+      {/* Verificação BM data (from project_phases.bm_data) */}
+      {project.project_type === 'api_oficial' && bmData && (
+        <ListGroup label="Verificação BM" defaultOpen>
+          <div className="divide-y divide-border/10">
+            {[
+              { label: 'Tipo de Cliente', value: bmData.tipo_cliente as string, icon: <Tag className="h-3.5 w-3.5" strokeWidth={1.5} /> },
+              { label: 'Executivo', value: (bmData.executivo as string) || null, icon: <User className="h-3.5 w-3.5" strokeWidth={1.5} /> },
+              { label: 'Resp. Verificação', value: (bmData.responsavel_verificacao as string) || null, icon: <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.5} /> },
+              { label: 'Site', value: (bmData.site as string) || null, icon: <Globe className="h-3.5 w-3.5" strokeWidth={1.5} /> },
+              { label: 'Versão', value: (bmData.versao_plataforma as string) || null, icon: <Code className="h-3.5 w-3.5" strokeWidth={1.5} /> },
+            ]
+              .filter(f => !!f.value)
+              .map(f => (
+                <div key={f.label} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/30 transition-colors">
+                  <span className="text-primary/40 flex-shrink-0">{f.icon}</span>
+                  <span className="text-[10px] sm:text-[11px] text-muted-foreground uppercase tracking-widest min-w-[80px] sm:min-w-[100px] flex-shrink-0 font-semibold">
+                    {f.label}
+                  </span>
+                  <span className="text-xs text-foreground font-medium truncate">{f.value}</span>
+                </div>
+              ))}
+            {bmData.descricao && (
+              <div className="px-3 py-2">
+                <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold block mb-1">
+                  Descrição
+                </span>
+                <p className="text-xs text-foreground leading-relaxed">{bmData.descricao as string}</p>
+              </div>
+            )}
+          </div>
+        </ListGroup>
+      )}
+
       {/* Attachments */}
       <ProjectAttachments projectId={project.id} canEdit={canEditProject} />
     </div>
@@ -891,161 +957,163 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
           {topSlot}
 
           {/* Header */}
-          <DialogHeader className="px-3 sm:px-6 pt-2.5 sm:pt-5 pb-0 flex-shrink-0 space-y-0 border-b-0">
-            {/* Top row: breadcrumb + actions */}
-            <div className="flex items-center justify-between mb-1 gap-1">
-              <div className="flex items-center gap-1 text-xs text-muted-foreground min-w-0 overflow-hidden">
-                <span className="font-medium hover:text-foreground transition-colors cursor-default hidden sm:inline">
-                  Projetos
-                </span>
-                <ChevronRight className="h-3 w-3 text-muted-foreground/30 hidden sm:block" strokeWidth={1.5} />
-                <span className="font-mono text-[10px] sm:text-xs text-muted-foreground/60 shrink-0">
-                  PROJ-{String(project.project_number).padStart(4, "0")}
-                </span>
-                <div className="w-px h-3.5 bg-border/30 mx-0.5 hidden sm:block" />
-                {canEditProject ? (
-                  <Select
-                    value={project.project_type}
-                    onValueChange={(v) => handleInlineStatusChange("project_type", v)}
-                  >
-                    <SelectTrigger className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0 h-[18px] sm:h-5 rounded-md border-foreground/20 bg-foreground/5 font-semibold text-foreground shrink-0 w-auto min-w-0 gap-1 shadow-none focus:ring-0">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="venda" className="text-xs">
-                        Venda
-                      </SelectItem>
-                      <SelectItem value="evolucao" className="text-xs">
-                        Evolução
-                      </SelectItem>
-                      <SelectItem value="migracao" className="text-xs">
-                        Migração
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0 h-[18px] sm:h-5 rounded-md border-foreground/20 bg-foreground/5 font-semibold text-foreground shrink-0"
-                  >
-                    {PROJECT_TYPE_LABELS[project.project_type as ProjectType] || project.project_type}
-                  </Badge>
-                )}
-              </div>
-              <div className="flex items-center flex-shrink-0 gap-[8px]">
-                <Tooltip>
-                  <TooltipTrigger asChild>
+          <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-5 pb-5 flex-shrink-0 space-y-0 border-b-0">
+            <div className="flex flex-col gap-4">
+              {/* Row 1: Breadcrumb + actions */}
+              <div className="flex items-center justify-between gap-1">
+                <div className="flex items-center gap-1 text-xs text-muted-foreground min-w-0 overflow-hidden">
+                  <span className="font-medium hover:text-foreground transition-colors cursor-default hidden sm:inline">
+                    Projetos
+                  </span>
+                  <ChevronRight className="h-3 w-3 text-muted-foreground/30 hidden sm:block" strokeWidth={1.5} />
+                  <span className="font-mono text-[10px] sm:text-xs text-muted-foreground/60 shrink-0">
+                    PROJ-{String(project.project_number).padStart(4, "0")}
+                  </span>
+                </div>
+                <div className="flex items-center flex-shrink-0 gap-[8px]">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 rounded-xl text-muted-foreground/80 hover:text-foreground"
+                        onClick={() => {
+                          const url = `${window.location.origin}/projects?project=${project.id}`;
+                          navigator.clipboard.writeText(url);
+                          toast.success("Link copiado!");
+                        }}
+                      >
+                        <Link2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-xs">Copiar link do projeto</TooltipContent>
+                  </Tooltip>
+                  {canEditProject && !editing && (
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 rounded-xl text-muted-foreground/80 hover:text-foreground"
-                      onClick={() => {
-                        const url = `${window.location.origin}/projects?project=${project.id}`;
-                        navigator.clipboard.writeText(url);
-                        toast.success("Link copiado!");
-                      }}
+                      onClick={() => setEditing(true)}
                     >
-                      <Link2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} />
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="text-xs">Copiar link do projeto</TooltipContent>
-                </Tooltip>
-                {canEditProject && !editing && (
+                  )}
+                  {canEditProject && !editing && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 rounded-xl text-muted-foreground/80 hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                        <AlertDialogTitle>Mover para lixeira?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          O projeto <strong>{project.company_name}</strong> será movido para a lixeira e poderá ser restaurado em até 30 dias.
+                        </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={handleDelete}
+                            disabled={softDelete.isPending}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            {softDelete.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                            Mover para lixeira
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7 rounded-xl text-muted-foreground/80 hover:text-foreground"
-                    onClick={() => setEditing(true)}
+                    onClick={() => onOpenChange(false)}
                   >
-                    <Pencil className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    <X className="h-4 w-4" strokeWidth={1.5} />
                   </Button>
-                )}
-                {canEditProject && !editing && (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 rounded-xl text-muted-foreground/80 hover:text-destructive"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                      <AlertDialogTitle>Mover para lixeira?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        O projeto <strong>{project.company_name}</strong> será movido para a lixeira e poderá ser restaurado em até 30 dias.
-                      </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={handleDelete}
-                          disabled={softDelete.isPending}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                          {softDelete.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                          Mover para lixeira
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 rounded-xl text-muted-foreground/80 hover:text-foreground"
-                  onClick={() => onOpenChange(false)}
-                >
-                  <X className="h-4 w-4" strokeWidth={1.5} />
-                </Button>
+                </div>
               </div>
-            </div>
 
-            {/* Title + progress inline */}
-            {editing ? (
-              <Input
-                value={editData.company_name}
-                onChange={(e) => setEditData({ ...editData, company_name: e.target.value })}
-                className="text-base font-semibold h-9 rounded-xl border-border/30 mb-1"
-              />
-            ) : (
-              <div className="flex items-center gap-2 mt-1">
-                <DialogTitle className="text-[14px] sm:text-lg font-semibold text-foreground tracking-tight leading-tight truncate">
-                  {project.company_name}
-                </DialogTitle>
-                <span className="text-[10px] font-bold text-primary tabular-nums shrink-0">{progressPercent}%</span>
-              </div>
-            )}
+              {/* Row 2: Title + type badge */}
+              {editing ? (
+                <Input
+                  value={editData.company_name}
+                  onChange={(e) => setEditData({ ...editData, company_name: e.target.value })}
+                  className="text-base font-semibold h-9 rounded-xl border-border/30"
+                />
+              ) : (
+                <div className="flex items-center gap-3">
+                  <DialogTitle className="text-2xl font-medium text-foreground tracking-tight leading-tight truncate capitalize">
+                    {project.company_name}
+                  </DialogTitle>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-[11px] h-5 px-2 rounded-md font-medium shrink-0 border",
+                      {
+                        "bg-primary/10 text-primary border-primary/30": project.project_type === "venda",
+                        "bg-chart-2/10 text-chart-2 border-chart-2/30": project.project_type === "evolucao",
+                        "bg-chart-5/10 text-chart-5 border-chart-5/30": project.project_type === "api_oficial",
+                        "bg-chart-4/10 text-chart-4 border-chart-4/30": project.project_type === "migracao",
+                      },
+                    )}
+                  >
+                    {PROJECT_TYPE_LABELS[project.project_type as ProjectType] || project.project_type}
+                  </Badge>
+                </div>
+              )}
 
-            {/* Tags */}
-            <div className="mt-1.5">
-              <ProjectTagsEditor
-                projectId={project.id}
-                tags={Array.isArray(project.tags) ? project.tags : []}
-                canEdit={canEditProject}
-                onUpdate={(newTags) => {
-                  updateProjectCache({ ...project, tags: newTags });
-                }}
-              />
-            </div>
+              {/* Row 3: Progress bar */}
+              {!editing && (() => {
+                const totalPhasesForType =
+                  project.project_type && PHASES_BY_TYPE[project.project_type as ProjectType]
+                    ? PHASES_BY_TYPE[project.project_type as ProjectType].length
+                    : phases?.length || 1;
+                const completedCount = phases?.filter((p: any) => p.status === "CONCLUÍDO").length || 0;
+                return (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] text-muted-foreground font-medium">
+                        Progresso do projeto
+                      </span>
+                      <span className="text-[11px] text-muted-foreground font-medium tabular-nums">
+                        {completedCount} / {totalPhasesForType} fases · {progressPercent}%
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full bg-primary rounded-full transition-all"
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
 
-            {/* Grouped status bar */}
-            <div className="flex flex-wrap items-center gap-2 px-3 sm:px-6 py-2 mt-2.5 sm:mt-3 border-b border-border/40">
-              {/* Group 1: Status + Priority */}
-              <div className="flex items-center gap-1.5">
+              {/* Row 4: Metadata chips */}
+              <div className="flex flex-wrap items-center gap-3 text-xs">
+                {/* Status */}
                 {canEditProject ? (
                   <Select
                     value={project.overall_status}
                     onValueChange={(v) => handleInlineStatusChange("overall_status", v)}
                   >
                     <SelectTrigger
-                      className={cn(
-                        "h-7 text-xs w-auto min-w-[60px] px-2 py-1 rounded-md font-medium border-0 shadow-none bg-transparent hover:bg-muted/50 transition-colors gap-1",
-                        statusColors[project.overall_status] || "",
-                      )}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/40 bg-background text-xs cursor-pointer hover:bg-muted/50 transition-colors h-8 w-auto min-w-0 shadow-none focus:ring-0"
                     >
+                      <span className={cn("h-2 w-2 rounded-full shrink-0", {
+                        "bg-chart-3": project.overall_status === "ativo",
+                        "bg-chart-5": project.overall_status === "em_pausa",
+                        "bg-primary": project.overall_status === "concluido",
+                        "bg-destructive": project.overall_status === "cancelado",
+                      })} />
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1057,107 +1125,108 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
                     </SelectContent>
                   </Select>
                 ) : (
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "text-xs px-2 py-0.5 h-7 rounded-md font-medium border-0",
-                      statusColors[project.overall_status] || "",
-                    )}
-                  >
-                    {statusLabels[project.overall_status] || project.overall_status}
-                  </Badge>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/40 bg-background text-xs h-8">
+                    <span className={cn("h-2 w-2 rounded-full shrink-0", {
+                      "bg-chart-3": project.overall_status === "ativo",
+                      "bg-chart-5": project.overall_status === "em_pausa",
+                      "bg-primary": project.overall_status === "concluido",
+                      "bg-destructive": project.overall_status === "cancelado",
+                    })} />
+                    <span className="font-medium">{statusLabels[project.overall_status] || project.overall_status}</span>
+                  </div>
                 )}
+
+                {/* Priority */}
                 {canEditProject ? (
-                  <Select value={project.priority} onValueChange={(v) => handleInlineStatusChange("priority", v)}>
+                  <Select
+                    value={project.priority || "media"}
+                    onValueChange={(v) => handleInlineStatusChange("priority", v)}
+                  >
                     <SelectTrigger
-                      className={cn(
-                        "h-7 text-xs w-auto min-w-[60px] px-2 py-1 rounded-md font-medium border-0 shadow-none bg-transparent hover:bg-muted/50 transition-colors gap-1",
-                        priorityColors[project.priority] || "",
-                      )}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/40 bg-background text-xs cursor-pointer hover:bg-muted/50 transition-colors h-8 w-auto min-w-0 shadow-none focus:ring-0"
                     >
+                      <Flag className={cn("h-3.5 w-3.5", priorityFlagColors[project.priority || "media"])} strokeWidth={1.5} />
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
                         <SelectItem key={k} value={k} className="text-xs">
-                          <span className="flex items-center gap-1.5">
-                            <Flag className={cn("h-3 w-3", priorityFlagColors[k] || "")} strokeWidth={1.5} />
-                            {v}
-                          </span>
+                          {v}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 ) : (
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "text-xs px-2 py-0.5 h-7 rounded-md font-medium border-0",
-                      priorityColors[project.priority] || "",
-                    )}
-                  >
-                    {PRIORITY_LABELS[project.priority as keyof typeof PRIORITY_LABELS] || project.priority}
-                  </Badge>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/40 bg-background text-xs h-8">
+                    <Flag className={cn("h-3.5 w-3.5", priorityFlagColors[project.priority || "media"])} strokeWidth={1.5} />
+                    <span className="font-medium">{PRIORITY_LABELS[project.priority as keyof typeof PRIORITY_LABELS] || "Média"}</span>
+                  </div>
                 )}
+
+                {/* Phase owner */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/40 bg-background h-8">
+                  <Avatar className="h-5 w-5 text-[8px]">
+                    {phaseOwnerProfile?.avatar_url && (
+                      <AvatarImage src={phaseOwnerProfile.avatar_url} alt={phaseOwnerProfile.name} />
+                    )}
+                    <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                      {phaseOwnerProfile
+                        ? phaseOwnerProfile.name
+                            .split(" ")
+                            .map((w: string) => w[0])
+                            .join("")
+                            .slice(0, 2)
+                            .toUpperCase()
+                        : "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="font-medium truncate max-w-[120px] text-xs">
+                    {phaseOwnerProfile?.name || <span className="text-muted-foreground italic">Sem dono</span>}
+                  </span>
+                </div>
+
+                {/* Dates */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/40 bg-background h-8">
+                  <CalendarRange className="h-3.5 w-3.5 opacity-50" strokeWidth={1.5} />
+                  <span className="font-medium text-xs">
+                    {project.start_date ? formatDateBR(project.start_date) : "—"}
+                  </span>
+                  <ArrowRight className="h-3 w-3 opacity-30" strokeWidth={1.5} />
+                  <span className="font-medium text-xs">
+                    {project.due_date ? formatDateBR(project.due_date) : "—"}
+                  </span>
+                  {(() => {
+                    if (!project.start_date) return null;
+                    const days = differenceInDays(
+                      project.due_date ? new Date(project.due_date) : new Date(),
+                      new Date(project.start_date),
+                    );
+                    return (
+                      <span className={cn(
+                        "text-[11px] font-medium tabular-nums ml-0.5",
+                        project.due_date && new Date(project.due_date) < new Date()
+                          ? "text-destructive"
+                          : "text-muted-foreground",
+                      )}>
+                        {days}d
+                      </span>
+                    );
+                  })()}
+                </div>
               </div>
 
-              <span className="text-border hidden sm:inline">·</span>
-
-              {/* Group 2: Phase owner */}
-              <div className="flex items-center gap-1.5">
-                <Avatar className="h-5 w-5 text-[8px]">
-                  {phaseOwnerProfile?.avatar_url && (
-                    <AvatarImage src={phaseOwnerProfile.avatar_url} alt={phaseOwnerProfile.name} />
-                  )}
-                  <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                    {phaseOwnerProfile
-                      ? phaseOwnerProfile.name
-                          .split(" ")
-                          .map((w: string) => w[0])
-                          .join("")
-                          .slice(0, 2)
-                          .toUpperCase()
-                      : "?"}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-xs text-muted-foreground font-medium truncate max-w-[100px]">
-                  {phaseOwnerProfile?.name || <span className="text-muted-foreground/30 italic">Sem dono</span>}
-                </span>
-              </div>
-
-              <span className="text-border hidden sm:inline">·</span>
-
-              {/* Group 3: Dates */}
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <CalendarIcon className="h-3 w-3 text-muted-foreground/40 shrink-0" strokeWidth={1.5} />
-                <span className="font-medium">
-                  {project.start_date ? formatDateBR(project.start_date) : "—"}
-                </span>
-                {project.due_date ? (
-                  <>
-                    <span className="text-border">·</span>
-                    <span className="font-medium">{formatDateBR(project.due_date)}</span>
-                    {duration !== "—" && (
-                      <>
-                        <span className="text-border">·</span>
-                        <span className="font-mono text-[10px]">{duration}</span>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <span className="text-border">·</span>
-                    <span className="italic text-muted-foreground/50 text-[11px]">em andamento</span>
-                  </>
-                )}
+              {/* Row 5: Tags */}
+              <div>
+                <ProjectTagsEditor
+                  projectId={project.id}
+                  tags={Array.isArray(project.tags) ? project.tags : []}
+                  canEdit={canEditProject}
+                  onUpdate={(newTags) => {
+                    updateProjectCache({ ...project, tags: newTags });
+                  }}
+                />
               </div>
             </div>
-
-            {/* Ultra-thin progress bar */}
-            <Progress
-              value={progressPercent}
-              className="h-[2px] rounded-none [&>div]:bg-primary/60"
-            />
           </DialogHeader>
 
           {/* Body */}
@@ -1253,6 +1322,18 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
         onConfirm={handlePauseReasonConfirm}
         onCancel={handlePauseReasonCancel}
       />
+
+      {project && (
+        <ComplexityLevelDialog
+          open={complexityDialogOpen}
+          onOpenChange={(v) => {
+            setComplexityDialogOpen(v);
+            if (!v) setPendingComplexityRetry(null);
+          }}
+          projectId={project.id}
+          onSaved={handleComplexitySaved}
+        />
+      )}
 
     </>
   );

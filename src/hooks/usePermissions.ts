@@ -3,22 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useRoleSimulation } from '@/stores/useRoleSimulation';
 import { useAuthSession } from '@/contexts/AuthSessionContext';
 
-const isLovablePreview = typeof window !== 'undefined' &&
-  (window.location.hostname.includes('id-preview--') || window.location.hostname.endsWith('.lovableproject.com'));
-
 export const usePermissions = (enabled: boolean = true) => {
   const { session } = useAuthSession();
   const userId = session?.user?.id;
   const { isSimulating, simulatedRole } = useRoleSimulation();
-
-  // In preview, grant all permissions
-  if (isLovablePreview) {
-    return {
-      permissions: new Set<string>(),
-      hasPermission: () => true,
-      isLoading: false,
-    };
-  }
 
   const { data: realPermissions = new Set<string>(), isLoading } = useQuery({
     queryKey: ['userPermissions', userId],

@@ -10,8 +10,8 @@ interface LeadTypeBadgeProps {
 export const LeadTypeBadge = ({ type, className }: LeadTypeBadgeProps) => {
   const styles = {
     INBOUND: 'bg-primary/10 text-primary hover:bg-primary/15',
-    OUTBOUND: 'bg-[hsl(220,90%,90%)] text-[hsl(220,90%,30%)] hover:bg-[hsl(220,90%,85%)] dark:bg-[hsl(220,90%,30%)]/20 dark:text-[hsl(220,90%,70%)] dark:hover:bg-[hsl(220,90%,30%)]/30',
-    INDICACAO: 'bg-[hsl(160,84%,90%)] text-[hsl(160,84%,25%)] hover:bg-[hsl(160,84%,85%)] dark:bg-[hsl(160,84%,30%)]/20 dark:text-[hsl(160,84%,70%)] dark:hover:bg-[hsl(160,84%,30%)]/30',
+    OUTBOUND: 'bg-badge-outbound-bg text-badge-outbound-text hover:bg-badge-outbound-bg/85',
+    INDICACAO: 'bg-source-indicacao-bg text-source-indicacao-text hover:bg-source-indicacao-bg/85',
   };
   const labels = { INBOUND: 'Inbound', OUTBOUND: 'Outbound', INDICACAO: 'Indicação' };
 
@@ -40,9 +40,9 @@ export const SourceBadge = ({ source, className }: SourceBadgeProps) => {
       case 'inbound':
         return 'bg-primary/10 text-primary border-0 hover:bg-primary/15';
       case 'outbound':
-        return 'bg-[hsl(220,90%,90%)] text-[hsl(220,90%,30%)] border-0 hover:bg-[hsl(220,90%,85%)] dark:bg-[hsl(220,90%,30%)]/20 dark:text-[hsl(220,90%,70%)] dark:hover:bg-[hsl(220,90%,30%)]/30';
+        return 'bg-badge-outbound-bg text-badge-outbound-text border-0 hover:bg-badge-outbound-bg/85';
       case 'indicação':
-        return 'bg-[hsl(160,84%,90%)] text-[hsl(160,84%,25%)] border-0 hover:bg-[hsl(160,84%,85%)] dark:bg-[hsl(160,84%,30%)]/20 dark:text-[hsl(160,84%,70%)] dark:hover:bg-[hsl(160,84%,30%)]/30';
+        return 'bg-source-indicacao-bg text-source-indicacao-text border-0 hover:bg-source-indicacao-bg/85';
       default:
         return 'bg-muted/20 text-muted-foreground border-0 hover:bg-muted/25';
     }
@@ -77,19 +77,19 @@ export const LeadStatusBadge = ({ status, className }: LeadStatusBadgeProps) => 
       case 'Em contato':
         return 'bg-chart-1/15 text-chart-1 border-0 hover:bg-chart-1/20';
       case 'Ocupado':
-        return 'bg-[hsl(45,100%,90%)] text-[hsl(45,100%,30%)] border-0 hover:bg-[hsl(45,100%,85%)] dark:bg-[hsl(45,100%,30%)]/20 dark:text-[hsl(45,100%,70%)] dark:hover:bg-[hsl(45,100%,30%)]/30';
+        return 'bg-status-ocupado-bg text-status-ocupado-text border-0 hover:bg-status-ocupado-bg/85';
       case 'Agendar retorno':
-        return 'bg-[hsl(270,60%,92%)] text-[hsl(270,60%,40%)] border-0 hover:bg-[hsl(270,60%,87%)] dark:bg-[hsl(270,60%,40%)]/20 dark:text-[hsl(270,60%,70%)] dark:hover:bg-[hsl(270,60%,40%)]/30';
+        return 'bg-status-return-bg text-status-return-text border-0 hover:bg-status-return-bg/85';
       case 'Sem retorno':
-        return 'bg-[hsl(0,0%,92%)] text-[hsl(0,0%,40%)] border-0 hover:bg-[hsl(0,0%,87%)] dark:bg-[hsl(0,0%,40%)]/20 dark:text-[hsl(0,0%,70%)] dark:hover:bg-[hsl(0,0%,40%)]/30';
+        return 'bg-status-no-return-bg text-status-no-return-text border-0 hover:bg-status-no-return-bg/85';
       case 'Interesse/Agendar Retorno':
         return 'bg-chart-4/15 text-chart-4 border-0 hover:bg-chart-4/20';
       case 'Oportunidade criada':
-        return 'bg-[hsl(160,84%,39%)]/15 text-[hsl(160,84%,39%)] border-0 hover:bg-[hsl(160,84%,39%)]/20';
+        return 'bg-status-created-solid/15 text-status-created-solid border-0 hover:bg-status-created-solid/20';
       case 'Descartado':
         return 'bg-destructive/10 text-destructive border-0 hover:bg-destructive/15';
       case 'Reciclagem' as any:
-        return 'bg-[hsl(35,90%,50%)]/15 text-[hsl(35,90%,40%)] border-0 hover:bg-[hsl(35,90%,50%)]/20';
+        return 'bg-status-reciclagem-solid/15 text-status-reciclagem-text border-0 hover:bg-status-reciclagem-solid/20';
       default:
         return 'bg-muted text-muted-foreground border-0';
     }
@@ -138,7 +138,7 @@ export const PriorityIndicator = ({ isOverdue, isDueToday, className }: Priority
       )} />
     );
   }
-  
+
   if (isDueToday) {
     return (
       <span className={cn(
@@ -147,7 +147,7 @@ export const PriorityIndicator = ({ isOverdue, isDueToday, className }: Priority
       )} />
     );
   }
-  
+
   return (
     <span className={cn(
       'inline-flex items-center justify-center w-2 h-2 rounded-full bg-muted',

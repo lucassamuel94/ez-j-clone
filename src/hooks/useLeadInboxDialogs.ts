@@ -6,6 +6,7 @@ import { bulkDiscardLeads } from '@/services/leadService';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
 import { supabase } from '@/integrations/supabase/client';
+import { findExistingActiveMeeting, updateExistingMeeting, updateExistingOpportunity } from '@/services/meetingService';
 import { toast } from 'sonner';
 import type { MeetingData } from '@/components/MeetingConfirmationDialog';
 import type { ScheduleReturnData } from '@/components/ScheduleReturnDialog';
@@ -113,7 +114,7 @@ export function useLeadInboxDialogs({
   const updateLeadMutation = useUpdateLead();
   const bulkDeleteMutation = useBulkDeleteLeads();
   const { user: currentUser } = useCurrentUser();
-  const { isConnected: isCalendarConnected, createEvent: createCalendarEvent } = useGoogleCalendar();
+  const { isConnected: isCalendarConnected, createEvent: createCalendarEvent, updateEvent: updateCalendarEvent } = useGoogleCalendar();
 
   const fetchRequestId = useRef(0);
   const [dialogs, dispatchDialog] = useReducer(dialogReducer, initialDialogState);
@@ -291,8 +292,8 @@ export function useLeadInboxDialogs({
     handleUpdateLead({
       ...quickActionLead,
       status: (quickActionLead.status || 'Em contato') as LeadStatus,
-      next_action_at: returnDate,
-      last_contact_at: new Date(),
+      next_action_at: returnDate.toISOString(),
+      last_contact_at: new Date().toISOString(),
     });
     closeDialog('scheduleReturnOpen');
     setQuickActionLead(null);
@@ -306,50 +307,74 @@ export function useLeadInboxDialogs({
     meetingDate.setHours(hours, minutes, 0, 0);
     const oneHourBefore = new Date(meetingDate.getTime() - 60 * 60 * 1000);
 
-    // Create meeting record first
-    let meetingRecordId: string | undefined;
-    const { data: meetingRow } = await supabase.from('meetings').insert({
-      lead_id: quickActionLead.id,
-      executive_name: data.executiveName,
-      meeting_datetime: meetingDate.toISOString(),
-      title: data.meetingTitle,
-      reminder_minutes_before: data.reminderMinutesBefore,
-      user_id: currentUser?.id || null,
-    }).select('id').single();
-    meetingRecordId = meetingRow?.id;
+    // Check for existing meeting to avoid duplication
+    const existing = await findExistingActiveMeeting(quickActionLead.id);
 
-    // Create opportunity BEFORE updating lead status — if it fails, abort
-    if (currentUser?.id) {
-      const { error: oppError } = await supabase.from('opportunities').insert({
-        lead_id: quickActionLead.id,
-        created_by_user_id: currentUser.id,
-        assigned_to_user_id: data.executiveUserId,
-        sdr_user_id: currentUser.id,
-        meeting_datetime: meetingDate.toISOString(),
-        stage: 'Demonstração',
+    let meetingRecordId: string | undefined;
+
+    if (existing) {
+      // UPDATE existing meeting
+      await updateExistingMeeting({
+        meetingId: existing.id,
+        meetingDatetime: meetingDate.toISOString(),
+        title: data.meetingTitle,
+        executiveName: data.executiveName,
       });
-      if (oppError) {
-        console.error('Error creating opportunity:', oppError);
-        toast.error('Erro ao criar oportunidade no pipeline do Closer. Tente novamente.');
-        // Clean up meeting record since we're aborting
-        if (meetingRecordId) {
-          try { await supabase.from('meetings').delete().eq('id', meetingRecordId); } catch { /* cleanup */ }
-        }
-        closeDialog('meetingDialogOpen');
-        setQuickActionLead(null);
-        return;
+      meetingRecordId = existing.id;
+
+      // UPDATE existing opportunity
+      if (existing.opportunity_id) {
+        await updateExistingOpportunity({
+          opportunityId: existing.opportunity_id,
+          meetingDatetime: meetingDate.toISOString(),
+          assignedToUserId: data.executiveUserId,
+        });
       }
-      queryClient.invalidateQueries({ queryKey: ['leads-paginated'] });
-      queryClient.invalidateQueries({ queryKey: ['lead-tab-counts'] });
+    } else {
+      // INSERT new meeting
+      const { data: meetingRow } = await supabase.from('meetings').insert({
+        lead_id: quickActionLead.id,
+        executive_name: data.executiveName,
+        meeting_datetime: meetingDate.toISOString(),
+        title: data.meetingTitle,
+        reminder_minutes_before: data.reminderMinutesBefore,
+        user_id: currentUser?.id || null,
+      }).select('id').single();
+      meetingRecordId = meetingRow?.id;
+
+      // INSERT new opportunity
+      if (currentUser?.id) {
+        const { error: oppError } = await supabase.from('opportunities').insert({
+          lead_id: quickActionLead.id,
+          created_by_user_id: currentUser.id,
+          assigned_to_user_id: data.executiveUserId,
+          sdr_user_id: currentUser.id,
+          meeting_datetime: meetingDate.toISOString(),
+          stage: 'Demonstração',
+        });
+        if (oppError) {
+          console.error('Error creating opportunity:', oppError);
+          toast.error('Erro ao criar oportunidade no pipeline do Closer. Tente novamente.');
+          if (meetingRecordId) {
+            try { await supabase.from('meetings').delete().eq('id', meetingRecordId); } catch { /* cleanup */ }
+          }
+          closeDialog('meetingDialogOpen');
+          setQuickActionLead(null);
+          return;
+        }
+        queryClient.invalidateQueries({ queryKey: ['leads-paginated'] });
+        queryClient.invalidateQueries({ queryKey: ['lead-tab-counts'] });
+      }
     }
 
-    // Only update lead status AFTER opportunity was successfully created
+    // Update lead status
     handleUpdateLead({
       ...quickActionLead,
       status: 'Reunião agendada' as LeadStatus,
-      next_action_at: oneHourBefore,
+      next_action_at: oneHourBefore.toISOString(),
     });
 
+    // Google Calendar
     const meetingEndDate = new Date(meetingDate.getTime() + 60 * 60 * 1000);
     const attendees = (data.inviteEmails || []).map((email: string) => ({ email }));
     const formattedDate = meetingDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -358,16 +383,30 @@ export function useLeadInboxDialogs({
     let meetLink: string | undefined;
     if (isCalendarConnected) {
       try {
-        const calResult = await createCalendarEvent({
+        const calendarPayload = {
           summary: data.meetingTitle,
           start: { dateTime: meetingDate.toISOString() },
           end: { dateTime: meetingEndDate.toISOString() },
           attendees,
           description: `Empresa: ${quickActionLead.company}\nContato: ${quickActionLead.name}\nExecutivo: ${data.executiveName}`,
-        });
-        meetLink = calResult?.hangoutLink || calResult?.conferenceData?.entryPoints?.find((e: Record<string, string>) => e.entryPointType === 'video')?.uri;
-        if (meetLink && meetingRecordId) {
-          await supabase.from('meetings').update({ meet_link: meetLink } as Record<string, unknown>).eq('id', meetingRecordId);
+        };
+
+        let calResult: Record<string, unknown> | undefined;
+        if (existing?.google_calendar_event_id) {
+          // UPDATE existing Google Calendar event
+          calResult = await updateCalendarEvent(existing.google_calendar_event_id, calendarPayload) as Record<string, unknown>;
+        } else {
+          // CREATE new Google Calendar event
+          calResult = await createCalendarEvent(calendarPayload) as Record<string, unknown>;
+        }
+
+        const entryPoints = (calResult?.conferenceData as Record<string, Record<string, string>[]> | undefined)?.entryPoints;
+        meetLink = (calResult?.hangoutLink as string) || entryPoints?.find((e) => e.entryPointType === 'video')?.uri;
+        if (meetingRecordId) {
+          await supabase.from('meetings').update({
+            meet_link: meetLink || null,
+            google_calendar_event_id: (calResult?.id as string) || existing?.google_calendar_event_id || null,
+          } as Record<string, unknown>).eq('id', meetingRecordId);
         }
       } catch (err) {
         console.error('Google Calendar error:', err);
@@ -399,8 +438,8 @@ export function useLeadInboxDialogs({
 
     closeDialog('meetingDialogOpen');
     setQuickActionLead(null);
-    toast.success('Reunião agendada com sucesso');
-  }, [quickActionLead, currentUser, handleUpdateLead, isCalendarConnected, createCalendarEvent, queryClient, closeDialog]);
+    toast.success(existing ? 'Reunião reagendada com sucesso' : 'Reunião agendada com sucesso');
+  }, [quickActionLead, currentUser, handleUpdateLead, isCalendarConnected, createCalendarEvent, updateCalendarEvent, queryClient, closeDialog]);
 
   const handleConfirmMeetingConfirm = useCallback(async () => {
     if (!quickActionLead || !currentUser) return;
@@ -413,7 +452,7 @@ export function useLeadInboxDialogs({
     handleUpdateLead({
       ...quickActionLead,
       status: 'Oportunidade criada' as LeadStatus,
-      last_contact_at: new Date(),
+      last_contact_at: new Date().toISOString(),
       attempts_count: quickActionLead.attempts_count + 1,
     });
     try {
@@ -442,7 +481,7 @@ export function useLeadInboxDialogs({
       ...quickActionLead,
       status: 'Descartado' as LeadStatus,
       list_reason: reason.status,
-      next_action_at: new Date('2099-12-31T23:59:59Z'),
+      next_action_at: '2099-12-31T23:59:59Z',
     });
     closeDialog('singleLostDialogOpen');
     setQuickActionLead(null);
@@ -455,10 +494,10 @@ export function useLeadInboxDialogs({
   }, [handleUpdateLead]);
 
   const handleQuickStatusChange = useCallback((lead: Lead, status: string) => {
-    const now = new Date();
+    const now = new Date().toISOString();
     const activeStatuses = ['Ocupado', 'Sem retorno', 'Em contato'];
     const scheduleStatuses = ['Ocupado', 'Sem retorno', 'Agendar retorno'];
-    const nextAction = activeStatuses.includes(status) && (!lead.next_action_at || new Date(String(lead.next_action_at)) < now)
+    const nextAction = activeStatuses.includes(status) && (!lead.next_action_at || lead.next_action_at < now)
       ? now
       : lead.next_action_at;
     if (scheduleStatuses.includes(status)) {
@@ -505,7 +544,7 @@ export function useLeadInboxDialogs({
   const handleKanbanMoveStatus = useCallback((leadId: string, newStatus: LeadStatus) => {
     const lead = kanbanLeads.find(l => l.id === leadId);
     if (!lead) return;
-    const now = new Date();
+    const now = new Date().toISOString();
     handleUpdateLead({
       ...lead,
       status: newStatus,

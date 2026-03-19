@@ -166,7 +166,7 @@ export default function SDRMyClientsPage() {
             <Card>
               <CardContent className="py-3 px-4">
                 <p className="text-xs text-muted-foreground">Valor total captado</p>
-                <p className="text-2xl font-bold text-emerald-600">{formatCurrency(totalValue)}</p>
+                <p className="text-2xl font-bold text-success">{formatCurrency(totalValue)}</p>
               </CardContent>
             </Card>
           )}
@@ -259,7 +259,7 @@ export default function SDRMyClientsPage() {
                     </TableCell>
                     <TableCell className="text-xs py-2.5 text-right font-medium">
                       {client.deal_value ? (
-                        <span className="text-emerald-600">{formatCurrency(client.deal_value)}</span>
+                        <span className="text-success">{formatCurrency(client.deal_value)}</span>
                       ) : '—'}
                     </TableCell>
                     <TableCell className="py-2.5">

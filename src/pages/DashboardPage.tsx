@@ -98,7 +98,7 @@ export default function DashboardPage() {
       description: 'Acompanhe seus leads e prospecções',
       stat: newLeadsCount,
       statLabel: newLeadsCount === 1 ? 'lead novo' : 'leads novos',
-      accent: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-400',
+      accent: 'text-success bg-success/15 dark:bg-success/15 dark:text-success',
       visible: canAccessCommercial,
     },
     {

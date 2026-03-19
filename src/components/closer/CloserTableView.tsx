@@ -464,7 +464,7 @@ export function CloserTableView({
               currentCloserId={opp.assigned_to_user_id}
               currentCloserName={opp.closer_name || null}
               disabled={!(canManage || opp.assigned_to_user_id === currentUser?.id)}
-              closerOnly={!canManage && opp.assigned_to_user_id === currentUser?.id}
+              closerOnly={true}
             />
           </div>
         );

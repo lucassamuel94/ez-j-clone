@@ -39,7 +39,7 @@ const EmbedFormPage = lazy(() => import("./pages/EmbedFormPage"));
 const GoogleCalendarCallbackPage = lazy(() => import("./pages/GoogleCalendarCallbackPage"));
 const FormPreviewPage = lazy(() => import("./pages/FormPreviewPage"));
 const ProjectsPage = lazy(() => import("./pages/ProjectsPage"));
-const PostVendaDashboardPage = lazy(() => import("./pages/PostVendaDashboardPage"));
+
 const PhaseDetailPage = lazy(() => import("./pages/PhaseDetailPage"));
 const ApiAnalysisPage = lazy(() => import("./pages/ApiAnalysisPage"));
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
@@ -225,11 +225,6 @@ const App = () => {
                 <ProtectedRoute requiredPermission="view_projects">
                   <ProjectsPage />
                 </ProtectedRoute>
-              } />
-              <Route path="/projects/dashboard" element={
-                <AdminOnlyRoute>
-                  <PostVendaDashboardPage />
-                </AdminOnlyRoute>
               } />
               <Route path="/projects/phase/:phaseName" element={
                 <ProtectedRoute requiredPermission="view_project_phases">

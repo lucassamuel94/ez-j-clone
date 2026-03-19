@@ -94,11 +94,11 @@ const LEAD_FILTER_OPTIONS = [
   },
   {
     value: 'tasks', label: 'Tarefas', icon: <ListChecks className="h-3.5 w-3.5" strokeWidth={1.5} />,
-    activeClass: 'bg-amber-500/10 text-amber-600 border-amber-500/25',
+    activeClass: 'bg-warning/10 text-warning border-amber-500/25',
   },
   {
     value: 'emails', label: 'E-mails', icon: <Mail className="h-3.5 w-3.5" strokeWidth={1.5} />,
-    activeClass: 'bg-blue-500/10 text-blue-600 border-blue-500/25',
+    activeClass: 'bg-info/10 text-info border-info/25',
   },
   {
     value: 'meetings', label: 'Reuniões', icon: <Calendar className="h-3.5 w-3.5" strokeWidth={1.5} />,

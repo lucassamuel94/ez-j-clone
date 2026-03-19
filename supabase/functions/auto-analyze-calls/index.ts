@@ -218,21 +218,33 @@ Deno.serve(async (req) => {
                 continue;
               }
 
-              // Dispatch transcription (fire-and-forget, but mark error on failure)
-              fetch(`${supabaseUrl}/functions/v1/transcribe-call`, {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${serviceKey}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ analysis_id: analysis.id, audio_path: storagePath }),
-              }).catch(async (e) => {
+              // Dispatch transcription (awaited to ensure it runs before function terminates)
+              try {
+                const transcribeRes = await fetch(`${supabaseUrl}/functions/v1/transcribe-call`, {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Bearer ${serviceKey}`,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({ analysis_id: analysis.id, audio_path: storagePath }),
+                });
+                if (!transcribeRes.ok) {
+                  const errText = await transcribeRes.text();
+                  console.error(`[auto-analyze] Transcribe dispatch failed [${transcribeRes.status}]:`, errText.slice(0, 200));
+                  await supabase.from("call_analyses").update({
+                    status: "error",
+                    feedback: `Falha ao despachar transcrição: status ${transcribeRes.status}`,
+                  }).eq("id", analysis.id);
+                } else {
+                  console.log(`[auto-analyze] Transcription dispatched for ${call.linkedid}`);
+                }
+              } catch (e) {
                 console.error(`[auto-analyze] Transcribe dispatch failed:`, e);
                 await supabase.from("call_analyses").update({
                   status: "error",
-                  feedback: `Falha ao despachar transcrição: ${e?.message || "erro de rede"}`,
+                  feedback: `Falha ao despachar transcrição: ${e instanceof Error ? e.message : "erro de rede"}`,
                 }).eq("id", analysis.id);
-              });
+              }
 
               totalCreated++;
               console.log(`[auto-analyze] Created analysis for SDR ${sdr.name}, call ${call.linkedid}`);

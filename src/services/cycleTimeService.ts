@@ -35,7 +35,7 @@ export interface CycleTimeOverall {
 }
 
 const INACTIVE_STATUSES = new Set(['em_pausa', 'cancelado']);
-const DONE_STATUSES = new Set(['entregue', 'concluido']);
+const DONE_STATUSES = new Set(['concluido']);
 
 const daysBetween = (a: Date, b: Date): number =>
   Math.max(0, (b.getTime() - a.getTime()) / 86_400_000);

@@ -6,9 +6,9 @@ interface Props {
 }
 
 const CONFIG = {
-  positive: { icon: Star, color: 'text-emerald-500', fill: 'fill-emerald-500', title: 'Momento positivo' },
+  positive: { icon: Star, color: 'text-success', fill: 'fill-success', title: 'Momento positivo' },
   negative: { icon: AlertTriangle, color: 'text-red-500', fill: '', title: 'Momento negativo' },
-  turning_point: { icon: Zap, color: 'text-amber-500', fill: 'fill-amber-500', title: 'Ponto de virada' },
+  turning_point: { icon: Zap, color: 'text-warning', fill: 'fill-warning', title: 'Ponto de virada' },
 };
 
 export function KeyMomentBadge({ moment }: Props) {

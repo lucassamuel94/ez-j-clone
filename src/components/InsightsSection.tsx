@@ -19,15 +19,15 @@ interface InsightCategory {
 
 const CHATBOT_CATEGORIES: InsightCategory[] = [
   { key: 'automacoes', label: 'Automações Sugeridas', icon: <Zap className="h-3.5 w-3.5" />, color: 'text-violet-600 bg-violet-100 dark:text-violet-400 dark:bg-violet-900/30' },
-  { key: 'integracoes', label: 'Integrações', icon: <Link2 className="h-3.5 w-3.5" />, color: 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30' },
-  { key: 'argumentos', label: 'Argumentos de Venda', icon: <Target className="h-3.5 w-3.5" />, color: 'text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-900/30' },
-  { key: 'perguntas', label: 'Perguntas de Descoberta', icon: <HelpCircle className="h-3.5 w-3.5" />, color: 'text-amber-600 bg-amber-100 dark:text-amber-400 dark:bg-amber-900/30' },
+  { key: 'integracoes', label: 'Integrações', icon: <Link2 className="h-3.5 w-3.5" />, color: 'text-info bg-info/15 dark:text-info dark:bg-info/10' },
+  { key: 'argumentos', label: 'Argumentos de Venda', icon: <Target className="h-3.5 w-3.5" />, color: 'text-success bg-success/15 dark:text-success dark:bg-success/10' },
+  { key: 'perguntas', label: 'Perguntas de Descoberta', icon: <HelpCircle className="h-3.5 w-3.5" />, color: 'text-warning bg-warning/15 dark:text-warning dark:bg-warning/10' },
 ];
 
 const PABX_CATEGORIES: InsightCategory[] = [
   { key: 'diferenciais', label: 'Diferenciais Competitivos', icon: <Sparkles className="h-3.5 w-3.5" />, color: 'text-primary bg-primary/10' },
-  { key: 'argumentos', label: 'Argumentos de Venda', icon: <Target className="h-3.5 w-3.5" />, color: 'text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-900/30' },
-  { key: 'perguntas', label: 'Perguntas de Descoberta', icon: <HelpCircle className="h-3.5 w-3.5" />, color: 'text-amber-600 bg-amber-100 dark:text-amber-400 dark:bg-amber-900/30' },
+  { key: 'argumentos', label: 'Argumentos de Venda', icon: <Target className="h-3.5 w-3.5" />, color: 'text-success bg-success/15 dark:text-success dark:bg-success/10' },
+  { key: 'perguntas', label: 'Perguntas de Descoberta', icon: <HelpCircle className="h-3.5 w-3.5" />, color: 'text-warning bg-warning/15 dark:text-warning dark:bg-warning/10' },
   { key: 'riscos', label: 'Objeções e Riscos', icon: <AlertTriangle className="h-3.5 w-3.5" />, color: 'text-destructive bg-destructive/10' },
 ];
 

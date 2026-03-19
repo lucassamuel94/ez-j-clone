@@ -24,9 +24,9 @@ export function buildLeadFromOpportunity(opp: CloserOpportunity): Lead {
     attempts_count: 0,
     source: null,
     owner_user_id: null,
-    last_contact_at: opp.lead_last_contact_at ? new Date(opp.lead_last_contact_at) : null,
-    next_action_at: new Date(opp.lead_next_action_at || new Date()),
-    created_at: new Date(opp.created_at),
-    updated_at: new Date(opp.updated_at),
+    last_contact_at: opp.lead_last_contact_at || null,
+    next_action_at: opp.lead_next_action_at || new Date().toISOString(),
+    created_at: opp.created_at,
+    updated_at: opp.updated_at,
   } as Lead;
 }

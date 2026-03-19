@@ -341,13 +341,6 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             collapsed={isCollapsed}
             isActive={location.pathname === "/projects"}
             onNavigate={onNavigate} />
-            {isRealAdmin && (
-            <NavLinkItem
-            item={{ to: "/projects/dashboard", icon: <BarChart3 className="h-4 w-4" />, label: "Dashboard Gerencial" }}
-            collapsed={isCollapsed}
-            isActive={location.pathname === "/projects/dashboard"}
-            onNavigate={onNavigate} />
-            )}
 
             {!isCollapsed && PROJECT_PHASES_ORDER.map((phase) => {
             const count = phaseCounts?.find((p) => p.phase_name === phase)?.count || 0;

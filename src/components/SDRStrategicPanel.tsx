@@ -137,7 +137,7 @@ export const SDRStrategicPanel = ({
     const timeStr = nextAction.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     const dateStr = nextAction.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
-    onUpdateLead({ ...lead, status: status as LeadStatus, last_contact_at: new Date(), next_action_at: nextAction });
+    onUpdateLead({ ...lead, status: status as LeadStatus, last_contact_at: new Date().toISOString(), next_action_at: nextAction.toISOString() });
     toast.success(`Status atualizado para "${status}"`, { description: `Retorno agendado para ${dateStr} às ${timeStr}` });
     await createLeadNote({ lead_id: lead.id, note: `[${status}] Retorno automático agendado para ${dateStr} às ${timeStr}` });
   }, [lead, onUpdateLead]);

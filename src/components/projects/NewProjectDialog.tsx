@@ -21,6 +21,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Plus, Building2, User, Settings2, ChevronRight, ChevronLeft, Check, AlertCircle } from 'lucide-react';
 import { ProjectType, ApiType, BrokerType, ChecklistData, PROJECT_TYPE_LABELS, PHASES_BY_TYPE } from '@/types/project';
+import { addBusinessDays } from '@/utils/businessDays';
 import { PhoneInput } from '@/components/PhoneInput';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ListGroup } from '@/components/kibo-ui/list';
@@ -223,16 +224,6 @@ export const NewProjectDialog = ({ open, onOpenChange }: NewProjectDialogProps) 
       const assignments = await resolveAutoAssignments();
 
       const now = new Date();
-      const addBusinessDays = (start: Date, days: number): Date => {
-        const result = new Date(start);
-        let added = 0;
-        while (added < days) {
-          result.setDate(result.getDate() + 1);
-          const dow = result.getDay();
-          if (dow !== 0 && dow !== 6) added++;
-        }
-        return result;
-      };
       const dueDate = addBusinessDays(now, 15);
 
       const phases = PHASES_BY_TYPE[projectType];

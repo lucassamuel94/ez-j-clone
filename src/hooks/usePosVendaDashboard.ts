@@ -184,11 +184,11 @@ export const usePosVendaDashboard = (period: Period) => {
     const cancelled = projects.filter(p => p.overall_status === 'cancelado').length;
 
     const deliveredInPeriod = projects.filter(p =>
-      (p.overall_status === 'entregue' || p.overall_status === 'concluido') &&
+      p.overall_status === 'concluido' &&
       p.updated_at && new Date(p.updated_at) >= start && new Date(p.updated_at) <= end
     );
     const deliveredPrev = projects.filter(p =>
-      (p.overall_status === 'entregue' || p.overall_status === 'concluido') &&
+      p.overall_status === 'concluido' &&
       p.updated_at && new Date(p.updated_at) >= prevStart && new Date(p.updated_at) <= prevEnd
     );
 
@@ -236,7 +236,7 @@ export const usePosVendaDashboard = (period: Period) => {
       }
     });
     const reworkCount = Array.from(reworkMap.values()).filter(c => c > 1).length;
-    const totalCompleted = projects.filter(p => p.overall_status === 'entregue' || p.overall_status === 'concluido').length;
+    const totalCompleted = projects.filter(p => p.overall_status === 'concluido').length;
 
     // Approved first: no AJUSTES transitions
     const projectsWithAjustes = new Set<string>();
@@ -273,7 +273,7 @@ export const usePosVendaDashboard = (period: Period) => {
     // ── Time by type ──
     const typeLabels: Record<string, string> = { venda: 'Implantação', evolucao: 'Evolução', api_oficial: 'API Oficial', migracao: 'Migração' };
     const typeTimes: Record<string, { total: number; count: number }> = {};
-    projects.filter(p => p.overall_status === 'entregue' || p.overall_status === 'concluido').forEach(p => {
+    projects.filter(p => p.overall_status === 'concluido').forEach(p => {
       if (p.start_date && p.updated_at) {
         const days = (new Date(p.updated_at).getTime() - new Date(p.start_date).getTime()) / 86400000;
         const key = typeLabels[p.project_type] || p.project_type;
@@ -318,7 +318,7 @@ export const usePosVendaDashboard = (period: Period) => {
       const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
       const monthLabel = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
       const del = projects.filter(p =>
-        (p.overall_status === 'entregue' || p.overall_status === 'concluido') &&
+        p.overall_status === 'concluido' &&
         p.updated_at && new Date(p.updated_at) >= d && new Date(p.updated_at) <= monthEnd
       ).length;
       const ovr = projects.filter(p =>

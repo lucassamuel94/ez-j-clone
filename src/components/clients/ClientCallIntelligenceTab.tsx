@@ -16,7 +16,7 @@ interface Props {
 }
 
 function scoreColor(score: number) {
-  if (score >= 80) return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
+  if (score >= 80) return 'bg-success/10 text-success border-success/20';
   if (score >= 60) return 'bg-warning/10 text-warning border-warning/20';
   return 'bg-destructive/10 text-destructive border-destructive/20';
 }

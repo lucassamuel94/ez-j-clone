@@ -26,11 +26,6 @@ const getRedirectByRole = async (userId: string): Promise<string> => {
 
 import ezsoftLogoWhite from '@/assets/ez-journey-logo-white.svg';
 
-const previewHostname = typeof window !== 'undefined' ? window.location.hostname : '';
-const isLovablePreview =
-  previewHostname.includes('id-preview--') ||
-  previewHostname.endsWith('.lovableproject.com');
-
 const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -42,10 +37,14 @@ const LoginPage = () => {
 
   // Bypass login in Lovable preview environment
   useEffect(() => {
-    if (isLovablePreview) {
-      navigate('/', { replace: true });
+    if (import.meta.env.VITE_DEV_USER_EMAIL && import.meta.env.VITE_DEV_USER_PASSWORD && status === 'unauthenticated') {
+      supabase.auth.signInWithPassword({
+        email: import.meta.env.VITE_DEV_USER_EMAIL,
+        password: import.meta.env.VITE_DEV_USER_PASSWORD,
+      });
+      return;
     }
-  }, [navigate]);
+  }, [navigate, status]);
 
   // Check invite
   useEffect(() => {

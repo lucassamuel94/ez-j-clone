@@ -4,7 +4,7 @@ export type ProjectType = 'venda' | 'evolucao' | 'api_oficial' | 'migracao';
 
 export type ProjectPriority = 'baixa' | 'media' | 'alta' | 'urgente';
 
-export type ProjectOverallStatus = 'ativo' | 'em_pausa' | 'concluido' | 'cancelado' | 'entregue';
+export type ProjectOverallStatus = 'ativo' | 'em_pausa' | 'concluido' | 'cancelado';
 
 export type ApiType = 'oficial' | 'extra' | 'oficial_e_extra';
 
@@ -13,22 +13,29 @@ export type BrokerType = 'gupshup' | 'hyperflow' | 'ez';
 // Phase names per project type
 export const PHASES_BY_TYPE: Record<ProjectType, string[]> = {
   venda: ['validacao', 'ux_po', 'dev_chatbot', 'treinamento', 'ativacao', 'automacao', 'curadoria_ia', 'go_live_assistido'],
-  evolucao: ['validacao', 'ux_po', 'dev_chatbot', 'treinamento', 'ativacao', 'automacao', 'curadoria_ia'],
-  api_oficial: ['validacao', 'verificacao_bm'],
-  migracao: ['validacao', 'ux_po', 'dev_chatbot', 'treinamento', 'ativacao', 'automacao', 'curadoria_ia', 'go_live_assistido'],
+  evolucao: ['validacao', 'ux_po', 'dev_chatbot', 'curadoria_ia'],
+  api_oficial: ['validacao', 'verificacao_bm', 'ativacao'],
+  migracao: ['validacao', 'ux_po', 'dev_chatbot', 'treinamento', 'ativacao', 'automacao', 'curadoria_ia'],
 };
 
 // Status options per phase
 export const PHASE_STATUSES: Record<string, string[]> = {
-  validacao: ['BACKLOG', 'EM ANÁLISE', 'DADOS INCOMPLETOS', 'VALIDADO', 'CONCLUÍDO'],
-  ux_po: ['BACKLOG', 'MAPEAMENTO DE PROCESSOS', 'MONTAGEM DE FLUXO', 'REVISÃO INTERNA', 'APROVAÇÃO DO CLIENTE', 'AJUSTES', 'CONCLUÍDO'],
-  dev_chatbot: ['BACKLOG', 'DESENVOLVIMENTO', 'QA', 'REVISÃO', 'CONCLUÍDO'],
-  treinamento: ['BACKLOG', 'AGENDAMENTO', 'MATERIAL PREPARADO', 'TREINAMENTO REALIZADO', 'CONCLUÍDO'],
-  ativacao: ['BACKLOG', 'EM ANDAMENTO', 'COM PENDÊNCIA', 'CONCLUÍDO'],
+  validacao: ['BACKLOG', 'EM ANÁLISE', 'DADOS INCOMPLETOS', 'VALIDADO', 'PAUSADO', 'CONCLUÍDO'],
+  ux_po: ['BACKLOG', 'MAPEAMENTO DE PROCESSOS', 'MONTAGEM DE FLUXO', 'REVISÃO INTERNA', 'APROVAÇÃO DO CLIENTE', 'AJUSTES', 'PAUSADO', 'CONCLUÍDO'],
+  dev_chatbot: ['BACKLOG', 'DESENVOLVIMENTO', 'QA', 'REVISÃO', 'PAUSADO', 'CONCLUÍDO'],
+  treinamento: ['BACKLOG', 'AGENDAMENTO', 'MATERIAL PREPARADO', 'TREINAMENTO REALIZADO', 'PAUSADO', 'CONCLUÍDO'],
+  ativacao: ['BACKLOG', 'EM ANDAMENTO', 'COM PENDÊNCIA', 'PAUSADO', 'CONCLUÍDO'],
   verificacao_bm: ['BACKLOG', 'EM CONTATO', 'REUNIÃO AGENDADA', 'AGUARDANDO CLIENTE', 'AGUARDANDO META', 'PAUSADO', 'CANCELADO', 'CONCLUÍDO'],
-  automacao: ['BACKLOG', 'EM DESENVOLVIMENTO', 'EM TESTE', 'CONCLUÍDO'],
+  automacao: ['BACKLOG', 'EM DESENVOLVIMENTO', 'EM TESTE', 'PAUSADO', 'CONCLUÍDO'],
   curadoria_ia: ['BACKLOG', 'EM PROCESSO DE CURADORIA', 'EM PAUSA', 'GESTÃO DE PENDÊNCIAS', 'CONCLUÍDO'],
-  go_live_assistido: ['BACKLOG', 'EM ACOMPANHAMENTO', 'CONCLUÍDO'],
+  go_live_assistido: ['BACKLOG', 'EM ACOMPANHAMENTO', 'PAUSADO', 'CONCLUÍDO'],
+};
+
+// Business days distribution per phase by complexity level
+export const PHASE_DEADLINES_BY_COMPLEXITY: Record<string, Record<string, number>> = {
+  baixa:  { validacao: 1, ux_po: 3, dev_chatbot: 7,  treinamento: 2, ativacao: 2, automacao: 5, go_live_assistido: 5, verificacao_bm: 5 },
+  media:  { validacao: 1, ux_po: 4, dev_chatbot: 10, treinamento: 3, ativacao: 2, automacao: 5, go_live_assistido: 5, verificacao_bm: 5 },
+  alta:   { validacao: 2, ux_po: 6, dev_chatbot: 14, treinamento: 4, ativacao: 4, automacao: 5, go_live_assistido: 5, verificacao_bm: 5 },
 };
 
 // Labels for display

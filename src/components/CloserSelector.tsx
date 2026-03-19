@@ -26,29 +26,36 @@ interface CloserSelectorProps {
   closerOnly?: boolean;
 }
 
-const fetchCloserProfiles = async (): Promise<Profile[]> => {
-  const { data: roleRows } = await supabase
-    .from('user_roles')
-    .select('user_id')
-    .eq('role', 'closer');
-  const userIds = [...new Set((roleRows || []).map(r => r.user_id))];
-  if (userIds.length === 0) return [];
+interface FetchResult {
+  profiles: Profile[];
+  roleUserIds: Set<string>;
+}
+
+const fetchCloserProfiles = async (): Promise<FetchResult> => {
+  const [{ data: roleRows }, { data: assignedRows }] = await Promise.all([
+    supabase.from('user_roles').select('user_id').eq('role', 'closer'),
+    supabase.from('opportunities').select('assigned_to_user_id').not('assigned_to_user_id', 'is', null),
+  ]);
+  const roleIds = new Set((roleRows || []).map(r => r.user_id));
+  const assignedIds = (assignedRows || []).map(r => r.assigned_to_user_id).filter(Boolean) as string[];
+  const allIds = [...new Set([...roleIds, ...assignedIds])];
+  if (allIds.length === 0) return { profiles: [], roleUserIds: roleIds };
   const { data: profiles } = await supabase
     .from('profiles')
     .select('id, name, active')
-    .in('id', userIds)
+    .in('id', allIds)
     .eq('active', true)
     .order('name');
-  return profiles || [];
+  return { profiles: profiles || [], roleUserIds: roleIds };
 };
 
-const fetchAllProfiles = async (): Promise<Profile[]> => {
+const fetchAllProfiles = async (): Promise<FetchResult> => {
   const { data: profiles } = await supabase
     .from('profiles')
     .select('id, name, active')
     .eq('active', true)
     .order('name');
-  return profiles || [];
+  return { profiles: profiles || [], roleUserIds: new Set((profiles || []).map(p => p.id)) };
 };
 
 export const CloserSelector = ({
@@ -63,13 +70,15 @@ export const CloserSelector = ({
   const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
 
-  // Use react-query with long staleTime so all CloserSelector instances share the cache
-  const { data: closerList = [], isLoading } = useQuery({
+  const { data: fetchResult, isLoading } = useQuery({
     queryKey: ['closer-selector-profiles', closerOnly],
     queryFn: closerOnly ? fetchCloserProfiles : fetchAllProfiles,
     staleTime: 5 * 60 * 1000,
     enabled: open,
   });
+
+  const closerList = fetchResult?.profiles ?? [];
+  const roleUserIds = fetchResult?.roleUserIds ?? new Set<string>();
 
   const filteredList = useMemo(() => {
     if (!search.trim()) return closerList;
@@ -201,7 +210,12 @@ export const CloserSelector = ({
                   )}
                 >
                   <User className="h-4 w-4 text-muted-foreground" />
-                  <span className="flex-1 text-left">{closer.name}</span>
+                  <span className="flex-1 text-left">
+                    {closer.name}
+                    {!roleUserIds.has(closer.id) && (
+                      <span className="ml-1 text-[10px] text-muted-foreground font-normal">(atribuído)</span>
+                    )}
+                  </span>
                   {currentCloserId === closer.id && (
                     <Check className="h-4 w-4 text-primary" />
                   )}

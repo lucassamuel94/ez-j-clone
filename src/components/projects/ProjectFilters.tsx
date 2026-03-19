@@ -26,7 +26,6 @@ const STATUS_OPTIONS: [string, string][] = [
   ['ativo', 'Ativo'],
   ['em_pausa', 'Em Pausa'],
   ['concluido', 'Concluído'],
-  ['entregue', 'Entregue'],
   ['cancelado', 'Cancelado'],
   ['arquivado', 'Arquivado'],
   ['lixeira', '🗑️ Lixeira'],

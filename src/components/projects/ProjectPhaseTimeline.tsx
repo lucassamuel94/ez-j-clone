@@ -94,7 +94,7 @@ const STATUS_CATEGORIES: { label: string; color: string; statuses: string[] }[] 
   },
   {
     label: 'Fechado',
-    color: 'text-emerald-600',
+    color: 'text-success',
     statuses: ['CONCLUÍDO'],
   },
 ];

@@ -127,6 +127,7 @@ export const CallIntelligenceSection = () => {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [uploadTab, setUploadTab] = useState('ezcall');
   const [contextFilter, setContextFilter] = useState<'all' | 'sdr_call' | 'demo_closer'>('all');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -282,22 +283,12 @@ export const CallIntelligenceSection = () => {
   const handleStartBulk = () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    const withoutLead = filteredAnalyses.filter(a => ids.includes(a.id) && !a.lead_id);
-    if (withoutLead.length > 0) {
-      toast.error(`Associe um lead/empresa antes de analisar. ${withoutLead.length} registro(s) sem lead vinculado.`);
-      return;
-    }
     startAnalysis.mutate(ids, {
       onSuccess: () => setSelectedIds(new Set()),
     });
   };
 
   const handleStartSingle = (id: string) => {
-    const analysis = filteredAnalyses.find(a => a.id === id);
-    if (analysis && !analysis.lead_id) {
-      toast.error('Associe um lead/empresa antes de iniciar a análise.');
-      return;
-    }
     startAnalysis.mutate([id]);
   };
 
@@ -343,11 +334,13 @@ export const CallIntelligenceSection = () => {
         </TabsList>
 
         <TabsContent value="analyses" className="space-y-4 mt-4">
-          <BulkCallAnalysisPanel
-            processingCount={analyses.filter(a => a.status === 'processing').length}
-            analyzingCount={analyses.filter(a => a.status === 'transcribed').length}
-          />
-          <CallAnalysisUploadForm />
+          <CallAnalysisUploadForm onTabChange={setUploadTab} />
+          {(uploadTab === 'ezcall' || uploadTab === 'manual') && (
+            <BulkCallAnalysisPanel
+              processingCount={analyses.filter(a => a.status === 'processing').length}
+              analyzingCount={analyses.filter(a => a.status === 'transcribed').length}
+            />
+          )}
 
           {/* Context filter */}
           <div className="flex items-center gap-2">

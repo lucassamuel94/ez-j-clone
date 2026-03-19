@@ -24,9 +24,9 @@ const formatTime = (s: number) => {
 };
 
 const MOMENT_CONFIG = {
-  positive: { icon: Star, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-500/10', border: 'border-emerald-200 dark:border-emerald-500/20', dot: 'bg-emerald-500' },
+  positive: { icon: Star, color: 'text-success dark:text-success', bg: 'bg-success/5 dark:bg-success/10', border: 'border-success/20 dark:border-success/20', dot: 'bg-success/50' },
   negative: { icon: AlertTriangle, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-500/10', border: 'border-red-200 dark:border-red-500/20', dot: 'bg-red-500' },
-  turning_point: { icon: Zap, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-500/10', border: 'border-amber-200 dark:border-amber-500/20', dot: 'bg-amber-500' },
+  turning_point: { icon: Zap, color: 'text-warning dark:text-warning', bg: 'bg-warning/5 dark:bg-warning/10', border: 'border-warning/20 dark:border-warning/20', dot: 'bg-warning/50' },
 };
 
 export function CoachTab({ data, onSeekTo, segments }: Props) {
@@ -56,7 +56,7 @@ export function CoachTab({ data, onSeekTo, segments }: Props) {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Zap className="h-4 w-4 text-amber-500" />
+              <Zap className="h-4 w-4 text-warning" />
               Momentos-Chave
               <Badge variant="secondary" className="text-[10px] ml-auto">{data.keyMoments.length}</Badge>
             </CardTitle>

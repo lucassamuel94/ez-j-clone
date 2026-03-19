@@ -21,7 +21,7 @@ const PosVendaHorizontalBars = memo(function PosVendaHorizontalBars({ data, colo
               className="h-full rounded-full transition-all"
               style={{
                 width: `${Math.min((d.value / Math.max(...data.map(x => x.value), 1)) * 100, 100)}%`,
-                backgroundColor: colorFn ? colorFn(d.value, i) : 'hsl(220,79%,48%)',
+                backgroundColor: colorFn ? colorFn(d.value, i) : 'hsl(var(--info))',
               }}
             />
           </div>

@@ -547,8 +547,8 @@ export const LeadModalOperationColumn = ({
     onUpdateLead({
       ...lead,
       status: status as any,
-      last_contact_at: new Date(),
-      next_action_at: nextAction,
+      last_contact_at: new Date().toISOString(),
+      next_action_at: nextAction.toISOString(),
     });
 
     toast.success(`Status atualizado para "${status}"`, {

@@ -88,6 +88,37 @@ export default {
   				bg: 'hsl(var(--badge-outbound-bg))',
   				text: 'hsl(var(--badge-outbound-text))'
   			},
+  			'source-indicacao': {
+  				bg: 'hsl(var(--source-indicacao-bg))',
+  				text: 'hsl(var(--source-indicacao-text))'
+  			},
+  			'status-ocupado': {
+  				bg: 'hsl(var(--status-ocupado-bg))',
+  				text: 'hsl(var(--status-ocupado-text))'
+  			},
+  			'status-return': {
+  				bg: 'hsl(var(--status-return-bg))',
+  				text: 'hsl(var(--status-return-text))'
+  			},
+  			'status-no-return': {
+  				bg: 'hsl(var(--status-no-return-bg))',
+  				text: 'hsl(var(--status-no-return-text))'
+  			},
+  			'status-reciclagem': {
+  				bg: 'hsl(var(--status-reciclagem-bg))',
+  				text: 'hsl(var(--status-reciclagem-text))',
+  				solid: 'hsl(var(--status-reciclagem-solid))'
+  			},
+  			'status-created': {
+  				solid: 'hsl(var(--status-created-solid))'
+  			},
+  			'status-discarded': {
+  				solid: 'hsl(var(--status-discarded-solid))'
+  			},
+  			'status-future': {
+  				bg: 'hsl(var(--status-future-bg))',
+  				text: 'hsl(var(--status-future-text))'
+  			},
   			sidebar: {
   				DEFAULT: 'hsl(var(--sidebar-background))',
   				foreground: 'hsl(var(--sidebar-foreground))',

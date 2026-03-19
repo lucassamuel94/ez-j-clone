@@ -23,6 +23,10 @@ const AuthSessionContext = createContext<AuthSessionState>({
 export const useAuthSession = () => useContext(AuthSessionContext);
 
 export const AuthSessionProvider = ({ children }: { children: ReactNode }) => {
+  return <AuthSessionProviderReal>{children}</AuthSessionProviderReal>;
+};
+
+const AuthSessionProviderReal = ({ children }: { children: ReactNode }) => {
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [session, setSession] = useState<Session | null>(null);
   // Stable ref to the last known valid session — survives closures

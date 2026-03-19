@@ -53,8 +53,8 @@ import { ClientCallIntelligenceTab } from "./ClientCallIntelligenceTab";
 const STATUS_CONFIG: Record<string, { label: string; dot: string; badge: string }> = {
   ativo: {
     label: "Ativo",
-    dot: "bg-emerald-500",
-    badge: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+    dot: "bg-success/50",
+    badge: "bg-success/10 text-success dark:text-success border-success/20",
   },
   pausado: {
     label: "Pausado",

@@ -24,7 +24,7 @@ export const usePhaseProjectCounts = () => {
       const countMap = new Map<string, Set<string>>();
       (data || []).forEach((row: any) => {
         const projectStatus = row.project?.overall_status;
-        if (projectStatus === 'cancelado' || projectStatus === 'concluido' || projectStatus === 'entregue') return;
+        if (projectStatus === 'cancelado' || projectStatus === 'concluido') return;
         if (row.project?.deleted_at) return;
         if (row.status === 'BACKLOG' && !row.is_active) return;
         if (!countMap.has(row.phase_name)) {

@@ -29,8 +29,8 @@ const CallAnalysisDetailModal = lazy(() =>
 );
 
 const interestColors: Record<string, string> = {
-  alto: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-  medio: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  alto: 'bg-success/10 text-success dark:text-success',
+  medio: 'bg-warning/10 text-warning dark:text-warning',
   baixo: 'bg-red-500/10 text-red-600 dark:text-red-400',
 };
 
@@ -38,182 +38,10 @@ const interestColors: Record<string, string> = {
 
 interface CallIntelligenceViewProps {
   context: 'sdr_call' | 'demo_closer';
+  uploadSlot?: React.ReactNode;
 }
 
-// ─── SDR Upload Section ──────────────────────────────────────────────────────
-
-const DAILY_LIMIT = 5;
-const ACCEPTED_AUDIO = '.mp3,.wav,.ogg,.m4a,.webm,.aac,.flac';
-
-interface LeadOption {
-  id: string;
-  name: string;
-  company: string;
-}
-
-const SDRUploadSection = ({ userId }: { userId: string }) => {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [leadSearch, setLeadSearch] = useState('');
-  const [leadResults, setLeadResults] = useState<LeadOption[]>([]);
-  const [selectedLead, setSelectedLead] = useState<LeadOption | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [todayCount, setTodayCount] = useState<number | null>(null);
-  const uploadMutation = useUploadCallAnalysis();
-  const startMutation = useStartAnalysis();
-
-  // Count today's uploads
-  useEffect(() => {
-    const fetchCount = async () => {
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      const { count: c } = await (supabase
-        .from('call_analyses' as any)
-        .select('*', { count: 'exact', head: true }) as any)
-        .eq('uploaded_by', userId)
-        .gte('created_at', startOfDay.toISOString());
-      setTodayCount(c ?? 0);
-    };
-    fetchCount();
-  }, [userId, uploadMutation.isSuccess]);
-
-  // Lead search
-  useEffect(() => {
-    if (leadSearch.length < 2) { setLeadResults([]); return; }
-    const timer = setTimeout(async () => {
-      setSearching(true);
-      const term = `%${leadSearch}%`;
-      const { data } = await supabase
-        .from('leads')
-        .select('id, name, company')
-        .or(`name.ilike.${term},company.ilike.${term}`)
-        .limit(5);
-      setLeadResults((data || []) as LeadOption[]);
-      setSearching(false);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [leadSearch]);
-
-  const canUpload = todayCount !== null && todayCount < DAILY_LIMIT;
-  const isSubmitting = uploadMutation.isPending || startMutation.isPending;
-
-  const handleSubmit = async () => {
-    if (!file || !canUpload) return;
-    try {
-      const result = await uploadMutation.mutateAsync({
-        file,
-        sdr_user_id: userId,
-        lead_id: selectedLead?.id,
-        media_type: 'audio',
-        analysis_context: 'sdr_call',
-      });
-      if (result?.id) {
-        await startMutation.mutateAsync([result.id]);
-      }
-      setFile(null);
-      setSelectedLead(null);
-      setLeadSearch('');
-      if (fileRef.current) fileRef.current.value = '';
-    } catch {
-      // errors handled by hooks
-    }
-  };
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    const f = e.dataTransfer.files[0];
-    if (f) setFile(f);
-  }, []);
-
-  return (
-    <Card className="border border-border rounded-2xl shadow-sm">
-      <CardContent className="p-5">
-        <div className="flex flex-col sm:flex-row sm:items-end gap-4">
-          {/* Drop zone / file picker */}
-          <div
-            className={cn(
-              "flex-1 min-w-0 border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors",
-              file ? "border-primary/40 bg-primary/5" : "border-border hover:border-primary/30"
-            )}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleDrop}
-            onClick={() => fileRef.current?.click()}
-          >
-            <input
-              ref={fileRef}
-              type="file"
-              accept={ACCEPTED_AUDIO}
-              className="hidden"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-            />
-            {file ? (
-              <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
-            ) : (
-              <div className="flex flex-col items-center gap-1">
-                <Upload className="h-5 w-5 text-muted-foreground" />
-                <p className="text-xs text-muted-foreground">Arraste um áudio ou clique para selecionar</p>
-              </div>
-            )}
-          </div>
-
-          {/* Lead search */}
-          <div className="relative w-full sm:w-56">
-            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Buscar lead (opcional)"
-              className="pl-8 h-9 text-xs"
-              value={selectedLead ? `${selectedLead.name} — ${selectedLead.company}` : leadSearch}
-              onChange={(e) => {
-                setLeadSearch(e.target.value);
-                if (selectedLead) setSelectedLead(null);
-              }}
-            />
-            {leadResults.length > 0 && !selectedLead && (
-              <div className="absolute z-20 top-full mt-1 w-full bg-popover border border-border rounded-lg shadow-lg max-h-40 overflow-auto">
-                {leadResults.map(l => (
-                  <button
-                    key={l.id}
-                    type="button"
-                    className="w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors"
-                    onClick={() => {
-                      setSelectedLead(l);
-                      setLeadResults([]);
-                    }}
-                  >
-                    {l.name} — <span className="text-muted-foreground">{l.company}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Submit + counter */}
-          <div className="flex items-center gap-3">
-            <Badge variant="outline" className="text-[10px] whitespace-nowrap shrink-0">
-              {todayCount ?? '…'}/{DAILY_LIMIT} hoje
-            </Badge>
-            <Button
-              size="sm"
-              disabled={!file || !canUpload || isSubmitting}
-              onClick={handleSubmit}
-              className="shrink-0"
-            >
-              {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Upload className="h-3.5 w-3.5 mr-1" />}
-              Enviar para Análise
-            </Button>
-          </div>
-        </div>
-        {todayCount !== null && !canUpload && (
-          <p className="text-xs text-destructive mt-2">Limite diário atingido ({DAILY_LIMIT}/{DAILY_LIMIT}). Tente novamente amanhã.</p>
-        )}
-      </CardContent>
-    </Card>
-  );
-};
-
-// ─── Shared view component ────────────────────────────────────────────────────
-
-const CallIntelligenceView = ({ context }: CallIntelligenceViewProps) => {
+const CallIntelligenceView = ({ context, uploadSlot }: CallIntelligenceViewProps) => {
   const { user } = useCurrentUser();
   const [datePeriod, setDatePeriod] = useState<ExecDatePeriod>('30d');
   const [selectedAnalysis, setSelectedAnalysis] = useState<CallAnalysis | null>(null);
@@ -351,8 +179,7 @@ const CallIntelligenceView = ({ context }: CallIntelligenceViewProps) => {
           </Select>
         </div>
 
-        {/* SDR Upload Section (only for sdr_call context) */}
-        {!isDemo && user && <SDRUploadSection userId={user.id} />}
+        {uploadSlot}
 
         {/* KPI Cards */}
         {isLoading ? (
@@ -371,7 +198,7 @@ const CallIntelligenceView = ({ context }: CallIntelligenceViewProps) => {
               label="Meu Score Médio"
               value={kpis.avgScore > 0 ? `${kpis.avgScore}` : '—'}
               subtitle="/100"
-              color={kpis.avgScore >= 70 ? 'text-emerald-500' : kpis.avgScore >= 50 ? 'text-amber-500' : kpis.avgScore > 0 ? 'text-red-500' : undefined}
+              color={kpis.avgScore >= 70 ? 'text-success' : kpis.avgScore >= 50 ? 'text-warning' : kpis.avgScore > 0 ? 'text-red-500' : undefined}
             />
             {/* Team average card */}
             <TeamAvgCard
@@ -455,7 +282,7 @@ const CallIntelligenceView = ({ context }: CallIntelligenceViewProps) => {
                       <span className="font-semibold">{macroFeedback.avgLeadTalk}%</span>
                     </div>
                     <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${macroFeedback.avgLeadTalk}%` }} />
+                      <div className="h-full bg-success/50 rounded-full transition-all" style={{ width: `${macroFeedback.avgLeadTalk}%` }} />
                     </div>
                   </div>
                   <div className="flex items-center justify-between text-xs">
@@ -466,7 +293,7 @@ const CallIntelligenceView = ({ context }: CallIntelligenceViewProps) => {
                       'text-[10px]',
                       macroFeedback.earlyPitchRate > 30
                         ? 'border-red-500/20 text-red-500 bg-red-500/10'
-                        : 'border-emerald-500/20 text-emerald-500 bg-emerald-500/10'
+                        : 'border-success/20 text-success bg-success/10'
                     )}>
                       {macroFeedback.earlyPitchRate}%
                     </Badge>
@@ -551,8 +378,8 @@ const CallIntelligenceView = ({ context }: CallIntelligenceViewProps) => {
                           {a.status === 'completed' ? (
                             <Badge variant="outline" className={cn(
                               'text-[10px]',
-                              (a.call_score || 0) >= 70 ? 'border-emerald-500/20 text-emerald-500 bg-emerald-500/10' :
-                              (a.call_score || 0) >= 50 ? 'border-amber-500/20 text-amber-500 bg-amber-500/10' :
+                              (a.call_score || 0) >= 70 ? 'border-success/20 text-success bg-success/10' :
+                              (a.call_score || 0) >= 50 ? 'border-warning/20 text-warning bg-warning/10' :
                               'border-red-500/20 text-red-500 bg-red-500/10'
                             )}>
                               {a.call_score}
@@ -576,8 +403,8 @@ const CallIntelligenceView = ({ context }: CallIntelligenceViewProps) => {
                         <TableCell className="text-center">
                           <Badge variant="outline" className={cn(
                             'text-[10px]',
-                            a.status === 'completed' ? 'border-emerald-500/20 text-emerald-500 bg-emerald-500/10' :
-                            a.status === 'processing' ? 'border-amber-500/20 text-amber-500 bg-amber-500/10' :
+                            a.status === 'completed' ? 'border-success/20 text-success bg-success/10' :
+                            a.status === 'processing' ? 'border-warning/20 text-warning bg-warning/10' :
                             'border-muted-foreground/20'
                           )}>
                             {a.status === 'completed' ? 'Concluído' :
@@ -672,10 +499,10 @@ const TeamAvgCard = ({
   scoreDiff: number | null;
 }) => {
   const teamColor = teamAvgScore !== null
-    ? teamAvgScore >= 70 ? 'text-emerald-500' : teamAvgScore >= 50 ? 'text-amber-500' : 'text-red-500'
+    ? teamAvgScore >= 70 ? 'text-success' : teamAvgScore >= 50 ? 'text-warning' : 'text-red-500'
     : 'text-muted-foreground';
 
-  const diffColor = scoreDiff === null ? '' : scoreDiff > 0 ? 'text-emerald-600 dark:text-emerald-400' : scoreDiff < 0 ? 'text-red-500' : 'text-muted-foreground';
+  const diffColor = scoreDiff === null ? '' : scoreDiff > 0 ? 'text-success dark:text-success' : scoreDiff < 0 ? 'text-red-500' : 'text-muted-foreground';
   const DiffIcon = scoreDiff === null ? null : scoreDiff > 0 ? ArrowUp : scoreDiff < 0 ? ArrowDown : Minus;
 
   return (

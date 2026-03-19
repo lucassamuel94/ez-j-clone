@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { CloserOpportunity, CloserStage, normalizeStage } from '@/services/closerService';
+import { CloserOpportunity, CloserStage, mapRpcRowToOpportunity } from '@/services/closerService';
 
 type SortOption = 'value_desc' | 'created_desc' | 'next_action_asc' | 'temperature_desc' | 'last_contact_asc';
 
@@ -17,6 +17,10 @@ interface UseCloserKanbanByStageParams {
   enabled: boolean;
   /** Pages loaded per column — controlled externally */
   columnPages: Record<string, number>;
+  meetingFrom?: string | null;
+  meetingTo?:   string | null;
+  wonFrom?:     string | null;
+  wonTo?:       string | null;
 }
 
 const PAGE_SIZE = 15;
@@ -30,6 +34,10 @@ export function useCloserKanbanByStage({
   visibleStages,
   enabled,
   columnPages,
+  meetingFrom = null,
+  meetingTo = null,
+  wonFrom = null,
+  wonTo = null,
 }: UseCloserKanbanByStageParams) {
   const queryClient = useQueryClient();
 
@@ -42,7 +50,8 @@ export function useCloserKanbanByStage({
     queries: stages.map((stage) => {
       const pages = columnPages[stage] ?? 1;
       return {
-        queryKey: ['closer-kanban', stage, closerId, search, sortBy, opportunityType, pages],
+        queryKey: ['closer-kanban', stage, closerId, search, sortBy, opportunityType, pages,
+                   meetingFrom, meetingTo, wonFrom, wonTo],
         queryFn: async () => {
           const { data: result, error } = await (supabase.rpc as any)('search_opportunities_kanban', {
             p_stage: stage,
@@ -52,12 +61,16 @@ export function useCloserKanbanByStage({
             p_page: 1,
             p_page_size: pages * PAGE_SIZE,
             p_sort: sortBy || 'created_desc',
+            p_meeting_from: meetingFrom || null,
+            p_meeting_to:   meetingTo   || null,
+            p_won_from:     wonFrom     || null,
+            p_won_to:       wonTo       || null,
           });
           if (error) throw error;
           const parsed = result as any;
           return {
             total: parsed.total as number,
-            data: (parsed.data || []).map(mapRpcRow),
+            data: (parsed.data || []).map(mapRpcRowToOpportunity),
           };
         },
         enabled: enabled && !!stage,
@@ -119,46 +132,4 @@ export function useCloserKanbanByStage({
   }, [queryClient]);
 
   return { columns, isLoading, optimisticMove, invalidateColumns, invalidateAll };
-}
-
-function mapRpcRow(row: any): CloserOpportunity {
-  return {
-    id: row.id,
-    lead_id: row.lead_id,
-    stage: normalizeStage(row.stage) as CloserStage,
-    created_by_user_id: row.created_by_user_id,
-    assigned_to_user_id: row.assigned_to_user_id,
-    sdr_user_id: row.sdr_user_id,
-    closer_notes: row.closer_notes,
-    returned_to_sdr: row.returned_to_sdr || false,
-    return_reason: row.return_reason,
-    lost_reason: row.lost_reason,
-    meeting_datetime: row.meeting_datetime,
-    deal_value: Number(row.deal_value) || 0,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-    active_objection: row.active_objection || null,
-    expected_close_date: row.expected_close_date || null,
-    decision_maker_identified: row.decision_maker_identified || false,
-    won_at: row.won_at || null,
-    opportunity_type: row.opportunity_type || 'new_business',
-    lead_name: row.lead_name,
-    lead_company: row.lead_company,
-    lead_razao_social: row.lead_razao_social,
-    lead_nome_fantasia: row.lead_nome_fantasia,
-    lead_cnpj: row.lead_cnpj,
-    lead_whatsapp: row.lead_whatsapp,
-    lead_phone: row.lead_phone,
-    lead_phone_2: row.lead_phone_2,
-    lead_phone_3: row.lead_phone_3,
-    lead_phone_4: row.lead_phone_4,
-    lead_email: row.lead_email,
-    lead_temperature: row.lead_temperature,
-    lead_last_contact_at: row.lead_last_contact_at,
-    lead_next_action_at: row.lead_next_action_at,
-    lead_status: row.lead_status,
-    lead_website: row.lead_website,
-    sdr_name: row.sdr_name,
-    closer_name: row.closer_name,
-  };
 }

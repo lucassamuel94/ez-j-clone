@@ -220,8 +220,8 @@ const FormPreview = ({ title, subtitle, buttonText, primaryColor, fields, showRe
         ) : (
           /* Form Preview */
           <div className="space-y-5">
-            {title && <h3 className="text-lg font-semibold text-foreground text-center" style={{ fontFamily: "'Inter', sans-serif" }}>{title}</h3>}
-            {subtitle && <p className={`text-[16px] text-muted-foreground -mt-3 ${subtitleAlign === 'left' ? 'text-left' : subtitleAlign === 'right' ? 'text-right' : 'text-center'}`} style={{ fontFamily: "'Inter', sans-serif" }}>{subtitle}</p>}
+            {title && <h3 className="text-lg font-semibold text-foreground text-center" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{title}</h3>}
+            {subtitle && <p className={`text-[16px] text-muted-foreground -mt-3 ${subtitleAlign === 'left' ? 'text-left' : subtitleAlign === 'right' ? 'text-right' : 'text-center'}`} style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{subtitle}</p>}
 
             {fields.length === 0 && (
               <p className="text-xs text-muted-foreground text-center py-6">Adicione campos para visualizar o formulário.</p>

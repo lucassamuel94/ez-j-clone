@@ -484,10 +484,11 @@ const CloserPipelinePage = () => {
     pageSize: itemsPerPage,
     sortColumn,
     sortDirection,
+    enabled: selectedCloserId !== 'pending',
   });
 
   // Tab counts from server
-  const tabCounts = useCloserTabCounts(closerIdParam);
+  const tabCounts = useCloserTabCounts(closerIdParam, undefined, selectedCloserId !== 'pending');
 
   // Kanban data (only loaded when kanban is active) — server-side per-stage pagination
   const isKanbanActive = viewMode === 'kanban' && activeTab === 'oportunidades';
@@ -505,6 +506,10 @@ const CloserPipelinePage = () => {
     visibleStages: kanbanVisibleStages,
     enabled: isKanbanActive && selectedCloserId !== 'pending',
     columnPages: kanbanColumnPages,
+    meetingFrom: meetingDateRange.from ? startOfDay(meetingDateRange.from).toISOString() : null,
+    meetingTo:   meetingDateRange.to   ? endOfDay(meetingDateRange.to).toISOString()     : null,
+    wonFrom:     wonDateRange.from ? startOfDay(wonDateRange.from).toISOString() : null,
+    wonTo:       wonDateRange.to   ? endOfDay(wonDateRange.to).toISOString()     : null,
   });
 
   // For pagination display
@@ -556,7 +561,7 @@ const CloserPipelinePage = () => {
   const [detectedProjectType, setDetectedProjectType] = useState<string | null>(null);
 
   // Bulk selection state
-  const canBulkSelect = hasPermission('access_admin');
+  const canBulkSelect = hasPermission('access_admin') || hasPermission('reassign_ownership');
   const [selectedOppIds, setSelectedOppIds] = useState<Set<string>>(new Set());
   const [allFilteredSelected, setAllFilteredSelected] = useState(false);
   const [isLoadingSelection, setIsLoadingSelection] = useState(false);
@@ -1223,7 +1228,7 @@ const CloserPipelinePage = () => {
               isMoving={moveStage.isPending}
               isLoading={kanbanLoading}
               currentUserId={currentUser?.id ?? null}
-              canManage={hasPermission('access_admin')}
+              canManage={hasPermission('access_admin') || hasPermission('reassign_ownership')}
               onLoadMore={handleKanbanLoadMore}
             />
           )}
@@ -1233,7 +1238,7 @@ const CloserPipelinePage = () => {
               <CloserTableView
                 opportunities={paginatedOpps}
                 canBulkSelect={canBulkSelect}
-                canManage={hasPermission('access_admin')}
+                canManage={hasPermission('access_admin') || hasPermission('reassign_ownership')}
                 selectedOppIds={selectedOppIds}
                 onOppCheckChange={handleOppCheckChange}
                 onCheckAllChange={handleCheckAllChange}

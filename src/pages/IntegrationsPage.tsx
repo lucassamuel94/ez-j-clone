@@ -123,7 +123,7 @@ export default function IntegrationsPage() {
                         </TableCell>
                         <TableCell className="text-center">
                           {item.is_new ? (
-                            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400 text-[11px] font-semibold border-0">
+                            <Badge className="bg-success/15 text-success dark:bg-success/15 dark:text-success text-[11px] font-semibold border-0">
                               Nova
                             </Badge>
                           ) : (

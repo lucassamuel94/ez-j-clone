@@ -98,10 +98,11 @@ async function syncLeadNextAction(leadId: string, newDueDate: string) {
 
   // Update if: no current date, new date is earlier, OR current date is overdue and new date is in the future
   if (current === null || incoming < current || (current < now && incoming >= now)) {
-    await supabase
+    const { error: updateErr } = await supabase
       .from('leads')
       .update({ next_action_at: newDueDate } as any)
       .eq('id', leadId);
+    if (updateErr) console.error('[syncLeadNextAction] Failed to update next_action_at:', updateErr.message);
   }
 }
 
@@ -145,6 +146,30 @@ export const deleteProjectTask = async (taskId: string) => {
 };
 
 export const updateProjectFields = async (projectId: string, fields: Record<string, unknown>) => {
+  // If due_date is being changed, log it
+  if ('due_date' in fields) {
+    const { data: oldProject } = await supabase
+      .from('projects')
+      .select('due_date')
+      .eq('id', projectId)
+      .single();
+
+    const oldDueDate = oldProject?.due_date || null;
+    const newDueDate = (fields.due_date as string) || null;
+
+    if (oldDueDate !== newDueDate) {
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('project_activity_logs').insert({
+        project_id: projectId,
+        user_id: user?.id || null,
+        action_type: 'deadline_changed',
+        old_value: oldDueDate || '(sem prazo)',
+        new_value: newDueDate || '(sem prazo)',
+        description: `Prazo alterado de ${oldDueDate || '(sem prazo)'} para ${newDueDate || '(sem prazo)'}`,
+      } as any);
+    }
+  }
+
   const { data, error } = await supabase
     .from('projects')
     .update(fields as any)

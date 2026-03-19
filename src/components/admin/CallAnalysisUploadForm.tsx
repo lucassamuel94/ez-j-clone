@@ -20,7 +20,7 @@ const AUDIO_FORMATS = '.mp3,.wav,.m4a,.webm,.ogg';
 
 type UploadPhase = 'idle' | 'compressing' | 'uploading' | 'done';
 
-export const CallAnalysisUploadForm = () => {
+export const CallAnalysisUploadForm = ({ onTabChange }: { onTabChange?: (tab: string) => void }) => {
   const [file, setFile] = useState<File | null>(null);
   const [sdrUserId, setSdrUserId] = useState('');
   const [leadSearch, setLeadSearch] = useState('');
@@ -127,7 +127,7 @@ export const CallAnalysisUploadForm = () => {
         <CardDescription>Envie gravações de ligações, vídeos de demonstração ou importe do PABX EZCall.</CardDescription>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="ezcall" className="w-full">
+        <Tabs defaultValue="ezcall" className="w-full" onValueChange={onTabChange}>
           <TabsList className="mb-4">
             <TabsTrigger value="ezcall" className="text-xs gap-1.5">
               <Phone className="h-3.5 w-3.5" />

@@ -1,15 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  updateOpportunityStage, 
+import {
+  updateOpportunityStage,
   updateOpportunityNotes,
-  returnLeadToSdr, 
+  returnLeadToSdr,
   markOpportunityLost,
   markOpportunityWon,
   CloserStage,
   CloserOpportunity,
   fetchCloserOpportunities,
-  normalizeStage,
+  mapRpcRowToOpportunity,
 } from '@/services/closerService';
 import { toast } from 'sonner';
 
@@ -27,6 +27,7 @@ export interface CloserPaginationParams {
   opportunityType?: string;
   sortColumn?: string | null;
   sortDirection?: 'asc' | 'desc';
+  enabled?: boolean;
 }
 
 export const useCloserPipelinePaginated = (params: CloserPaginationParams) => {
@@ -34,6 +35,7 @@ export const useCloserPipelinePaginated = (params: CloserPaginationParams) => {
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ['closer-opportunities-paginated', params],
+    enabled: params.enabled !== false,
     queryFn: async () => {
       const { data: result, error } = await supabase.rpc('search_opportunities_paginated', {
         p_tab: params.tab,
@@ -72,9 +74,10 @@ export const useCloserPipelinePaginated = (params: CloserPaginationParams) => {
   };
 };
 
-export const useCloserTabCounts = (closerId?: string | null, opportunityType?: string) => {
+export const useCloserTabCounts = (closerId?: string | null, opportunityType?: string, enabled = true) => {
   const { data } = useQuery({
     queryKey: ['closer-tab-counts', closerId, opportunityType],
+    enabled,
     queryFn: async () => {
       const { data: result, error } = await supabase.rpc('get_opportunity_tab_counts', {
         p_closer_id: closerId || null,
@@ -180,47 +183,6 @@ export const useCloserMutations = () => {
 
   return { moveStage, updateNotes, returnToSdr, markLost, markWon, invalidateAll };
 };
-
-function mapRpcRowToOpportunity(row: any): CloserOpportunity {
-  return {
-    id: row.id,
-    lead_id: row.lead_id,
-    stage: normalizeStage(row.stage) as CloserStage,
-    created_by_user_id: row.created_by_user_id,
-    assigned_to_user_id: row.assigned_to_user_id,
-    sdr_user_id: row.sdr_user_id,
-    closer_notes: row.closer_notes,
-    returned_to_sdr: row.returned_to_sdr || false,
-    return_reason: row.return_reason,
-    lost_reason: row.lost_reason,
-    meeting_datetime: row.meeting_datetime,
-    deal_value: Number(row.deal_value) || 0,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-    active_objection: row.active_objection || null,
-    opportunity_type: row.opportunity_type || 'new_business',
-    expected_close_date: row.expected_close_date || null,
-    decision_maker_identified: row.decision_maker_identified || false,
-    lead_name: row.lead_name,
-    lead_company: row.lead_company,
-    lead_razao_social: row.lead_razao_social,
-    lead_nome_fantasia: row.lead_nome_fantasia,
-    lead_cnpj: row.lead_cnpj,
-    lead_whatsapp: row.lead_whatsapp,
-    lead_phone: row.lead_phone,
-    lead_phone_2: row.lead_phone_2,
-    lead_phone_3: row.lead_phone_3,
-    lead_phone_4: row.lead_phone_4,
-    lead_email: row.lead_email,
-    lead_temperature: row.lead_temperature,
-    lead_last_contact_at: row.lead_last_contact_at,
-    lead_next_action_at: row.lead_next_action_at,
-    lead_status: row.lead_status,
-    lead_website: row.lead_website,
-    sdr_name: row.sdr_name,
-    closer_name: row.closer_name,
-  };
-}
 
 // Backwards-compatible hook for pages that still need the full opportunity list
 export const useCloserPipeline = () => {

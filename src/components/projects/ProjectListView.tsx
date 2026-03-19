@@ -44,7 +44,6 @@ const statusColors: Record<string, string> = {
   em_pausa: 'bg-chart-5/10 text-chart-5 border-chart-5/20',
   concluido: 'bg-chart-3/10 text-chart-3 border-chart-3/20',
   cancelado: 'bg-destructive/10 text-destructive border-destructive/20',
-  entregue: 'bg-chart-1/10 text-chart-1 border-chart-1/20',
 };
 
 const statusLabels: Record<string, string> = {
@@ -52,7 +51,6 @@ const statusLabels: Record<string, string> = {
   em_pausa: 'Pausado',
   concluido: 'Concluído',
   cancelado: 'Cancelado',
-  entregue: 'Entregue',
 };
 
 const projectTypeColors: Record<string, string> = {

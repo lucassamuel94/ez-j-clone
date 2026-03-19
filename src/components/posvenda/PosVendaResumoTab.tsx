@@ -10,7 +10,7 @@ import { AlertTriangle, Clock } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import type { PosVendaKpi, BarEntry, DeliveryVsDelay, RiskProject } from '@/hooks/usePosVendaDashboard';
 
-const DONUT_COLORS = ['hsl(135,50%,33%)', 'hsl(220,79%,48%)', 'hsl(38,100%,30%)', 'hsl(0,56%,46%)'];
+const DONUT_COLORS = ['hsl(var(--success))', 'hsl(var(--info))', 'hsl(var(--warning))', 'hsl(var(--destructive))'];
 
 interface Props {
   kpis: PosVendaKpi;
@@ -63,7 +63,7 @@ const PosVendaResumoTab = memo(function PosVendaResumoTab(props: Props) {
           <PosVendaChartCard title="Quanto tempo leva cada tipo">
             <PosVendaHorizontalBars
               data={typeTimeBars}
-              colorFn={(v) => v > 20 ? 'hsl(0,56%,46%)' : v > 12 ? 'hsl(38,100%,30%)' : 'hsl(135,50%,33%)'} />
+              colorFn={(v) => v > 20 ? 'hsl(var(--destructive))' : v > 12 ? 'hsl(var(--warning))' : 'hsl(var(--success))'} />
             
           </PosVendaChartCard>
         </div>
@@ -94,7 +94,7 @@ const PosVendaResumoTab = memo(function PosVendaResumoTab(props: Props) {
               <div className="space-y-2">
                   {deadlineRisks.slice(0, 5).map((r) =>
                 <div key={`dl-${r.id}`} className="flex items-center gap-2">
-                      <AlertTriangle className="h-3.5 w-3.5 text-[hsl(38,100%,30%)] flex-shrink-0" />
+                      <AlertTriangle className="h-3.5 w-3.5 text-warning flex-shrink-0" />
                       <span className="text-xs truncate flex-1">{r.company}</span>
                       <div className="w-20">
                         <Progress value={Math.min(r.deadlinePercent, 100)} className="h-1.5" />
@@ -108,7 +108,7 @@ const PosVendaResumoTab = memo(function PosVendaResumoTab(props: Props) {
               <div className="space-y-2 pt-1">
                   {stagnantRisks.slice(0, 5).map((r) =>
                 <div key={`st-${r.id}`} className="flex items-center gap-2">
-                      <Clock className="h-3.5 w-3.5 text-[hsl(220,79%,48%)] flex-shrink-0" />
+                      <Clock className="h-3.5 w-3.5 text-info flex-shrink-0" />
                       <span className="text-xs truncate flex-1">{r.company}</span>
                       <span className="text-[10px] font-mono tabular-nums text-muted-foreground">{r.daysStagnant}d parado</span>
                     </div>
@@ -128,12 +128,12 @@ const PosVendaResumoTab = memo(function PosVendaResumoTab(props: Props) {
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={deliveryHistory} barCategoryGap="20%">
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(0,0%,90%)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
               <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px' }} />
-              <Bar dataKey="delivered" name="Entregues" fill="hsl(135,50%,33%)" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="overdue" name="Atrasados" fill="hsl(0,56%,46%)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="delivered" name="Entregues" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="overdue" name="Atrasados" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

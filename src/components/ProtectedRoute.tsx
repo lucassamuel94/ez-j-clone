@@ -9,20 +9,12 @@ interface ProtectedRouteProps {
   requiredPermission?: string;
 }
 
-const previewHostname = typeof window !== 'undefined' ? window.location.hostname : '';
-const isLovablePreview =
-  previewHostname.includes('id-preview--') ||
-  previewHostname.endsWith('.lovableproject.com');
-
 export const ProtectedRoute = ({ children, requiredPermission }: ProtectedRouteProps) => {
   const { status, session, retry } = useAuthSession();
   const location = useLocation();
   const hasSession = !!session;
   const isUsable = status === 'authenticated' || (status === 'degraded' && hasSession);
   const { hasPermission, isLoading: isLoadingPerms } = usePermissions(isUsable);
-
-  // Bypass auth in Lovable preview environment
-  if (isLovablePreview) return <>{children}</>;
 
   // Loading state (only on initial boot, not degraded with session)
   if (status === 'loading') {

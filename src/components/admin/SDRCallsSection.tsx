@@ -125,16 +125,13 @@ const SendToAIButton = memo(function SendToAIButton({ linkedid, sdrUserId, callD
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Não autenticado');
 
-      console.log('[CallAI] Step 1: Fetching audio from EZCall...');
       // Fetch audio blob from EZCall
       const url = await playRecording(linkedid);
       const resp = await fetch(url);
       const blob = await resp.blob();
-      console.log('[CallAI] Step 2: Audio fetched, size:', blob.size, 'type:', blob.type);
 
       // Upload to storage
       const path = `${user.id}/ezcall_${linkedid}.mp3`;
-      console.log('[CallAI] Step 3: Uploading to storage...', path);
       const { error: uploadError } = await supabase.storage
         .from('call-recordings')
         .upload(path, blob, { contentType: 'audio/mpeg', upsert: true });
@@ -142,7 +139,6 @@ const SendToAIButton = memo(function SendToAIButton({ linkedid, sdrUserId, callD
         console.error('[CallAI] Storage upload error:', uploadError);
         throw uploadError;
       }
-      console.log('[CallAI] Step 4: Upload OK, inserting record...');
 
       // Create call_analyses record with status 'processing'
       const { data: insertedData, error: insertError } = await (supabase
@@ -160,7 +156,6 @@ const SendToAIButton = memo(function SendToAIButton({ linkedid, sdrUserId, callD
         console.error('[CallAI] Insert error:', insertError);
         throw insertError;
       }
-      console.log('[CallAI] Step 5: Record created, starting transcription...');
 
       // Auto-start transcription (which chains into analyze-call)
       const analysisId = (insertedData as { id: string }).id;
@@ -359,7 +354,7 @@ const CallRow = memo(function CallRow({ call, sdrUserId }: { call: EZCallRecord;
           className={cn(
             'text-[10px] font-medium',
             isAnswered
-              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+              ? 'border-success/30 bg-success/10 text-success dark:text-success'
               : 'border-destructive/30 bg-destructive/10 text-destructive',
           )}
         >
@@ -472,7 +467,7 @@ function SDRCallRow({ report }: { report: EZCallSDRReport }) {
         </td>
         <td className="px-3 py-2.5 text-center text-xs tabular-nums text-muted-foreground">{report.extension}</td>
         <td className="px-3 py-2.5 text-center text-xs tabular-nums font-semibold">{fmt(report.totalCalls)}</td>
-        <td className="px-3 py-2.5 text-center text-xs tabular-nums font-semibold text-emerald-600 dark:text-emerald-400">{fmt(report.answeredCalls)}</td>
+        <td className="px-3 py-2.5 text-center text-xs tabular-nums font-semibold text-success dark:text-success">{fmt(report.answeredCalls)}</td>
         <td className="px-3 py-2.5 text-center text-xs tabular-nums">{report.answerRate}%</td>
         <td className="px-3 py-2.5 text-center text-xs tabular-nums">{formatSeconds(report.avgTalkTime)}</td>
       </tr>

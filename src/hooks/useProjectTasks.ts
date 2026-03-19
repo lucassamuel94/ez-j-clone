@@ -58,6 +58,15 @@ export const useCreateProjectTask = () => {
       if (vars.lead_id) {
         queryClient.invalidateQueries({ queryKey: ['lead-tasks', vars.lead_id] });
       }
+      if (vars.lead_id || vars.opportunity_id) {
+        queryClient.invalidateQueries({ queryKey: ['leads'] });
+        queryClient.invalidateQueries({ queryKey: ['leads-paginated'] });
+        queryClient.invalidateQueries({ queryKey: ['lead-tab-counts'] });
+        queryClient.invalidateQueries({ queryKey: ['kanban-leads'] });
+        queryClient.invalidateQueries({ queryKey: ['closer-kanban'] });
+        queryClient.invalidateQueries({ queryKey: ['closer-opportunities-paginated'] });
+        queryClient.invalidateQueries({ queryKey: ['closer-tab-counts'] });
+      }
       toast.success('Tarefa criada');
     },
     onError: () => toast.error('Erro ao criar tarefa'),
@@ -73,6 +82,15 @@ export const useUpdateProjectTask = () => {
       queryClient.invalidateQueries({ queryKey: ['project-tasks', vars.projectId] });
       queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
+      if ('due_date' in vars.updates) {
+        queryClient.invalidateQueries({ queryKey: ['leads'] });
+        queryClient.invalidateQueries({ queryKey: ['leads-paginated'] });
+        queryClient.invalidateQueries({ queryKey: ['lead-tab-counts'] });
+        queryClient.invalidateQueries({ queryKey: ['kanban-leads'] });
+        queryClient.invalidateQueries({ queryKey: ['closer-kanban'] });
+        queryClient.invalidateQueries({ queryKey: ['closer-opportunities-paginated'] });
+        queryClient.invalidateQueries({ queryKey: ['closer-tab-counts'] });
+      }
       toast.success('Tarefa atualizada');
     },
     onError: () => toast.error('Erro ao atualizar tarefa'),

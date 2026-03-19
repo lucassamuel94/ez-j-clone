@@ -139,11 +139,11 @@ function renderSectionBody(text: string): React.ReactNode {
 // ─── ScoreGauge ───────────────────────────────────────────────────────────────
 
 const ScoreGauge = ({ score }: { score: number }) => {
-  const color = score >= 70 ? 'text-emerald-600 dark:text-emerald-400' : score >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-destructive';
+  const color = score >= 70 ? 'text-success dark:text-success' : score >= 40 ? 'text-warning dark:text-warning' : 'text-destructive';
   const bg = score >= 70
-    ? 'bg-emerald-100 dark:bg-emerald-500/15 ring-emerald-200 dark:ring-emerald-500/30'
+    ? 'bg-success/15 dark:bg-success/15 ring-success/20 dark:ring-success/30'
     : score >= 40
-    ? 'bg-amber-100 dark:bg-amber-500/15 ring-amber-200 dark:ring-amber-500/30'
+    ? 'bg-warning/15 dark:bg-warning/15 ring-warning/20 dark:ring-warning/30'
     : 'bg-destructive/10 ring-destructive/20';
   return (
     <div className={`flex flex-col items-center justify-center h-20 w-20 rounded-full ring-2 shrink-0 ${bg}`}>
@@ -158,8 +158,8 @@ const ScoreGauge = ({ score }: { score: number }) => {
 function RenderFeedback({ feedback }: { feedback: string }) {
   const sections = parseFeedbackSections(feedback);
   const sectionConfig: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
-    strengths: { icon: <ThumbsUp className="h-4 w-4" />, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-500/5 dark:border-emerald-500/20' },
-    improvements: { icon: <Target className="h-4 w-4" />, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 border-amber-200 dark:bg-amber-500/5 dark:border-amber-500/20' },
+    strengths: { icon: <ThumbsUp className="h-4 w-4" />, color: 'text-success dark:text-success', bg: 'bg-success/5 border-success/20 dark:bg-success/5 dark:border-success/20' },
+    improvements: { icon: <Target className="h-4 w-4" />, color: 'text-warning dark:text-warning', bg: 'bg-warning/5 border-warning/20 dark:bg-warning/5 dark:border-warning/20' },
     recommendations: { icon: <ArrowUpRight className="h-4 w-4" />, color: 'text-primary', bg: 'bg-primary/5 border-primary/20' },
   };
   if (sections) {
@@ -199,8 +199,8 @@ function RenderFeedback({ feedback }: { feedback: string }) {
 const ScoreRow = ({ label, earned, max }: { label: string; earned: number; max: number }) => {
   const pct = Math.round((earned / max) * 100);
   const lost = max - earned;
-  const barColor = pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-destructive';
-  const lostColor = lost === 0 ? 'text-emerald-600 dark:text-emerald-400' : lost <= 2 ? 'text-amber-600 dark:text-amber-400' : 'text-destructive';
+  const barColor = pct >= 80 ? 'bg-success/50' : pct >= 50 ? 'bg-warning/50' : 'bg-destructive';
+  const lostColor = lost === 0 ? 'text-success dark:text-success' : lost <= 2 ? 'text-warning dark:text-warning' : 'text-destructive';
   return (
     <div className="flex items-center gap-3">
       <p className="text-sm text-foreground w-[200px] shrink-0 truncate" title={label}>{label}</p>
@@ -213,7 +213,7 @@ const ScoreRow = ({ label, earned, max }: { label: string; earned: number; max: 
       {lost > 0 ? (
         <Badge variant="outline" className={`text-[10px] h-5 shrink-0 border-current ${lostColor}`}>-{lost} pt{lost > 1 ? 's' : ''}</Badge>
       ) : (
-        <Badge variant="outline" className="text-[10px] h-5 shrink-0 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700">Perfeito</Badge>
+        <Badge variant="outline" className="text-[10px] h-5 shrink-0 text-success dark:text-success border-success/30 dark:border-success/30">Perfeito</Badge>
       )}
     </div>
   );
@@ -249,18 +249,18 @@ export default function CallAnalysisSharePage() {
   const title = isDemo ? 'Análise de Demonstração' : 'Análise de Ligação';
 
   const interestColor = {
-    Alto: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400',
-    Médio: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
+    Alto: 'bg-success/15 text-success dark:bg-success/15 dark:text-success',
+    Médio: 'bg-warning/15 text-warning dark:bg-warning/15 dark:text-warning',
     Baixo: 'bg-destructive/10 text-destructive',
   }[(analysis?.interest_level || '')] || 'bg-muted text-muted-foreground';
 
   const objectionColors: Record<string, string> = {
     Preço: 'bg-destructive/10 text-destructive',
-    Concorrente: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
-    'Falta de urgência': 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
+    Concorrente: 'bg-warning/15 text-warning dark:bg-warning/15 dark:text-warning',
+    'Falta de urgência': 'bg-warning/15 text-warning dark:bg-warning/15 dark:text-warning',
     'Sem orçamento': 'bg-destructive/10 text-destructive',
     'Sem decisor': 'bg-primary/10 text-primary',
-    Timing: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
+    Timing: 'bg-info/15 text-info dark:bg-info/15 dark:text-info',
   };
 
   const speakerLabels = useMemo<Record<string, string>>(() => {
@@ -354,7 +354,7 @@ export default function CallAnalysisSharePage() {
                   <p className="text-xl font-bold">{title}</p>
                   {isDemo && <Badge className="bg-primary/10 text-primary text-[10px]">Demo</Badge>}
                   <Badge
-                    className={`text-[10px] ${analysis.call_score >= 70 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400' : analysis.call_score >= 40 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400' : 'bg-destructive/10 text-destructive'}`}
+                    className={`text-[10px] ${analysis.call_score >= 70 ? 'bg-success/15 text-success dark:bg-success/15 dark:text-success' : analysis.call_score >= 40 ? 'bg-warning/15 text-warning dark:bg-warning/15 dark:text-warning' : 'bg-destructive/10 text-destructive'}`}
                   >
                     {analysis.call_score >= 70 ? 'Bom desempenho' : analysis.call_score >= 40 ? 'Desempenho médio' : 'Precisa melhorar'}
                   </Badge>
@@ -406,7 +406,7 @@ export default function CallAnalysisSharePage() {
                 <CardContent className="pt-4 flex flex-col items-center gap-1">
                   <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Conexão</p>
                   {analysis.connection_effective
-                    ? <CheckCircle2 className="h-7 w-7 text-emerald-500" />
+                    ? <CheckCircle2 className="h-7 w-7 text-success" />
                     : <XCircle className="h-7 w-7 text-destructive" />}
                   <p className="text-xs font-medium">{analysis.connection_effective ? 'Efetiva' : 'Falhou'}</p>
                 </CardContent>
@@ -424,7 +424,7 @@ export default function CallAnalysisSharePage() {
                 <CardContent className="pt-4 flex flex-col items-center gap-1">
                   <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Próx. Passo</p>
                   {analysis.next_step_defined
-                    ? <CheckCircle2 className="h-7 w-7 text-emerald-500" />
+                    ? <CheckCircle2 className="h-7 w-7 text-success" />
                     : <XCircle className="h-7 w-7 text-destructive" />}
                   <p className="text-xs font-medium">{analysis.next_step_defined ? 'Definido' : 'Indefinido'}</p>
                 </CardContent>
@@ -455,7 +455,7 @@ export default function CallAnalysisSharePage() {
                     <span>👤 {analysis.lead_data?.company || 'Lead'}</span>
                     <span>{analysis.lead_talk_percentage?.toFixed(0)}%</span>
                   </div>
-                  <Progress value={analysis.lead_talk_percentage} className="h-2 [&>div]:bg-emerald-500" />
+                  <Progress value={analysis.lead_talk_percentage} className="h-2 [[&>div]:bg-success/50>div]:bg-success" />
                 </div>
                 <Separator />
                 <div className="grid grid-cols-3 gap-3 text-center">
@@ -468,7 +468,7 @@ export default function CallAnalysisSharePage() {
                     <p className="text-[11px] text-muted-foreground">Interrupções</p>
                   </div>
                   <div>
-                    <p className={`text-lg font-bold ${analysis.early_pitch ? 'text-destructive' : 'text-emerald-600'}`}>
+                    <p className={`text-lg font-bold ${analysis.early_pitch ? 'text-destructive' : 'text-success'}`}>
                       {analysis.early_pitch ? 'Sim' : 'Não'}
                     </p>
                     <p className="text-[11px] text-muted-foreground">Pitch antecipado</p>
@@ -482,7 +482,7 @@ export default function CallAnalysisSharePage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-amber-500" /> Objeções Detectadas
+                    <AlertTriangle className="h-4 w-4 text-warning" /> Objeções Detectadas
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -570,11 +570,11 @@ export default function CallAnalysisSharePage() {
                     return (
                       <div
                         key={i}
-                        className={`rounded-lg px-3 py-2 border-l-2 ${isSDR ? 'bg-primary/5 border-primary/30' : 'bg-emerald-500/5 border-emerald-500/30'}`}
+                        className={`rounded-lg px-3 py-2 border-l-2 ${isSDR ? 'bg-primary/5 border-primary/30' : 'bg-success/5 border-success/30'}`}
                       >
                         <div className="flex items-center gap-2 mb-1">
                           <Badge
-                            className={`text-[10px] h-5 px-1.5 ${isSDR ? 'bg-primary/10 text-primary' : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'}`}
+                            className={`text-[10px] h-5 px-1.5 ${isSDR ? 'bg-primary/10 text-primary' : 'bg-success/10 text-success dark:text-success'}`}
                           >
                             {label}
                           </Badge>

@@ -6,6 +6,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { ProjectDetailModal } from "@/components/projects/ProjectDetailModal";
 import { ProjectDeliveryDialog } from "@/components/projects/ProjectDeliveryDialog";
 import { PauseReasonDialog, type TransitionType } from "@/components/projects/PauseReasonDialog";
+import { ComplexityLevelDialog } from "@/components/projects/ComplexityLevelDialog";
 
 // Wrapper that fetches full project data before opening DeliveryDialog
 function DeliveryDialogWithFullData({ open, onOpenChange, projectId, onDelivered }: {
@@ -505,6 +506,10 @@ const PhaseDetailPage = () => {
   const [pauseReasonType, setPauseReasonType] = useState<TransitionType>("pause");
   const [pendingPauseItem, setPendingPauseItem] = useState<{ item: PhaseDetailItem; targetStatus: string } | null>(null);
 
+  // Complexity level dialog state
+  const [complexityDialogOpen, setComplexityDialogOpen] = useState(false);
+  const [pendingComplexityItem, setPendingComplexityItem] = useState<{ item: PhaseDetailItem; targetStatus: string } | null>(null);
+
   const executePhaseStatusUpdate = (item: PhaseDetailItem, targetStatus: string, reason?: string) => {
     setTransitioning(true);
     updatePhaseStatus.mutate(
@@ -523,9 +528,12 @@ const PhaseDetailPage = () => {
           queryClient.invalidateQueries({ queryKey: ["phase-project-counts"] });
           setTransitioning(false);
         },
-        onError: () => {
+        onError: (err: Error) => {
           setTransitioning(false);
-          toast.error("Erro ao mover projeto");
+          if (err.message?.includes('complexidade')) {
+            setPendingComplexityItem({ item, targetStatus });
+            setComplexityDialogOpen(true);
+          }
         },
       },
     );
@@ -1130,6 +1138,21 @@ const PhaseDetailPage = () => {
         onCancel={() => {
           setPauseReasonOpen(false);
           setPendingPauseItem(null);
+        }}
+      />
+
+      <ComplexityLevelDialog
+        open={complexityDialogOpen}
+        onOpenChange={(v) => {
+          setComplexityDialogOpen(v);
+          if (!v) setPendingComplexityItem(null);
+        }}
+        projectId={pendingComplexityItem?.item.project_id || ''}
+        onSaved={() => {
+          if (pendingComplexityItem) {
+            executePhaseStatusUpdate(pendingComplexityItem.item, pendingComplexityItem.targetStatus);
+            setPendingComplexityItem(null);
+          }
         }}
       />
     </AppLayout>

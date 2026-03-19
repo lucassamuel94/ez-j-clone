@@ -5,29 +5,10 @@ import { useAuthSession } from '@/contexts/AuthSessionContext';
 
 export type UserRole = 'admin' | 'manager' | 'sdr' | 'closer' | 'moderator' | 'head_pos_venda' | 'ux_po' | 'dev_chatbot' | 'treinamento' | 'suporte' | 'verificacao_bm' | 'viewer';
 
-const isLovablePreview = typeof window !== 'undefined' &&
-  (window.location.hostname.includes('id-preview--') || window.location.hostname.endsWith('.lovableproject.com'));
-
 export const useUserRole = (enabled: boolean = true) => {
   const { session } = useAuthSession();
   const userId = session?.user?.id;
   const { isSimulating, simulatedRole } = useRoleSimulation();
-
-  // In preview, always return admin
-  if (isLovablePreview) {
-    return {
-      role: 'admin' as UserRole,
-      isLoading: false,
-      isCloser: false,
-      isSdr: false,
-      isAdmin: true,
-      isManager: false,
-      isProjectRole: false,
-      canAccessBoth: true,
-      isRealAdmin: true,
-      isSimulating: false,
-    };
-  }
 
   const { data: realRole, isLoading } = useQuery({
     queryKey: ['userRole', userId],

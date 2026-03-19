@@ -99,7 +99,7 @@ export const SendToCloserDialog = ({
         selectedCloserId,
         new Date().toISOString(),
         selectedStage,
-        isAdminTransfer, // skipSqoValidation
+        true, // skipSqoValidation — SQO é validado pelo Closer ao sair de Demonstração
       );
 
       // Update lead status
@@ -148,7 +148,7 @@ export const SendToCloserDialog = ({
         </DialogHeader>
 
         {isAdminTransfer && (
-          <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+          <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning dark:text-warning">
             <ShieldCheck className="h-4 w-4 shrink-0" />
             <span>
               <strong>Transferência administrativa</strong> — validação SQO dispensada, SDR não receberá crédito de produtividade.

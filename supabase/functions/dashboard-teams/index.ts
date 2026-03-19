@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     // 5. Fetch delivered projects in period for SLA/rework
     const { data: deliveredProjects } = await (admin.from("projects") as any)
       .select("id, overall_status, due_date, delivered_at, ux_po_user_id, dev_user_id, treinamento_user_id")
-      .eq("overall_status", "entregue")
+      .eq("overall_status", "concluido")
       .gte("delivered_at", periodStart.toISOString())
       .is("deleted_at", null)
       .limit(5000);
