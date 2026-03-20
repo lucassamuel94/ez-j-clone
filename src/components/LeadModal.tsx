@@ -372,7 +372,7 @@ export const LeadModal = ({
                   <TooltipContent side="bottom"><span className="text-xs">Enviar para Closer</span></TooltipContent>
                 </Tooltip>
               )}
-              {mode === "sdr" && lead.email && (
+              {(mode === "sdr" || mode === "closer") && lead.email && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button type="button" onClick={() => actions.setEnrollSequenceOpen(true)} className="h-6 w-6 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">

@@ -25,6 +25,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   FileSpreadsheet,
   Loader2,
   FileDown,
@@ -53,7 +60,7 @@ interface ImportJob {
   duplicate_details: any[] | null;
 }
 
-const PAGE_SIZE = 10;
+const DEFAULT_PAGE_SIZE = 20;
 
 const getAllocationLabel = (type: string) => {
   const map: Record<string, string> = {
@@ -70,21 +77,22 @@ export default function ImportHistoryPage() {
   const [jobs, setJobs] = useState<ImportJob[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [totalCount, setTotalCount] = useState(0);
   const [selectedJob, setSelectedJob] = useState<ImportJob | null>(null);
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   const fetchJobs = useCallback(async () => {
     setIsLoading(true);
-    const from = page * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
     const { count } = await supabase.from('import_jobs').select('*', { count: 'exact', head: true }) as any;
     const { data } = await supabase.from('import_jobs').select('*').order('created_at', { ascending: false }).range(from, to) as any;
     if (data) setJobs(data);
     if (count != null) setTotalCount(count);
     setIsLoading(false);
-  }, [page]);
+  }, [page, pageSize]);
 
   useEffect(() => { fetchJobs(); }, [fetchJobs]);
 
@@ -219,14 +227,30 @@ export default function ImportHistoryPage() {
                   </TableBody>
                 </TableProvider>
 
-                {totalPages > 1 && (
+                {totalCount > 0 && (
                   <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-                    <p className="text-xs text-muted-foreground">Página {page + 1} de {totalPages} · {totalCount} importações</p>
+                    <div className="flex items-center gap-3">
+                      <p className="text-xs text-muted-foreground">
+                        Mostrando {Math.min(page * pageSize + 1, totalCount)}–{Math.min((page + 1) * pageSize, totalCount)} de {totalCount}
+                      </p>
+                      <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(0); }}>
+                        <SelectTrigger className="h-7 w-[72px] text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="20">20</SelectItem>
+                          <SelectItem value="50">50</SelectItem>
+                          <SelectItem value="100">100</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <span className="text-xs text-muted-foreground">por página</span>
+                    </div>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page <= 0} onClick={() => setPage(p => p - 1)}>
                         <ChevronLeft className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+                      <span className="text-xs font-medium px-2">{page + 1} / {totalPages}</span>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
                         <ChevronRight className="h-4 w-4" />
                       </Button>
                     </div>

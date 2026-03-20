@@ -312,18 +312,22 @@ export default function CloserPartnersPage() {
   return (
     <AppLayout>
       <div className="flex flex-col h-full">
-        <PageHeader
-          title="Parceiros Comerciais"
-          subtitle="Gerencie seus parceiros e indicações"
-          icon={<Handshake className="h-5 w-5" />}
-          action={
-            !selectedPartner ? (
-              <Button size="sm" className="gap-1.5" onClick={() => setFormOpen(true)}>
-                <Plus className="h-4 w-4" />Novo Parceiro
-              </Button>
-            ) : undefined
-          }
-        />
+        <div className="sticky top-0 z-30 border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="px-3 sm:px-4 py-3">
+            <PageHeader
+              title="Parceiros Comerciais"
+              subtitle="Gerencie seus parceiros e indicações"
+              icon={<Handshake className="h-5 w-5" />}
+              actions={
+                !selectedPartner ? (
+                  <Button size="sm" className="gap-1.5" onClick={() => setFormOpen(true)}>
+                    <Plus className="h-4 w-4" />Novo Parceiro
+                  </Button>
+                ) : undefined
+              }
+            />
+          </div>
+        </div>
 
         <div className="flex-1 overflow-auto p-6 space-y-4">
           {selectedPartner ? (

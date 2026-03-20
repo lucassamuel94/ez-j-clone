@@ -6,7 +6,7 @@ export interface ClientProposal {
   company_name: string | null;
   status: string;
   total_monthly: number | null;
-  total_setup: number | null;
+  setup_total: number | null;
   view_count: number;
   created_at: string;
   opportunity_id: string | null;
@@ -28,7 +28,7 @@ export function useClientProposals(accountId: string | null) {
 
       const { data, error } = await supabase
         .from('proposals')
-        .select('id, company_name, status, total_monthly, total_setup, view_count, created_at, opportunity_id')
+        .select('id, company_name, status, total_monthly, setup_total, view_count, created_at, opportunity_id')
         .in('opportunity_id', oppIds)
         .order('created_at', { ascending: false });
 

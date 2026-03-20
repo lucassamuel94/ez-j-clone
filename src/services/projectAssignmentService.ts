@@ -5,6 +5,8 @@ export interface AutoAssignResult {
   ux_po_user_id: string | null;
   dev_user_id: string | null;
   treinamento_user_id: string | null;
+  verificacao_bm_user_id: string | null;
+  go_live_user_id: string | null;
 }
 
 /**
@@ -26,5 +28,7 @@ export async function resolveAutoAssignments(): Promise<AutoAssignResult> {
     ux_po_user_id: result.ux_po_user_id ?? null,
     dev_user_id: result.dev_user_id ?? null,
     treinamento_user_id: result.treinamento_user_id ?? null,
+    verificacao_bm_user_id: result.verificacao_bm_user_id ?? null,
+    go_live_user_id: result.go_live_user_id ?? null,
   };
 }

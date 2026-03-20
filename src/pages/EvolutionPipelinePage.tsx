@@ -60,14 +60,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from '@/components/ui/pagination';
-import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -90,6 +82,8 @@ import {
   Trash2,
   Download,
   TrendingUp,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { AppLayout } from '@/components/AppLayout';
@@ -483,10 +477,7 @@ const EvolutionPipelinePage = () => {
                       <TooltipContent>Exportar para Excel</TooltipContent>
                     </Tooltip>
                   )}
-                  <Button size="sm" className="h-8 text-xs font-medium" onClick={() => setNewDealDialogOpen(true)}>
-                    <Plus className="h-3.5 w-3.5 mr-1.5" />
-                    <span className="hidden sm:inline">Nova Evolução</span>
-                  </Button>
+                  {/* "Nova Evolução" removido — evoluções devem ser criadas a partir de "Meus Clientes" */}
                 </div>
               }
               toolbar={
@@ -620,43 +611,30 @@ const EvolutionPipelinePage = () => {
 
                 {totalResults > 0 && (
                   <div className="flex items-center justify-between mt-4">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span>Mostrar</span>
+                    <div className="flex items-center gap-3">
+                      <p className="text-xs text-muted-foreground">
+                        Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, totalResults)}–{Math.min(currentPage * itemsPerPage, totalResults)} de {totalResults}
+                      </p>
                       <Select value={itemsPerPage.toString()} onValueChange={(v) => { setItemsPerPage(Number(v)); setCurrentPage(1); localStorage.setItem('evo_items_per_page', v); }}>
-                        <SelectTrigger className="w-20 h-8 bg-background">
+                        <SelectTrigger className="h-7 w-[72px] text-xs">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent className="bg-popover">
-                          <SelectItem value="10">10</SelectItem>
+                        <SelectContent>
                           <SelectItem value="20">20</SelectItem>
                           <SelectItem value="50">50</SelectItem>
+                          <SelectItem value="100">100</SelectItem>
                         </SelectContent>
                       </Select>
-                      <span>por página</span>
+                      <span className="text-xs text-muted-foreground">por página</span>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="text-sm text-muted-foreground">
-                        Mostrando {(currentPage - 1) * itemsPerPage + 1} a {Math.min(currentPage * itemsPerPage, totalResults)} de {totalResults}
-                      </span>
-                      {totalPages > 1 && (
-                        <Pagination>
-                          <PaginationContent>
-                            <PaginationItem>
-                              <PaginationPrevious onClick={() => setCurrentPage(p => Math.max(1, p - 1))} />
-                            </PaginationItem>
-                            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map(page => (
-                              <PaginationItem key={page}>
-                                <PaginationLink isActive={page === currentPage} onClick={() => setCurrentPage(page)}>
-                                  {page}
-                                </PaginationLink>
-                              </PaginationItem>
-                            ))}
-                            <PaginationItem>
-                              <PaginationNext onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} />
-                            </PaginationItem>
-                          </PaginationContent>
-                        </Pagination>
-                      )}
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)}>
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <span className="text-xs font-medium px-2">{currentPage} / {totalPages}</span>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)}>
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 )}

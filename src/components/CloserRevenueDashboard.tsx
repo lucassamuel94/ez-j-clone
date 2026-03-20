@@ -131,13 +131,17 @@ export const CloserRevenueDashboard = ({ opportunities, onOpenLead, selectedClos
         const chunk = allOppIds.slice(i, i + 500);
         const { data: proposals } = await supabase
           .from('proposals')
-          .select('opportunity_id, setup_total, total_monthly, status')
+          .select('opportunity_id, setup_total, total_monthly, status, created_at')
           .in('opportunity_id', chunk)
+          .order('created_at', { ascending: false })
           .limit(5000);
         (proposals || []).forEach(p => {
           if (p.opportunity_id) {
-            setup[p.opportunity_id] = (setup[p.opportunity_id] || 0) + Number(p.setup_total || 0);
-            // MRR: pegar o maior total_monthly entre todas as propostas (independente do status)
+            // Setup: use only the LATEST proposal per opportunity (first seen = most recent due to DESC order)
+            if (!(p.opportunity_id in setup)) {
+              setup[p.opportunity_id] = Number(p.setup_total || 0);
+            }
+            // MRR: keep the highest total_monthly across all proposals
             const monthlyVal = Number(p.total_monthly || 0);
             if (monthlyVal > (mrr[p.opportunity_id] || 0)) {
               mrr[p.opportunity_id] = monthlyVal;
@@ -165,7 +169,9 @@ export const CloserRevenueDashboard = ({ opportunities, onOpenLead, selectedClos
   }, [filteredOpps, monthStart]);
 
   const wonOpps = useMemo(() => {
-    return filteredOpps.filter(o => o.stage === 'Ganho' && o.won_at && new Date(o.won_at) >= new Date(monthStart));
+    return filteredOpps.filter(o =>
+      o.stage === 'Ganho' && o.won_at && new Date(o.won_at) >= new Date(monthStart)
+    );
   }, [filteredOpps, monthStart]);
 
   // Use proposal setup_total when available (same logic as Ranking)
@@ -204,18 +210,50 @@ export const CloserRevenueDashboard = ({ opportunities, onOpenLead, selectedClos
   const getOppName = (o: CloserOpportunity) =>
     o.lead_razao_social || o.lead_nome_fantasia || o.lead_company || o.lead_name || '—';
 
-  const buildItems = (opps: CloserOpportunity[], showCloser = false): RevenueDetailItem[] =>
-    opps.map(o => ({
-      id: o.id,
-      name: getOppName(o),
-      closerName: showCloser ? (o.closer_name || undefined) : undefined,
-      setup: getOppValue(o),
-      mrr: getOppMrr(o),
-      stage: o.stage,
-    })).sort((a, b) => b.setup - a.setup);
+  const buildItems = (opps: CloserOpportunity[], showCloser = false, extraProposalMap?: Record<string, { setup: number; mrr: number }>): RevenueDetailItem[] =>
+    opps.map(o => {
+      const extra = extraProposalMap?.[o.id];
+      const setup = extra ? (extra.setup > 0 ? extra.setup : (Number(o.deal_value) || 0)) : getOppValue(o);
+      const mrr = extra ? extra.mrr : getOppMrr(o);
+      return {
+        id: o.id,
+        name: getOppName(o),
+        closerName: showCloser ? (o.closer_name || undefined) : undefined,
+        setup,
+        mrr,
+        stage: o.stage,
+      };
+    }).sort((a, b) => b.setup - a.setup);
 
   const openDetail = (title: string, opps: CloserOpportunity[], showCloser = false) => {
     setDetailModal({ open: true, title, items: buildItems(opps, showCloser) });
+  };
+
+  // Fetch proposals directly from DB for won opps (ensures correct values even if not in pipeline cache)
+  const openDetailWithFetch = async (title: string, opps: CloserOpportunity[], showCloser = false) => {
+    const oppIds = opps.map(o => o.id).filter(Boolean);
+    if (oppIds.length === 0) {
+      setDetailModal({ open: true, title, items: [] });
+      return;
+    }
+    const { data: proposals } = await supabase
+      .from('proposals')
+      .select('opportunity_id, setup_total, total_monthly, created_at')
+      .in('opportunity_id', oppIds.slice(0, 500))
+      .order('created_at', { ascending: false })
+      .limit(5000);
+
+    const extraMap: Record<string, { setup: number; mrr: number }> = {};
+    (proposals || []).forEach((p: any) => {
+      if (p.opportunity_id && !(p.opportunity_id in extraMap)) {
+        extraMap[p.opportunity_id] = {
+          setup: Number(p.setup_total || 0),
+          mrr: Number(p.total_monthly || 0),
+        };
+      }
+    });
+
+    setDetailModal({ open: true, title, items: buildItems(opps, showCloser, extraMap) });
   };
 
   const handleDetailItemClick = (oppId: string) => {
@@ -297,9 +335,12 @@ export const CloserRevenueDashboard = ({ opportunities, onOpenLead, selectedClos
   const hasAlerts = stuckDeals.length > 0 || noNextAction > 0 || overdueDeals > 0;
 
   // Team-wide opps (unfiltered) for drill-down
+  // Team won opps include evolutions (for revenue drill-down)
   const teamWonOpps = useMemo(() => {
     const monthStartDate = new Date(monthStart);
-    return opportunities.filter(o => o.stage === 'Ganho' && o.won_at && new Date(o.won_at) >= monthStartDate);
+    return opportunities.filter(o =>
+      o.stage === 'Ganho' && o.won_at && new Date(o.won_at) >= monthStartDate
+    );
   }, [opportunities, monthStart]);
 
   const teamAllActiveOpps = useMemo(() => opportunities.filter(o => o.stage !== 'Ganho' && o.stage !== 'Perdido'), [opportunities]);
@@ -369,7 +410,7 @@ export const CloserRevenueDashboard = ({ opportunities, onOpenLead, selectedClos
                           <span className="text-muted-foreground/40">ⓘ</span>
                         </p>
                       </TooltipTrigger>
-                      <TooltipContent className="max-w-[220px]">
+                      <TooltipContent side="bottom">
                         <p className="text-xs">{m.tooltip}</p>
                       </TooltipContent>
                     </Tooltip>
@@ -452,7 +493,7 @@ export const CloserRevenueDashboard = ({ opportunities, onOpenLead, selectedClos
               <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Resultado da Equipe — Mês Atual</span>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <button onClick={() => openDetail('Setup Fechado — Equipe', teamWonOpps, true)} className="text-center p-2 rounded-lg bg-[#f1f1f8] dark:bg-muted/30 border border-border/50 hover:shadow-sm hover:-translate-y-0.5 transition-all cursor-pointer">
+              <button onClick={() => openDetailWithFetch('Setup Fechado — Equipe', teamWonOpps, true)} className="text-center p-2 rounded-lg bg-[#f1f1f8] dark:bg-muted/30 border border-border/50 hover:shadow-sm hover:-translate-y-0.5 transition-all cursor-pointer">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Setup Fechado</p>
                 <p className="text-lg font-bold text-foreground tabular-nums mt-0.5">{formatCurrency(teamTotals.teamRevenue)}</p>
               </button>
@@ -465,7 +506,7 @@ export const CloserRevenueDashboard = ({ opportunities, onOpenLead, selectedClos
                 <p className="text-lg font-bold text-foreground tabular-nums mt-0.5">{formatCurrency(teamTotals.teamPipeline)}</p>
                 <p className="text-[10px] text-muted-foreground">{teamTotals.activeCount} deals</p>
               </div>
-              <button onClick={() => openDetail('Contratos Pendentes — Equipe', teamPendingContractOpps, true)} className="text-center p-2 rounded-lg bg-[#f1f1f8] dark:bg-muted/30 border border-border/50 hover:shadow-sm hover:-translate-y-0.5 transition-all cursor-pointer">
+              <button onClick={() => openDetailWithFetch('Contratos Pendentes — Equipe', teamPendingContractOpps, true)} className="text-center p-2 rounded-lg bg-[#f1f1f8] dark:bg-muted/30 border border-border/50 hover:shadow-sm hover:-translate-y-0.5 transition-all cursor-pointer">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Contratos Pendentes</p>
                 <p className="text-lg font-bold text-[hsl(var(--chart-2))] tabular-nums mt-0.5">{formatCurrency(teamTotals.teamPendingContracts)}</p>
                 <p className="text-[10px] text-muted-foreground">{teamTotals.pendingCount} deals</p>
@@ -509,7 +550,7 @@ export const CloserRevenueDashboard = ({ opportunities, onOpenLead, selectedClos
                   <button
                     onClick={() => {
                       const closerWonOpps = opportunities.filter(o => o.assigned_to_user_id === r.id && o.stage === 'Ganho' && o.won_at && new Date(o.won_at) >= new Date(monthStart));
-                      openDetail(`Setup Fechado — ${r.name}`, closerWonOpps);
+                      openDetailWithFetch(`Setup Fechado — ${r.name}`, closerWonOpps);
                     }}
                     className="font-medium tabular-nums text-foreground text-right hover:text-primary transition-colors cursor-pointer"
                   >

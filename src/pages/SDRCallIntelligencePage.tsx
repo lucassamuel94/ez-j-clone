@@ -19,7 +19,12 @@ import {
   Users, ArrowUp, ArrowDown, Minus, Presentation,
   ChevronLeft, ChevronRight, Trophy, Upload, Search, Loader2
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
+
+const scoreChartConfig = {
+  score: { label: 'Score', color: 'hsl(var(--primary))' },
+} satisfies ChartConfig;
 import { ExecDatePeriod, getExecDateRange } from '@/pages/SDRIndicadoresPage';
 import { formatDateBR, formatTimeBR } from '@/utils/dateFormat';
 import { cn } from '@/lib/utils';
@@ -237,18 +242,15 @@ const CallIntelligenceView = ({ context, uploadSlot }: CallIntelligenceViewProps
             </CardHeader>
             <CardContent className="h-64">
               {chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
+                <ChartContainer config={scoreChartConfig} className="h-full [&_.recharts-wrapper]:!aspect-auto">
                   <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="week" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                    <Tooltip
-                      contentStyle={{ borderRadius: 12, border: '1px solid hsl(var(--border))', background: 'hsl(var(--popover))' }}
-                      formatter={(v: number, name: string) => [v, name === 'score' ? 'Score' : isDemo ? 'Demos' : 'Ligações']}
-                    />
-                    <Line type="monotone" dataKey="score" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Line type="monotone" dataKey="score" stroke="var(--color-score)" strokeWidth={2} dot={{ r: 3 }} />
                   </LineChart>
-                </ResponsiveContainer>
+                </ChartContainer>
               ) : (
                 <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
                   Sem dados no período
@@ -421,11 +423,13 @@ const CallIntelligenceView = ({ context, uploadSlot }: CallIntelligenceViewProps
             </ScrollArea>
             {/* Pagination bar */}
             {allAnalyses.length > 0 && (
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-4 py-3 border-t border-border">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>Linhas por página</span>
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                <div className="flex items-center gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    Mostrando {showFrom}–{showTo} de {allAnalyses.length}
+                  </p>
                   <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
-                    <SelectTrigger className="w-[70px] h-7 text-xs">
+                    <SelectTrigger className="h-7 w-[72px] text-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -434,17 +438,15 @@ const CallIntelligenceView = ({ context, uploadSlot }: CallIntelligenceViewProps
                       <SelectItem value="100">100</SelectItem>
                     </SelectContent>
                   </Select>
+                  <span className="text-xs text-muted-foreground">por página</span>
                 </div>
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  Mostrando {showFrom}–{showTo} de {allAnalyses.length}
-                </span>
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-                    <ChevronLeft className="h-3.5 w-3.5" />
+                    <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <span className="text-xs tabular-nums text-muted-foreground px-1">{page} / {totalPages}</span>
+                  <span className="text-xs font-medium px-2">{page} / {totalPages}</span>
                   <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
-                    <ChevronRight className="h-3.5 w-3.5" />
+                    <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
               </div>

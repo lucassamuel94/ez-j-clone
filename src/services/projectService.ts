@@ -35,6 +35,9 @@ const createCompanionBMProject = async (params: {
   const now = new Date();
   const dueDate = addBusinessDays(now, 10);
 
+  // Auto-assign roles for the companion project
+  const assignments = await resolveAutoAssignments();
+
   const { data: project, error: projectError } = await supabase
     .from('projects')
     .insert({
@@ -51,7 +54,12 @@ const createCompanionBMProject = async (params: {
       version: params.version,
       broker: params.broker,
       api_type: 'Oficial',
-      head_user_id: params.userId,
+      head_user_id: assignments.head_user_id || params.userId,
+      ux_po_user_id: assignments.ux_po_user_id,
+      dev_user_id: assignments.dev_user_id,
+      treinamento_user_id: assignments.treinamento_user_id,
+      verificacao_bm_user_id: assignments.verificacao_bm_user_id,
+      go_live_user_id: assignments.go_live_user_id,
       current_phase: 'verificacao_bm',
       start_date: now.toISOString().split('T')[0],
       due_date: dueDate.toISOString().split('T')[0],
@@ -82,6 +90,7 @@ const createCompanionBMProject = async (params: {
       status: 'BACKLOG',
       sort_order: 0,
       is_active: true,
+      assigned_user_id: assignments.verificacao_bm_user_id || assignments.head_user_id || params.userId,
       bm_data: {
         cnpj: params.cnpj,
         razao_social: params.companyName,
@@ -142,6 +151,8 @@ export const createProjectFromChecklist = async (input: CreateProjectInput): Pro
     ux_po_user_id: assignments.ux_po_user_id,
     dev_user_id: assignments.dev_user_id,
     treinamento_user_id: assignments.treinamento_user_id,
+    verificacao_bm_user_id: assignments.verificacao_bm_user_id,
+    go_live_user_id: assignments.go_live_user_id,
     closer_name: input.closer_name || null,
     sdr_name: input.sdr_name || null,
     start_date: now.toISOString().split('T')[0],
@@ -202,7 +213,8 @@ export const createProjectFromChecklist = async (input: CreateProjectInput): Pro
     ux_po: assignments.ux_po_user_id,
     dev_chatbot: assignments.dev_user_id,
     treinamento: assignments.treinamento_user_id,
-    verificacao_bm: assignments.head_user_id,
+    verificacao_bm: assignments.verificacao_bm_user_id || assignments.head_user_id,
+    go_live_assistido: assignments.go_live_user_id || assignments.head_user_id,
   };
   const firstPhaseAssignee = firstPhaseAssigneeMap[phases[0]] || assignments.head_user_id || user.id;
 
@@ -745,8 +757,8 @@ export const updatePhaseStatus = async (
         await advanceEvolutionToAICuration(projectId, currentSortOrder);
         return;
       } else {
-        // Sem IA → finalizar projeto como concluído
-        await finalizeEvolutionFromCuradoria(projectId, user.id);
+        // Sem IA → finalizar projeto como concluído direto do dev_chatbot
+        await finalizeProjectAsDelivered(projectId, user.id, 'dev_chatbot', 'evolucao');
         return;
       }
     }
@@ -824,8 +836,8 @@ export const updatePhaseStatus = async (
           ativacao: projectData?.ativacao_user_id || headFallback,
           automacao: projectData?.dev_user_id || headFallback,
           curadoria_ia: projectData?.dev_user_id || headFallback,
-          go_live_assistido: headFallback,
-          verificacao_bm: headFallback,
+          go_live_assistido: (projectData as any)?.go_live_user_id || headFallback,
+          verificacao_bm: (projectData as any)?.verificacao_bm_user_id || headFallback,
         };
         const autoAssignUserId = phaseUserMap[nextPhaseName] ?? null;
 
@@ -984,8 +996,8 @@ export const forceMovePhaseTo = async (
       ativacao: projectData.ativacao_user_id || headFallback,
       automacao: projectData.dev_user_id || headFallback,
       curadoria_ia: projectData.dev_user_id || headFallback,
-      go_live_assistido: headFallback,
-      verificacao_bm: headFallback,
+      go_live_assistido: (projectData as any)?.go_live_user_id || headFallback,
+      verificacao_bm: (projectData as any)?.verificacao_bm_user_id || headFallback,
     };
 
     const { error: forcePhaseError } = await supabase.from('project_phases').insert({

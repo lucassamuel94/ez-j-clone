@@ -23,6 +23,7 @@ import { PageHeader } from '@/components/PageHeader';
 
 const AdminPage = () => {
   const {
+    isAdmin,
     isCheckingAdmin,
     isCheckingManager,
     users,
@@ -31,6 +32,7 @@ const AdminPage = () => {
     invitations,
     isLoadingInvitations,
     toggleUserActive,
+    toggleExcludeFromAutoAssign,
     updateUserRole,
     updateUserName,
     createInvitation,
@@ -206,9 +208,11 @@ const AdminPage = () => {
                     users={users}
                     roles={availableRoles}
                     onToggleActive={(userId, active) => toggleUserActive.mutate({ userId, active })}
+                    onToggleExcludeAutoAssign={(userId, exclude) => toggleExcludeFromAutoAssign.mutate({ userId, exclude })}
                     onUpdateRole={(userId, roleId) => updateUserRole.mutate({ userId, roleId })}
                     onUpdateName={(userId, name) => updateUserName.mutate({ userId, name })}
                     isUpdating={toggleUserActive.isPending || updateUserRole.isPending || updateUserName.isPending}
+                    isAdmin={isAdmin}
                   />
                 )}
               </CardContent>

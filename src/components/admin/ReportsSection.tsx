@@ -2,11 +2,16 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAdminReports } from '@/hooks/useAdminReports';
 import { Card, CardContent } from '@/components/ui/card';
+import { useMemo } from 'react';
 import {
   Users,
   TrendingUp,
   AlertCircle,
   CheckCircle,
+  CalendarCheck,
+  CalendarCheck2,
+  Target,
+  BarChart3,
   Loader2,
   Info,
 } from 'lucide-react';
@@ -38,6 +43,133 @@ interface ReportsKPICardsProps {
 export const ReportsKPICards = ({ selectedSdrId, dateRange }: ReportsKPICardsProps) => {
   const { metrics, isLoadingMetrics, error } = useAdminReports({ selectedSdrId, dateRange });
 
+  // SDR meeting/SQO metrics
+  const { data: sdrUserIds = [] } = useQuery({
+    queryKey: ['sdr-ids-report-kpi'],
+    queryFn: async () => {
+      const { data } = await supabase.from('user_roles').select('user_id').eq('role', 'sdr');
+      return (data || []).map(r => r.user_id);
+    },
+    staleTime: 300_000,
+  });
+
+  const { data: meetingSqoMetrics } = useQuery({
+    queryKey: ['sdr-meeting-sqo-kpi', selectedSdrId, sdrUserIds, dateRange?.start, dateRange?.end],
+    queryFn: async () => {
+      const filterStart = dateRange?.start || new Date().toISOString();
+      const filterEnd = dateRange?.end || new Date().toISOString();
+      const isAll = !selectedSdrId;
+
+      // Total agendado (SQL) — meetings created in period
+      let meetingsQ = supabase.from('meetings').select('id, lead_id')
+        .gte('created_at', filterStart)
+        .lte('created_at', filterEnd);
+      if (!isAll) {
+        meetingsQ = meetingsQ.eq('user_id', selectedSdrId);
+      } else if (sdrUserIds.length > 0) {
+        meetingsQ = meetingsQ.in('user_id', sdrUserIds);
+      }
+      const { data: meetings } = await meetingsQ;
+      const uniqueMeetingLeads = new Set((meetings || []).map(m => m.lead_id));
+      const agendados = uniqueMeetingLeads.size;
+
+      // Reuniões confirmadas — activity logs with "confirmou presença"
+      let confirmedQ = supabase.from('lead_activity_logs').select('id, lead_id')
+        .eq('action_type', 'opportunity_created')
+        .ilike('description', '%confirmou presença%')
+        .gte('created_at', filterStart)
+        .lte('created_at', filterEnd);
+      if (!isAll) {
+        confirmedQ = confirmedQ.eq('user_id', selectedSdrId);
+      } else if (sdrUserIds.length > 0) {
+        confirmedQ = confirmedQ.in('user_id', sdrUserIds);
+      }
+      const { data: confirmedLogs } = await confirmedQ;
+      const uniqueConfirmed = new Set((confirmedLogs || []).map(l => l.lead_id));
+      const confirmados = uniqueConfirmed.size;
+
+      // Promovidos SQO — leads with sqo_approved_at in period
+      let sqoQ = supabase.from('leads').select('id')
+        .not('sqo_approved_at', 'is', null)
+        .gte('sqo_approved_at', filterStart)
+        .lte('sqo_approved_at', filterEnd);
+      if (!isAll) {
+        sqoQ = sqoQ.eq('owner_user_id', selectedSdrId);
+      } else if (sdrUserIds.length > 0) {
+        sqoQ = sqoQ.in('owner_user_id', sdrUserIds);
+      }
+      const { data: sqoLeads } = await sqoQ;
+      const promotedSQO = sqoLeads?.length || 0;
+
+      return { agendados, confirmados, promotedSQO };
+    },
+    enabled: sdrUserIds.length > 0 || !!selectedSdrId,
+    staleTime: 30_000,
+  });
+
+  // SDR monthly SQO goal
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+  const { data: sdrGoalValue = 0 } = useQuery({
+    queryKey: ['sdr-sqo-goal-admin', currentMonth, currentYear, selectedSdrId],
+    queryFn: async () => {
+      if (selectedSdrId) {
+        const { data: individual } = await supabase
+          .from('goals')
+          .select('sqo_percentage')
+          .eq('target_user_id', selectedSdrId)
+          .eq('period_month', currentMonth)
+          .eq('period_year', currentYear)
+          .eq('goal_type', 'sdr')
+          .maybeSingle();
+        if (individual) return Math.round(Number(individual.sqo_percentage) || 0);
+      }
+      // Sum all individual SDR goals
+      const { data: individualGoals } = await supabase
+        .from('goals')
+        .select('sqo_percentage, target_user_id')
+        .not('target_user_id', 'is', null)
+        .eq('period_month', currentMonth)
+        .eq('period_year', currentYear)
+        .eq('goal_type', 'sdr');
+
+      if (individualGoals && individualGoals.length > 0) {
+        return individualGoals.reduce((s, g) => s + Math.round(Number(g.sqo_percentage) || 0), 0);
+      }
+
+      // Fallback: team goal × SDR count
+      const { data: teamGoal } = await supabase
+        .from('goals')
+        .select('sqo_percentage')
+        .is('target_user_id', null)
+        .eq('period_month', currentMonth)
+        .eq('period_year', currentYear)
+        .eq('goal_type', 'sdr')
+        .maybeSingle();
+
+      if (teamGoal) {
+        const sdrCount = sdrUserIds.length || 1;
+        return Math.round(Number(teamGoal.sqo_percentage) || 0) * sdrCount;
+      }
+      return 0;
+    },
+    staleTime: 60_000,
+  });
+
+  const totalSQO = meetingSqoMetrics?.promotedSQO || 0;
+  const faltaParaMetaSQO = Math.max(0, sdrGoalValue - totalSQO);
+
+  const projecaoSQO = useMemo(() => {
+    const today = new Date();
+    const daysPassed = today.getDate();
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const daysRemaining = daysInMonth - daysPassed;
+    if (daysPassed === 0) return 0;
+    const dailyAvg = totalSQO / daysPassed;
+    return Math.round(totalSQO + (dailyAvg * daysRemaining));
+  }, [totalSQO]);
+
   if (isLoadingMetrics) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -59,6 +191,100 @@ export const ReportsKPICards = ({ selectedSdrId, dateRange }: ReportsKPICardsPro
   return (
     <TooltipProvider delayDuration={300}>
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardContent className="p-4">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-2 mb-1 cursor-help">
+                  <CalendarCheck className="h-4 w-4 text-primary" />
+                  <span className="text-xs text-muted-foreground">Total Agendado (SQL)</span>
+                  <Info className="h-3 w-3 text-muted-foreground/50" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p className="text-xs">Leads únicos com reunião agendada no período</p>
+              </TooltipContent>
+            </Tooltip>
+            <p className="text-2xl font-bold text-foreground">{fmt(meetingSqoMetrics?.agendados || 0)}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-2 mb-1 cursor-help">
+                  <CalendarCheck2 className="h-4 w-4 text-[hsl(var(--chart-3))]" />
+                  <span className="text-xs text-muted-foreground">Reuniões Confirmadas</span>
+                  <Info className="h-3 w-3 text-muted-foreground/50" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p className="text-xs">Leads com presença confirmada pelo SDR no período</p>
+              </TooltipContent>
+            </Tooltip>
+            <p className="text-2xl font-bold text-foreground">{fmt(meetingSqoMetrics?.confirmados || 0)}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-2 mb-1 cursor-help">
+                  <Target className="h-4 w-4 text-[hsl(var(--chart-4))]" />
+                  <span className="text-xs text-muted-foreground">Promovidos SQO</span>
+                  <Info className="h-3 w-3 text-muted-foreground/50" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p className="text-xs">Leads que passaram na validação SQO (5 critérios) no período</p>
+              </TooltipContent>
+            </Tooltip>
+            <p className="text-2xl font-bold text-foreground">{fmt(meetingSqoMetrics?.promotedSQO || 0)}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-2 mb-1 cursor-help">
+                  <Target className="h-4 w-4 text-[hsl(var(--chart-2))]" />
+                  <span className="text-xs text-muted-foreground">Falta para a Meta (SQO)</span>
+                  <Info className="h-3 w-3 text-muted-foreground/50" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p className="text-xs">Total de SQO que falta para bater a meta mensal</p>
+              </TooltipContent>
+            </Tooltip>
+            <p className={cn('text-2xl font-bold font-display', faltaParaMetaSQO > 0 ? 'text-[hsl(var(--chart-2))]' : 'text-[hsl(var(--chart-3))]')}>
+              {fmt(faltaParaMetaSQO)}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-2 mb-1 cursor-help">
+                  <BarChart3 className="h-4 w-4 text-primary" />
+                  <span className="text-xs text-muted-foreground">Projeção</span>
+                  <Info className="h-3 w-3 text-muted-foreground/50" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p className="text-xs">SQO no período ÷ dias trabalhados × dias totais do mês</p>
+              </TooltipContent>
+            </Tooltip>
+            <p className={cn('text-2xl font-bold font-display', projecaoSQO >= sdrGoalValue && sdrGoalValue > 0 ? 'text-[hsl(var(--chart-3))]' : 'text-foreground')}>
+              {fmt(projecaoSQO)}
+            </p>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardContent className="p-4">
             <Tooltip>

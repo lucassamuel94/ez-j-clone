@@ -33,10 +33,8 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
 } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import {
   CalendarDays,
   RefreshCw,
@@ -1018,19 +1016,24 @@ export function ReportsMarketingSection() {
               {chartData.length === 0 ? (
                 <p className="text-center text-muted-foreground py-10">Sem dados para o período</p>
               ) : (
-                <ResponsiveContainer width="100%" height={360}>
+                <ChartContainer config={{
+                  Leads: { label: 'Leads', color: 'hsl(var(--primary))' },
+                  'Reunião': { label: 'Reunião', color: 'hsl(var(--chart-2))' },
+                  SQO: { label: 'SQO', color: 'hsl(var(--chart-3))' },
+                  Ganho: { label: 'Ganho', color: 'hsl(var(--chart-4))' },
+                } satisfies ChartConfig} className="h-[360px] [&_.recharts-wrapper]:!aspect-auto">
                   <BarChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="source" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="Leads" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Reunião" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="SQO" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Ganho" fill="hsl(var(--chart-4))" radius={[4, 4, 0, 0]} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <ChartLegend content={<ChartLegendContent />} />
+                    <Bar dataKey="Leads" fill="var(--color-Leads)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Reunião" fill="var(--color-Reunião)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="SQO" fill="var(--color-SQO)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Ganho" fill="var(--color-Ganho)" radius={[4, 4, 0, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
+                </ChartContainer>
               )}
             </CardContent>
           </Card>

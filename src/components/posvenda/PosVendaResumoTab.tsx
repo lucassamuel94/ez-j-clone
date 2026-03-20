@@ -1,8 +1,8 @@
 import { memo } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend } from
-'recharts';
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  PieChart, Pie, Cell } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import PosVendaKpiCard from './PosVendaKpiCard';
 import PosVendaChartCard from './PosVendaChartCard';
 import PosVendaHorizontalBars from './PosVendaHorizontalBars';
@@ -11,6 +11,15 @@ import { Progress } from '@/components/ui/progress';
 import type { PosVendaKpi, BarEntry, DeliveryVsDelay, RiskProject } from '@/hooks/usePosVendaDashboard';
 
 const DONUT_COLORS = ['hsl(var(--success))', 'hsl(var(--info))', 'hsl(var(--warning))', 'hsl(var(--destructive))'];
+
+const donutChartConfig = {
+  value: { label: 'Quantidade' },
+} satisfies ChartConfig;
+
+const deliveryChartConfig = {
+  delivered: { label: 'Entregues', color: 'hsl(var(--success))' },
+  overdue: { label: 'Atrasados', color: 'hsl(var(--destructive))' },
+} satisfies ChartConfig;
 
 interface Props {
   kpis: PosVendaKpi;
@@ -72,17 +81,15 @@ const PosVendaResumoTab = memo(function PosVendaResumoTab(props: Props) {
         <div className="space-y-4">
           <PosVendaChartCard title="Tipos de projeto em andamento">
             {typeDonut.length > 0 ?
-            <div className="h-52">
-                <ResponsiveContainer width="100%" height="100%">
+            <ChartContainer config={donutChartConfig} className="h-52 [&_.recharts-wrapper]:!aspect-auto">
                   <PieChart>
                     <Pie data={typeDonut} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2}>
                       {typeDonut.map((_, i) => <Cell key={i} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />)}
                     </Pie>
-                    <Legend wrapperStyle={{ fontSize: '12px' }} />
-                    <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px' }} />
+                    <ChartLegend content={<ChartLegendContent />} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
                   </PieChart>
-                </ResponsiveContainer>
-              </div> :
+                </ChartContainer> :
 
             <p className="text-xs text-muted-foreground text-center py-8">Sem dados</p>
             }
@@ -125,18 +132,16 @@ const PosVendaResumoTab = memo(function PosVendaResumoTab(props: Props) {
 
       {/* Entregas vs atrasos */}
       <PosVendaChartCard title="Entregas vs. atrasos — últimos 6 meses">
-        <div className="h-56">
-          <ResponsiveContainer width="100%" height="100%">
+        <ChartContainer config={deliveryChartConfig} className="h-56 [&_.recharts-wrapper]:!aspect-auto">
             <BarChart data={deliveryHistory} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px' }} />
-              <Bar dataKey="delivered" name="Entregues" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="overdue" name="Atrasados" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
+              <ChartTooltip content={<ChartTooltipContent />} />
+              <Bar dataKey="delivered" name="Entregues" fill="var(--color-delivered)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="overdue" name="Atrasados" fill="var(--color-overdue)" radius={[4, 4, 0, 0]} />
             </BarChart>
-          </ResponsiveContainer>
-        </div>
+        </ChartContainer>
       </PosVendaChartCard>
 
       {/* Footer cards */}

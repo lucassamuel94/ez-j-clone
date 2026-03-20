@@ -84,10 +84,10 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Acquire lock (5 min TTL)
+    // Acquire lock (10 min TTL)
     const lockName = "auto-analyze-calls";
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + 5 * 60 * 1000).toISOString();
+    const expiresAt = new Date(now.getTime() + 10 * 60 * 1000).toISOString();
 
     const { error: lockError } = await supabase
       .from("cron_locks")
@@ -152,8 +152,10 @@ Deno.serve(async (req) => {
       }
 
       const ezToken = await getEZCallToken();
-      let totalCreated = 0;
+      let totalQueued = 0;
 
+      // ── Phase 1: Download audio, upload to storage, create "queued" records ──
+      // No transcription is dispatched here — that happens one-at-a-time via chain dispatch
       for (const sdr of sdrs) {
         try {
           const calls = await fetchOutgoingCalls(ezToken, todayStr, sdr.ramal);
@@ -195,59 +197,29 @@ Deno.serve(async (req) => {
                 continue;
               }
 
-              // Create call_analyses record
-              const { data: analysis, error: insertError } = await supabase
+              // Create call_analyses record as "queued" — transcription dispatched later one-at-a-time
+              const { error: insertError } = await supabase
                 .from("call_analyses")
                 .insert({
                   sdr_user_id: sdr.id,
                   uploaded_by: sdr.id,
                   audio_path: storagePath,
-                  status: "uploaded",
+                  status: "queued",
                   ezcall_linkedid: call.linkedid,
                   auto_generated: true,
                   duration_seconds: call.billsec,
                   original_filename: `${call.dst}_${call.calldate.replace(/[: ]/g, "-")}.mp3`,
                   media_type: "audio",
                   analysis_context: "sdr_call",
-                })
-                .select("id")
-                .single();
+                });
 
               if (insertError) {
                 console.error(`[auto-analyze] Insert failed for ${call.linkedid}:`, insertError.message);
                 continue;
               }
 
-              // Dispatch transcription (awaited to ensure it runs before function terminates)
-              try {
-                const transcribeRes = await fetch(`${supabaseUrl}/functions/v1/transcribe-call`, {
-                  method: "POST",
-                  headers: {
-                    Authorization: `Bearer ${serviceKey}`,
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({ analysis_id: analysis.id, audio_path: storagePath }),
-                });
-                if (!transcribeRes.ok) {
-                  const errText = await transcribeRes.text();
-                  console.error(`[auto-analyze] Transcribe dispatch failed [${transcribeRes.status}]:`, errText.slice(0, 200));
-                  await supabase.from("call_analyses").update({
-                    status: "error",
-                    feedback: `Falha ao despachar transcrição: status ${transcribeRes.status}`,
-                  }).eq("id", analysis.id);
-                } else {
-                  console.log(`[auto-analyze] Transcription dispatched for ${call.linkedid}`);
-                }
-              } catch (e) {
-                console.error(`[auto-analyze] Transcribe dispatch failed:`, e);
-                await supabase.from("call_analyses").update({
-                  status: "error",
-                  feedback: `Falha ao despachar transcrição: ${e instanceof Error ? e.message : "erro de rede"}`,
-                }).eq("id", analysis.id);
-              }
-
-              totalCreated++;
-              console.log(`[auto-analyze] Created analysis for SDR ${sdr.name}, call ${call.linkedid}`);
+              totalQueued++;
+              console.log(`[auto-analyze] Queued analysis for SDR ${sdr.name}, call ${call.linkedid}`);
             } catch (callErr) {
               console.error(`[auto-analyze] Error processing call ${call.linkedid}:`, callErr);
             }
@@ -257,9 +229,52 @@ Deno.serve(async (req) => {
         }
       }
 
-      console.log(`[auto-analyze] Done. Created ${totalCreated} analyses.`);
+      // ── Phase 2: Dispatch ONLY the first queued item ──
+      // The deepgram-webhook will chain-dispatch the next one after each completes
+      if (totalQueued > 0) {
+        const { data: firstQueued } = await supabase
+          .from("call_analyses")
+          .select("id, audio_path")
+          .eq("status", "queued")
+          .eq("auto_generated", true)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .single();
 
-      return new Response(JSON.stringify({ created: totalCreated }), {
+        if (firstQueued) {
+          try {
+            const transcribeRes = await fetch(`${supabaseUrl}/functions/v1/transcribe-call`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${serviceKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ analysis_id: firstQueued.id, audio_path: firstQueued.audio_path }),
+            });
+
+            if (!transcribeRes.ok) {
+              const errText = await transcribeRes.text();
+              console.error(`[auto-analyze] First transcribe dispatch failed [${transcribeRes.status}]:`, errText.slice(0, 200));
+              await supabase.from("call_analyses").update({
+                status: "error",
+                feedback: `Falha ao despachar transcrição: status ${transcribeRes.status}`,
+              }).eq("id", firstQueued.id);
+            } else {
+              console.log(`[auto-analyze] First transcription dispatched (id=${firstQueued.id}), remaining ${totalQueued - 1} will be chain-dispatched`);
+            }
+          } catch (e) {
+            console.error(`[auto-analyze] First transcribe dispatch error:`, e);
+            await supabase.from("call_analyses").update({
+              status: "error",
+              feedback: `Falha ao despachar transcrição: ${e instanceof Error ? e.message : "erro de rede"}`,
+            }).eq("id", firstQueued.id);
+          }
+        }
+      }
+
+      console.log(`[auto-analyze] Done. Queued ${totalQueued} analyses.`);
+
+      return new Response(JSON.stringify({ queued: totalQueued }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     } finally {

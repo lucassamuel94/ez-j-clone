@@ -1,7 +1,8 @@
 import { memo, useMemo } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import PosVendaKpiCard from './PosVendaKpiCard';
 import PosVendaChartCard from './PosVendaChartCard';
 import PosVendaHorizontalBars from './PosVendaHorizontalBars';
@@ -11,6 +12,11 @@ import type {
   BlockedData,
   PausedProject,
 } from '@/hooks/useBlockedProjects';
+
+const historyChartConfig = {
+  paused_count: { label: 'Pausados', color: 'hsl(var(--warning))' },
+  cancelled_count: { label: 'Cancelados', color: 'hsl(var(--destructive))' },
+} satisfies ChartConfig;
 
 const ACTION_STYLES: Record<string, { label: string; cls: string }> = {
   escalar: { label: 'Escalar', cls: 'text-destructive font-semibold' },
@@ -111,19 +117,17 @@ const PosVendaTravadosTab = memo(function PosVendaTravadosTab({ data }: Props) {
 
       {/* 6m history chart */}
       <PosVendaChartCard title="Pausas e cancelamentos — últimos 6 meses">
-        <div className="h-56">
-          <ResponsiveContainer width="100%" height="100%">
+        <ChartContainer config={historyChartConfig} className="h-56 [&_.recharts-wrapper]:!aspect-auto">
             <BarChart data={history_6m} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px' }} />
-              <Legend wrapperStyle={{ fontSize: '12px' }} />
-              <Bar dataKey="paused_count" name="Pausados" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="cancelled_count" name="Cancelados" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
+              <ChartTooltip content={<ChartTooltipContent />} />
+              <ChartLegend content={<ChartLegendContent />} />
+              <Bar dataKey="paused_count" name="Pausados" fill="var(--color-paused_count)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="cancelled_count" name="Cancelados" fill="var(--color-cancelled_count)" radius={[4, 4, 0, 0]} />
             </BarChart>
-          </ResponsiveContainer>
-        </div>
+        </ChartContainer>
       </PosVendaChartCard>
     </div>
   );

@@ -18,6 +18,7 @@ export interface EmailSequenceStep {
   delay_hours: number;
   subject: string;
   body: string;
+  ai_personalize: boolean;
   created_at: string;
 }
 
@@ -115,7 +116,7 @@ export function useSequenceSteps(sequenceId: string | null) {
       if (payload.id) {
         const { error } = await supabase
           .from('email_sequence_steps')
-          .update({ subject: payload.subject, body: payload.body, delay_hours: payload.delay_hours })
+          .update({ subject: payload.subject, body: payload.body, delay_hours: payload.delay_hours, ai_personalize: payload.ai_personalize ?? false } as any)
           .eq('id', payload.id);
         if (error) throw error;
       } else {
@@ -127,7 +128,8 @@ export function useSequenceSteps(sequenceId: string | null) {
             delay_hours: payload.delay_hours,
             subject: payload.subject,
             body: payload.body,
-          });
+            ai_personalize: payload.ai_personalize ?? false,
+          } as any);
         if (error) throw error;
       }
     },

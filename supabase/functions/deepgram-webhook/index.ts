@@ -196,6 +196,54 @@ function mapTimestampsToSegments(
   return segments;
 }
 
+// ── Chain dispatch: pick and dispatch next queued auto-generated analysis ─────
+
+async function dispatchNextQueued(
+  supabase: ReturnType<typeof createClient>,
+  supabaseUrl: string,
+  serviceKey: string,
+): Promise<void> {
+  try {
+    const { data: nextQueued } = await supabase
+      .from("call_analyses")
+      .select("id, audio_path")
+      .eq("status", "queued")
+      .eq("auto_generated", true)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .single();
+
+    if (!nextQueued) {
+      console.log("[deepgram-webhook] No more queued items — chain complete");
+      return;
+    }
+
+    console.log(`[deepgram-webhook] Chain-dispatching next queued analysis id=${nextQueued.id}`);
+
+    const res = await fetch(`${supabaseUrl}/functions/v1/transcribe-call`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ analysis_id: nextQueued.id, audio_path: nextQueued.audio_path }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[deepgram-webhook] Chain dispatch failed [${res.status}]:`, errText.slice(0, 200));
+      await supabase.from("call_analyses").update({
+        status: "error",
+        feedback: `Falha ao despachar transcrição (chain): status ${res.status}`,
+      }).eq("id", nextQueued.id);
+    } else {
+      console.log(`[deepgram-webhook] Chain dispatch OK for id=${nextQueued.id}`);
+    }
+  } catch (e) {
+    console.error("[deepgram-webhook] Chain dispatch error:", e);
+  }
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 serve(async (req) => {
@@ -371,6 +419,11 @@ serve(async (req) => {
       console.warn(`[deepgram-webhook] Analysis trigger failed but transcription was saved.`);
     }
 
+    // ── Chain dispatch: process next queued auto-generated analysis ──
+    // This ensures sequential processing — only one call goes through the
+    // Deepgram → webhook → analyze pipeline at a time
+    await dispatchNextQueued(supabase, supabaseUrl, supabaseServiceKey);
+
     return new Response(JSON.stringify({
       success: true,
       analysis_id: analysisId,
@@ -389,6 +442,9 @@ serve(async (req) => {
         status: "error",
         feedback: `Erro no processamento da transcrição: ${errorMessage}`,
       }).eq("id", analysisId);
+
+      // Even on error, try to dispatch next queued item so the chain doesn't break
+      await dispatchNextQueued(supabase, supabaseUrl, supabaseServiceKey);
     } catch (persistErr) {
       console.error("[deepgram-webhook] Failed to persist error:", persistErr);
     }

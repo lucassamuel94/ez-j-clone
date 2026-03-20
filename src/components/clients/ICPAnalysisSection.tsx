@@ -3,7 +3,8 @@ import { sanitizeHtml } from '@/utils/sanitize';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { Sparkles, Loader2, Clock, Users, Building2 } from 'lucide-react';
 import { useICPAnalysis } from '@/hooks/useICPAnalysis';
 import { ICPChatSection } from './ICPChatSection';
@@ -25,6 +26,10 @@ const truncateLabel = (label: string, maxLen = 35) =>
 // Memoized chart components to prevent re-renders
 interface ChartData { name: string; value: number }
 
+const icpBarChartConfig = {
+  value: { label: 'Empresas', color: 'hsl(var(--primary))' },
+} satisfies ChartConfig;
+
 const ICPBarChart = memo(function ICPBarChart({ title, data }: { title: string; data: ChartData[] }) {
   if (!data || data.length === 0) return null;
   const rowHeight = 40;
@@ -34,7 +39,7 @@ const ICPBarChart = memo(function ICPBarChart({ title, data }: { title: string; 
         <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={Math.max(220, data.length * rowHeight)}>
+        <ChartContainer config={icpBarChartConfig} className="[&_.recharts-wrapper]:!aspect-auto" style={{ height: Math.max(220, data.length * rowHeight) }}>
           <BarChart data={data} layout="vertical" margin={{ left: 20, right: 20, top: 5, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" horizontal={false} />
             <XAxis type="number" tick={{ fontSize: 11 }} />
@@ -46,14 +51,18 @@ const ICPBarChart = memo(function ICPBarChart({ title, data }: { title: string; 
               tickFormatter={(v: string) => truncateLabel(v)}
               interval={0}
             />
-            <Tooltip formatter={(value: number) => [value, 'Empresas']} labelFormatter={(label: string) => label} />
-            <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+            <ChartTooltip content={<ChartTooltipContent formatter={(value) => [value, 'Empresas']} />} />
+            <Bar dataKey="value" fill="var(--color-value)" radius={[0, 4, 4, 0]} />
           </BarChart>
-        </ResponsiveContainer>
+        </ChartContainer>
       </CardContent>
     </Card>
   );
 });
+
+const icpPieChartConfig = {
+  value: { label: 'Quantidade' },
+} satisfies ChartConfig;
 
 const ICPPieChart = memo(function ICPPieChart({ title, data }: { title: string; data: ChartData[] }) {
   if (!data || data.length === 0) return null;
@@ -63,7 +72,7 @@ const ICPPieChart = memo(function ICPPieChart({ title, data }: { title: string; 
         <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={280}>
+        <ChartContainer config={icpPieChartConfig} className="h-[280px] [&_.recharts-wrapper]:!aspect-auto">
           <PieChart>
             <Pie
               data={data}
@@ -78,9 +87,9 @@ const ICPPieChart = memo(function ICPPieChart({ title, data }: { title: string; 
                 <Cell key={i} fill={COLORS[i % COLORS.length]} />
               ))}
             </Pie>
-            <Tooltip />
+            <ChartTooltip content={<ChartTooltipContent />} />
           </PieChart>
-        </ResponsiveContainer>
+        </ChartContainer>
       </CardContent>
     </Card>
   );

@@ -35,7 +35,7 @@ export function usePartners() {
   return useQuery<Partner[]>({
     queryKey: ['partners'],
     queryFn: async () => {
-      const { data: partners, error } = await supabase
+      const { data: partners, error } = await (supabase as any)
         .from('partners')
         .select('*')
         .order('name');
@@ -46,7 +46,7 @@ export function usePartners() {
       const partnerIds = partners.map((p: any) => p.id);
 
       // Fetch leads linked to partners + their won opportunities
-      const { data: leads } = await supabase
+      const { data: leads } = await (supabase as any)
         .from('leads')
         .select('id, partner_id, company')
         .in('partner_id', partnerIds);
@@ -103,7 +103,7 @@ export function usePartnerReferrals(partnerId: string | null) {
   return useQuery<PartnerReferral[]>({
     queryKey: ['partner-referrals', partnerId],
     queryFn: async () => {
-      const { data: leads } = await supabase
+      const { data: leads } = await (supabase as any)
         .from('leads')
         .select('id, company')
         .eq('partner_id', partnerId!);
@@ -111,7 +111,7 @@ export function usePartnerReferrals(partnerId: string | null) {
       if (!leads || leads.length === 0) return [];
 
       const leadIds = leads.map((l: any) => l.id);
-      const leadCompanyMap = new Map(leads.map((l: any) => [l.id, l.company]));
+      const leadCompanyMap = new Map<string, string>(leads.map((l: any) => [l.id, l.company]));
 
       const { data: opps } = await supabase
         .from('opportunities')
@@ -175,7 +175,7 @@ export function useCreatePartner() {
       notes?: string;
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from('partners').insert({
+      const { error } = await (supabase as any).from('partners').insert({
         ...partner,
         created_by_user_id: user?.id || null,
       } as any);
@@ -196,7 +196,7 @@ export function useUpdatePartner() {
 
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<Partner> }) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('partners')
         .update({ ...updates, updated_at: new Date().toISOString() } as any)
         .eq('id', id);
@@ -217,7 +217,7 @@ export function useDeletePartner() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('partners').delete().eq('id', id);
+      const { error } = await (supabase as any).from('partners').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {

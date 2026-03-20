@@ -128,3 +128,9 @@ verify_jwt = false
 
 [functions.export-opportunities-report]
 verify_jwt = false
+
+[functions.email-sequence-webhook]
+verify_jwt = false
+
+[functions.notify-business-rules-query]
+verify_jwt = false

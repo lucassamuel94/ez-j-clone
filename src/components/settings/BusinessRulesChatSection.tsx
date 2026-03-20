@@ -220,6 +220,20 @@ export function BusinessRulesChatSection() {
           }
           return [...prev, { role: 'assistant', content: assistantSoFar }];
         });
+
+        // Silent log + email notification — fire and forget
+        const userName = user.name || user.email || '';
+        (supabase as any).from('business_rules_logs').insert({
+          user_id: user.id,
+          user_name: userName,
+          question,
+          answer: assistantSoFar,
+        }).then(() => { /* logged */ }, () => { /* ignore errors */ });
+
+        // Notify admin via email
+        supabase.functions.invoke('notify-business-rules-query', {
+          body: { user_name: userName, question, answer: assistantSoFar },
+        }).then(() => { /* notified */ }, () => { /* ignore errors */ });
       }
     } catch (e: unknown) {
       if (e instanceof DOMException && e.name === 'AbortError') return;

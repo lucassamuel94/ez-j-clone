@@ -58,6 +58,7 @@ serve(async (req) => {
     }
 
     await supabase.from("call_analyses").update({
+      status: "uploaded",
       worker_retry_count: retryCount,
       worker_heartbeat_at: new Date().toISOString(),
     }).eq("id", analysis_id);

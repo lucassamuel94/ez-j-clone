@@ -16,6 +16,7 @@ export interface UserWithRole {
   name: string;
   email: string;
   active: boolean;
+  exclude_from_auto_assign: boolean;
   role: AppRole | null;
   role_id: string | null;
   role_name: string | null;
@@ -82,7 +83,7 @@ export const useAdminUsers = () => {
     queryFn: async () => {
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, name, email, created_at, active, last_seen_at');
+        .select('id, name, email, created_at, active, last_seen_at, exclude_from_auto_assign');
       
       if (profilesError) throw profilesError;
 
@@ -107,6 +108,7 @@ export const useAdminUsers = () => {
           name: profile.name,
           email: profile.email || '',
           active: profile.active ?? true,
+          exclude_from_auto_assign: (profile as any).exclude_from_auto_assign ?? false,
           role: userRole?.role as AppRole | null,
           role_id: roleId,
           role_name: roleId ? (roleNameMap.get(roleId) ?? null) : null,
@@ -199,6 +201,24 @@ export const useAdminUsers = () => {
     onError: (error) => {
       toast.error('Não foi possível atualizar o nome do usuário.');
       console.error('Error updating user name:', error);
+    },
+  });
+  // Toggle exclude from auto assign
+  const toggleExcludeFromAutoAssign = useMutation({
+    mutationFn: async ({ userId, exclude }: { userId: string; exclude: boolean }) => {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ exclude_from_auto_assign: exclude } as any)
+        .eq('id', userId);
+      if (error) throw error;
+    },
+    onSuccess: (_, { exclude }) => {
+      queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
+      toast.success(exclude ? 'Usuário excluído da atribuição automática.' : 'Usuário incluído na atribuição automática.');
+    },
+    onError: (error) => {
+      toast.error('Não foi possível atualizar a configuração.');
+      console.error('Error toggling exclude_from_auto_assign:', error);
     },
   });
 
@@ -297,6 +317,7 @@ export const useAdminUsers = () => {
     invitations,
     isLoadingInvitations,
     toggleUserActive,
+    toggleExcludeFromAutoAssign,
     updateUserRole,
     updateUserName,
     createInvitation,

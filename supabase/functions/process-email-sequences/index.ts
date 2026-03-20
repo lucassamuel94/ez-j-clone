@@ -29,9 +29,9 @@ Deno.serve(async (req) => {
   const { data: enrollments, error: enrollErr } = await supabase
     .from("email_sequence_enrollments")
     .select(`
-      id, sequence_id, lead_id, current_step, status,
+      id, sequence_id, lead_id, current_step, status, enrolled_by,
       email_sequences!inner(name, active),
-      leads!inner(name, company, email, razao_social, nome_fantasia)
+      leads!inner(name, company, email, razao_social, nome_fantasia, cnae_fiscal_descricao, cnaes_secundarios, segment)
     `)
     .eq("status", "active")
     .lte("next_send_at", new Date().toISOString())
@@ -66,6 +66,7 @@ Deno.serve(async (req) => {
 
       const lead = enrollment.leads as any;
       const sequence = enrollment.email_sequences as any;
+      const enrolledBy = (enrollment as any).enrolled_by as string | null;
 
       if (!sequence.active || !lead.email) {
         // Release lock
@@ -93,23 +94,115 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // Get sender info (person who enrolled the lead)
+      // Fallback to Rodrigo if enroller is inactive/not found
+      const FALLBACK_NAME = "Rodrigo Schumann";
+      const FALLBACK_EMAIL = "rodrigo@ezsoft.com.br";
+      let senderName = FALLBACK_NAME;
+      let replyTo: string = FALLBACK_EMAIL;
+
+      if (enrolledBy) {
+        const { data: senderProfile } = await supabase
+          .from("profiles")
+          .select("name, email, active")
+          .eq("id", enrolledBy)
+          .single();
+
+        if (senderProfile?.active && senderProfile.name) {
+          senderName = senderProfile.name;
+          replyTo = senderProfile.email || FALLBACK_EMAIL;
+        }
+      }
+
       // Replace variables in subject and body
       const contactName = lead.name || "Contato";
       const companyName = lead.razao_social || lead.nome_fantasia || lead.company || "";
 
-      const subject = step.subject
+      let subject = step.subject
         .replace(/\{\{nome_contato\}\}/g, contactName)
         .replace(/\{\{empresa\}\}/g, companyName);
 
-      const bodyHtml = step.body
+      let bodyHtml = step.body
         .replace(/\{\{nome_contato\}\}/g, contactName)
         .replace(/\{\{empresa\}\}/g, companyName);
 
-      // Send email via Resend
+      // AI Personalization: generate content based on CNAE/segment
+      if (step.ai_personalize) {
+        const cnaeDesc = lead.cnae_fiscal_descricao || "";
+        const cnaesSecundarios = lead.cnaes_secundarios || "";
+        const segment = lead.segment || "";
+        const segmentInfo = [cnaeDesc, cnaesSecundarios, segment].filter(Boolean).join(" | ");
+
+        const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+        if (ANTHROPIC_API_KEY && segmentInfo) {
+          try {
+            const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "").trim();
+            const directive = stripHtml(bodyHtml);
+
+            const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              headers: {
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                model: "claude-sonnet-4-20250514",
+                max_tokens: 1024,
+                messages: [{
+                  role: "user",
+                  content: `Você é um especialista em vendas B2B de soluções de automação (chatbots, CRM, atendimento digital).
+
+Gere um e-mail comercial personalizado em HTML seguindo estas regras:
+- Destinatário: ${contactName} da empresa ${companyName}
+- Segmento da empresa (CNAE): ${segmentInfo}
+- Remetente: ${senderName}
+- Diretriz do e-mail: ${directive}
+- Step ${enrollment.current_step} de uma sequência de follow-up chamada "${sequence.name}"
+
+REGRAS:
+- Escreva em português brasileiro, tom profissional mas amigável
+- Cite automações, vantagens e diferenciais ESPECÍFICOS para o segmento do cliente
+- Dê exemplos concretos de como a automação beneficia empresas desse setor
+- Máximo 200 palavras
+- Retorne APENAS o HTML do corpo do e-mail (sem <html>, <head>, <body>)
+- Use tags simples: <p>, <strong>, <ul>, <li>
+- NÃO inclua assunto, apenas o corpo
+- NÃO inclua saudação genérica tipo "Prezado", use o nome do contato naturalmente`,
+                }],
+              }),
+            });
+
+            if (aiRes.ok) {
+              const aiData = await aiRes.json();
+              const aiContent = aiData.content?.[0]?.text || "";
+              if (aiContent.length > 50) {
+                bodyHtml = aiContent;
+                console.log(`[sequences] AI personalized email for ${companyName} (CNAE: ${cnaeDesc})`);
+              }
+            } else {
+              console.error(`[sequences] AI personalization failed: ${aiRes.status}`);
+            }
+          } catch (aiErr) {
+            console.error("[sequences] AI personalization error:", aiErr);
+            // Falls back to original template
+          }
+        }
+      }
+
+      // Send email via Resend — from the person who enrolled
       const html = buildEmailTemplate({
         bodyHtml,
         headerTitle: sequence.name,
       });
+
+      const emailPayload: Record<string, unknown> = {
+        from: `${senderName} <noreply@notifications.ezsoft.com.br>`,
+        to: [lead.email],
+        reply_to: replyTo,
+        subject,
+        html,
+      };
 
       const resendRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -117,12 +210,7 @@ Deno.serve(async (req) => {
           Authorization: `Bearer ${resendApiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          from: "EZ Journey CRM <noreply@notifications.ezsoft.com.br>",
-          to: [lead.email],
-          subject,
-          html,
-        }),
+        body: JSON.stringify(emailPayload),
       });
 
       if (!resendRes.ok) {

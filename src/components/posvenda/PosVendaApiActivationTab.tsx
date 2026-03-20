@@ -4,7 +4,12 @@ import PosVendaKpiCard from './PosVendaKpiCard';
 import PosVendaChartCard from './PosVendaChartCard';
 import PosVendaHorizontalBars from './PosVendaHorizontalBars';
 import { type ApiActivationsData } from '@/hooks/useApiActivations';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
+
+const historyChartConfig = {
+  avg_days: { label: 'Média', color: 'hsl(var(--info))' },
+} satisfies ChartConfig;
 
 interface Props {
   data: ApiActivationsData;
@@ -65,23 +70,17 @@ const PosVendaApiActivationTab = memo(function PosVendaApiActivationTab({ data }
       {/* History chart */}
       {history_6m.length > 0 && (
         <PosVendaChartCard title="Tempo médio de ativação — últimos 6 meses">
-          <ResponsiveContainer width="100%" height={220}>
+          <ChartContainer config={historyChartConfig} className="h-[220px] [&_.recharts-wrapper]:!aspect-auto">
             <BarChart data={history_6m}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
               <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
-                formatter={(v: number) => [`${v} dias`, 'Média']}
+              <ChartTooltip
+                content={<ChartTooltipContent formatter={(value) => [`${value} dias`, 'Média']} />}
               />
-              <Bar dataKey="avg_days" fill="hsl(var(--info))" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="avg_days" fill="var(--color-avg_days)" radius={[4, 4, 0, 0]} />
             </BarChart>
-          </ResponsiveContainer>
+          </ChartContainer>
         </PosVendaChartCard>
       )}
 

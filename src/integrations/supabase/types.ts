@@ -2851,6 +2851,7 @@ export type Database = {
           created_at: string
           email: string | null
           email_signature: string | null
+          exclude_from_auto_assign: boolean
           id: string
           last_seen_at: string | null
           name: string
@@ -2868,6 +2869,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           email_signature?: string | null
+          exclude_from_auto_assign?: boolean
           id: string
           last_seen_at?: string | null
           name: string
@@ -2885,6 +2887,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           email_signature?: string | null
+          exclude_from_auto_assign?: boolean
           id?: string
           last_seen_at?: string | null
           name?: string
@@ -3420,6 +3423,7 @@ export type Database = {
           estimated_hours: number | null
           extra_storage: string | null
           figma_url: string | null
+          go_live_user_id: string | null
           has_ai: boolean | null
           has_coexistence: boolean | null
           has_integration: boolean | null
@@ -3443,6 +3447,7 @@ export type Database = {
           treinamento_user_id: string | null
           updated_at: string
           ux_po_user_id: string | null
+          verificacao_bm_user_id: string | null
           version: string | null
           website: string | null
         }
@@ -3475,6 +3480,7 @@ export type Database = {
           estimated_hours?: number | null
           extra_storage?: string | null
           figma_url?: string | null
+          go_live_user_id?: string | null
           has_ai?: boolean | null
           has_coexistence?: boolean | null
           has_integration?: boolean | null
@@ -3498,6 +3504,7 @@ export type Database = {
           treinamento_user_id?: string | null
           updated_at?: string
           ux_po_user_id?: string | null
+          verificacao_bm_user_id?: string | null
           version?: string | null
           website?: string | null
         }
@@ -3530,6 +3537,7 @@ export type Database = {
           estimated_hours?: number | null
           extra_storage?: string | null
           figma_url?: string | null
+          go_live_user_id?: string | null
           has_ai?: boolean | null
           has_coexistence?: boolean | null
           has_integration?: boolean | null
@@ -3553,6 +3561,7 @@ export type Database = {
           treinamento_user_id?: string | null
           updated_at?: string
           ux_po_user_id?: string | null
+          verificacao_bm_user_id?: string | null
           version?: string | null
           website?: string | null
         }
@@ -3588,6 +3597,13 @@ export type Database = {
           {
             foreignKeyName: "projects_dev_user_id_fkey"
             columns: ["dev_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_go_live_user_id_fkey"
+            columns: ["go_live_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -3630,6 +3646,13 @@ export type Database = {
           {
             foreignKeyName: "projects_ux_po_user_id_fkey"
             columns: ["ux_po_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_verificacao_bm_user_id_fkey"
+            columns: ["verificacao_bm_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]

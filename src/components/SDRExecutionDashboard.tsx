@@ -92,8 +92,8 @@ const DailyGoalBar = memo(({ label, current, goal, icon, tooltip }: { label: str
               <TooltipTrigger asChild>
                 <span className="cursor-help border-b border-dashed border-muted-foreground/50">{label}</span>
               </TooltipTrigger>
-              <TooltipContent side="top" className="max-w-[260px] text-xs">
-                {tooltip}
+              <TooltipContent side="bottom">
+                <p className="text-xs">{tooltip}</p>
               </TooltipContent>
             </Tooltip>
           ) : (

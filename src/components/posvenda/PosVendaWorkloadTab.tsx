@@ -5,7 +5,8 @@ import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { AlertTriangle } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import type { WorkloadData, TeamWeekEntry } from '@/hooks/useWorkload';
 
 const TEAM_COLORS: Record<string, string> = {
@@ -89,33 +90,32 @@ function WeeklyChartSection({ teamsWeekly, weeklyFlow }: { teamsWeekly: Record<s
     });
   }, [teamsWeekly, teamNames, weeklyFlow]);
 
+  const weeklyChartConfig = useMemo(() => {
+    const config: ChartConfig = {};
+    for (const name of teamNames) {
+      config[name] = { label: name, color: TEAM_COLORS[name] || 'hsl(var(--muted-foreground))' };
+    }
+    return config;
+  }, [teamNames]);
+
   return (
     <PosVendaChartCard title="Como a carga evoluiu nas semanas">
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
+      <ChartContainer config={weeklyChartConfig} className="h-64 [&_.recharts-wrapper]:!aspect-auto">
           <BarChart data={chartData} barGap={2}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="week" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
             <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" unit="h" />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '8px',
-                fontSize: 12,
-              }}
-            />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <ChartLegend content={<ChartLegendContent />} />
             {teamNames.map((name) => (
-              <Bar key={name} dataKey={name} fill={TEAM_COLORS[name] || 'hsl(var(--muted-foreground))'} radius={[4, 4, 0, 0]}>
+              <Bar key={name} dataKey={name} fill={`var(--color-${name})`} radius={[4, 4, 0, 0]}>
                 {chartData.map((entry, idx) => (
                   <Cell key={idx} fillOpacity={entry.is_projection ? 0.4 : 1} />
                 ))}
               </Bar>
             ))}
           </BarChart>
-        </ResponsiveContainer>
-      </div>
+      </ChartContainer>
     </PosVendaChartCard>
   );
 }

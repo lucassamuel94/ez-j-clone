@@ -20,10 +20,58 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  const results = { recovered_processing: 0, recovered_transcribed: 0, marked_error: 0 };
+  const results = { recovered_processing: 0, recovered_transcribed: 0, recovered_queued: 0, marked_error: 0 };
 
   try {
     const now = new Date();
+
+    // 0. Find stuck "queued" auto-generated analyses (chain dispatch broke)
+    // If there are queued items but nothing is currently processing/uploaded, restart the chain
+    const STUCK_QUEUED_MINUTES = 15;
+    const queuedCutoff = new Date(now.getTime() - STUCK_QUEUED_MINUTES * 60 * 1000).toISOString();
+
+    const { data: queuedItems } = await supabase
+      .from("call_analyses")
+      .select("id, audio_path")
+      .eq("status", "queued")
+      .eq("auto_generated", true)
+      .lt("created_at", queuedCutoff)
+      .order("created_at", { ascending: true })
+      .limit(1);
+
+    if (queuedItems?.length) {
+      // Check if anything is currently in-flight (processing/uploaded)
+      const { count: inFlightCount } = await supabase
+        .from("call_analyses")
+        .select("id", { count: "exact", head: true })
+        .eq("auto_generated", true)
+        .in("status", ["uploaded", "processing"]);
+
+      if (!inFlightCount || inFlightCount === 0) {
+        const item = queuedItems[0];
+        console.log(`[watchdog] Chain seems broken — dispatching queued item ${item.id}`);
+        try {
+          const res = await fetch(`${supabaseUrl}/functions/v1/transcribe-call`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify({ analysis_id: item.id, audio_path: item.audio_path }),
+          });
+          if (res.ok || res.status === 504) {
+            results.recovered_queued++;
+          } else {
+            const errText = await res.text().catch(() => "");
+            console.error(`[watchdog] Queued dispatch failed for ${item.id}: ${res.status} ${errText.slice(0, 200)}`);
+          }
+        } catch (fetchErr) {
+          console.error(`[watchdog] Queued dispatch error for ${item.id}:`, fetchErr);
+        }
+      } else {
+        console.log(`[watchdog] ${inFlightCount} items still in-flight, not restarting chain`);
+      }
+    }
 
     // 1. Find stuck "processing" analyses
     const processingCutoff = new Date(now.getTime() - STUCK_PROCESSING_MINUTES * 60 * 1000).toISOString();

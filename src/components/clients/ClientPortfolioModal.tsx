@@ -2,9 +2,10 @@ import { memo, useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { Building2, TrendingUp, FolderKanban, FileText, Clock, MapPin, Briefcase, Activity } from 'lucide-react';
+import { Building2, TrendingUp, FolderKanban, FileText, Clock, MapPin, Briefcase, Activity, Rocket } from 'lucide-react';
 import { useClientDeals, type ClientDeal } from '@/hooks/useClientDeals';
 import { useClientProjects, type ClientProject } from '@/hooks/useClientProjects';
 import { useClientProposals, type ClientProposal } from '@/hooks/useClientProposals';
@@ -267,9 +268,10 @@ interface ClientPortfolioModalProps {
   client: MyClient | null;
   open: boolean;
   onClose: () => void;
+  onNewDeal?: (clientId: string) => void;
 }
 
-export const ClientPortfolioModal = memo(({ client, open, onClose }: ClientPortfolioModalProps) => {
+export const ClientPortfolioModal = memo(({ client, open, onClose, onNewDeal }: ClientPortfolioModalProps) => {
   const [tab, setTab] = useState('resumo');
 
   if (!client) return null;
@@ -278,15 +280,27 @@ export const ClientPortfolioModal = memo(({ client, open, onClose }: ClientPortf
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader className="pb-2">
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <Building2 className="h-4 w-4 text-primary" />
-            {client.company_name}
-            <div className={cn('h-2.5 w-2.5 rounded-full ml-1', {
-              'bg-success': client.health_label === 'green',
-              'bg-warning': client.health_label === 'yellow',
-              'bg-destructive': client.health_label === 'red',
-            })} />
-          </DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Building2 className="h-4 w-4 text-primary" />
+              {client.company_name}
+              <div className={cn('h-2.5 w-2.5 rounded-full ml-1', {
+                'bg-success': client.health_label === 'green',
+                'bg-warning': client.health_label === 'yellow',
+                'bg-destructive': client.health_label === 'red',
+              })} />
+            </DialogTitle>
+            {onNewDeal && (
+              <Button
+                size="sm"
+                className="h-7 text-xs gap-1.5 mr-8"
+                onClick={() => onNewDeal(client.id)}
+              >
+                <Rocket className="h-3.5 w-3.5" />
+                Nova negociação
+              </Button>
+            )}
+          </div>
         </DialogHeader>
 
         <Tabs value={tab} onValueChange={setTab} className="flex-1 overflow-hidden flex flex-col">

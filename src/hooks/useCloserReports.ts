@@ -104,7 +104,7 @@ export const useCloserPerformanceBreakdown = (dateRange?: { start: string; end: 
       const closerIds = rows.map((r: CloserBreakdownRow) => r.id).filter(Boolean);
       if (closerIds.length === 0) return rows;
 
-      // Get won opportunities for all closers in range (include deal_value as fallback)
+      // Get won opportunities for all closers in range
       let wonQ = supabase.from('opportunities')
         .select('id, assigned_to_user_id, deal_value')
         .eq('returned_to_sdr', false)
@@ -124,20 +124,24 @@ export const useCloserPerformanceBreakdown = (dateRange?: { start: string; end: 
         oppDealValue[o.id] = Number(o.deal_value || 0);
       });
 
-      // Get proposals setup_total for these won opportunities
+      // Get proposals setup_total for ALL won opportunities (including evolutions for revenue)
+      // Order by created_at DESC so we can pick only the latest proposal per opportunity
       const { data: proposals } = await supabase
         .from('proposals')
-        .select('opportunity_id, setup_total')
+        .select('opportunity_id, setup_total, created_at')
         .in('opportunity_id', oppIds.slice(0, 500))
+        .order('created_at', { ascending: false })
         .limit(5000);
 
-      // Build set of opp IDs that have proposals
+      // Build set of opp IDs that have proposals — use only the LATEST proposal per opportunity
       const oppsWithProposal = new Set<string>();
       const revenueByCloser: Record<string, number> = {};
       (proposals || []).forEach(p => {
-        const cId = oppToCloser[p.opportunity_id || ''];
+        const oppId = p.opportunity_id || '';
+        if (oppsWithProposal.has(oppId)) return; // skip older proposals for same opportunity
+        const cId = oppToCloser[oppId];
         if (cId) {
-          oppsWithProposal.add(p.opportunity_id || '');
+          oppsWithProposal.add(oppId);
           revenueByCloser[cId] = (revenueByCloser[cId] || 0) + Number(p.setup_total || 0);
         }
       });
@@ -151,21 +155,39 @@ export const useCloserPerformanceBreakdown = (dateRange?: { start: string; end: 
       });
 
       // Fetch pending contracts (Contrato enviado + Aguardando pagamento) per closer
+      // Use setup_total from latest proposal, fallback to deal_value
       const pendingStages = ['Contrato enviado', 'Aguardando pagamento'];
-      let pendingQ = supabase.from('opportunities')
-        .select('assigned_to_user_id, deal_value')
+      const { data: pendingOpps } = await supabase.from('opportunities')
+        .select('id, assigned_to_user_id, deal_value')
         .eq('returned_to_sdr', false)
         .in('stage', pendingStages)
-        .in('assigned_to_user_id', closerIds);
-      if (rangeStart) pendingQ = pendingQ.gte('created_at', rangeStart);
-      if (rangeEnd) pendingQ = pendingQ.lte('created_at', rangeEnd);
-      const { data: pendingOpps } = await pendingQ.limit(5000);
+        .in('assigned_to_user_id', closerIds)
+        .limit(5000);
 
       const pendingByCloser: Record<string, number> = {};
-      (pendingOpps || []).forEach(o => {
-        const cId = o.assigned_to_user_id || '';
-        pendingByCloser[cId] = (pendingByCloser[cId] || 0) + Number(o.deal_value || 0);
-      });
+      if (pendingOpps && pendingOpps.length > 0) {
+        const pendingIds = pendingOpps.map(o => o.id);
+        const { data: pendingProposals } = await supabase
+          .from('proposals')
+          .select('opportunity_id, setup_total, created_at')
+          .in('opportunity_id', pendingIds.slice(0, 500))
+          .order('created_at', { ascending: false })
+          .limit(5000);
+
+        const pendingProposalMap: Record<string, number> = {};
+        (pendingProposals || []).forEach((p: any) => {
+          if (p.opportunity_id && !(p.opportunity_id in pendingProposalMap)) {
+            pendingProposalMap[p.opportunity_id] = Number(p.setup_total || 0);
+          }
+        });
+
+        pendingOpps.forEach(o => {
+          const cId = o.assigned_to_user_id || '';
+          const proposalVal = pendingProposalMap[o.id];
+          const value = proposalVal != null && proposalVal > 0 ? proposalVal : (Number(o.deal_value) || 0);
+          pendingByCloser[cId] = (pendingByCloser[cId] || 0) + value;
+        });
+      }
 
       return rows.map((r: CloserBreakdownRow) => ({
         ...r,

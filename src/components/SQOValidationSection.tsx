@@ -1,7 +1,10 @@
+import { useState, useEffect } from 'react';
 import { Lead } from '@/types/lead';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { formatDateTimeBR } from '@/utils/dateFormat';
 import {
   Target,
   Clock,
@@ -242,6 +245,20 @@ interface SQOValidationSectionProps {
 }
 
 export const SQOValidationSection = ({ lead, onUpdateLead, readOnly = false }: SQOValidationSectionProps) => {
+  const [approverName, setApproverName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!lead.sqo_approved_by) return;
+    supabase
+      .from('profiles')
+      .select('name')
+      .eq('id', lead.sqo_approved_by)
+      .single()
+      .then(({ data }) => {
+        if (data?.name) setApproverName(data.name);
+      });
+  }, [lead.sqo_approved_by]);
+
   const fields: SQOFields = {
     sqo_pain_category: lead.sqo_pain_category || '',
     sqo_pain_other: lead.sqo_pain_other || '',
@@ -474,6 +491,18 @@ export const SQOValidationSection = ({ lead, onUpdateLead, readOnly = false }: S
             </ul>
           )}
         </div>
+        {lead.sqo_approved_at && (
+          <div className="rounded-lg border border-border bg-muted/30 p-3 flex items-center gap-2 text-xs text-muted-foreground">
+            <CalendarCheck className="h-4 w-4 shrink-0" />
+            <span>
+              Avaliação registrada em{' '}
+              <span className="font-medium text-foreground">{formatDateTimeBR(lead.sqo_approved_at)}</span>
+              {approverName && (
+                <> por <span className="font-medium text-foreground">{approverName}</span></>
+              )}
+            </span>
+          </div>
+        )}
         </div>
       </div>
     </div>

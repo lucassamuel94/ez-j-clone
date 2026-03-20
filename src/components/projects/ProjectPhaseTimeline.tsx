@@ -382,10 +382,24 @@ function StatusPickerPopover({ currentStatus, availableStatuses, onSelect }: {
 }) {
   const [open, setOpen] = useState(false);
 
+  // Build categorized list, then add any uncategorized statuses
+  const allCategorizedStatuses = new Set(STATUS_CATEGORIES.flatMap(cat => cat.statuses));
   const categorized = STATUS_CATEGORIES.map(cat => ({
     ...cat,
     items: cat.statuses.filter(s => availableStatuses.includes(s)),
   })).filter(cat => cat.items.length > 0);
+
+  const uncategorized = availableStatuses.filter(s => !allCategorizedStatuses.has(s));
+  if (uncategorized.length > 0) {
+    // Insert before the last category (Fechado/Concluído) if it exists, otherwise append
+    const concluídoIdx = categorized.findIndex(c => c.statuses.includes('CONCLUÍDO'));
+    const otherCat = { label: 'Outros', color: 'text-muted-foreground', statuses: uncategorized, items: uncategorized };
+    if (concluídoIdx > 0) {
+      categorized.splice(concluídoIdx, 0, otherCat);
+    } else {
+      categorized.push(otherCat);
+    }
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

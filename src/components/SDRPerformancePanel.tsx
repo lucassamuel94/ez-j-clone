@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -184,6 +184,55 @@ export const SDRPerformancePanel = ({ selectedSdrId, dateRange }: SDRPerformance
     refetchInterval: 120000,
   });
 
+  // SDR SQO goals (individual + team fallback)
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+  const { data: sdrGoalsMap = {} } = useQuery({
+    queryKey: ['sdr-sqo-goals-breakdown', currentMonth, currentYear, sdrOnlyIds],
+    queryFn: async () => {
+      const map: Record<string, number> = {};
+      if (sdrOnlyIds.length === 0) return map;
+
+      // Individual goals
+      const { data: individualGoals } = await supabase
+        .from('goals')
+        .select('target_user_id, sqo_percentage')
+        .not('target_user_id', 'is', null)
+        .eq('period_month', currentMonth)
+        .eq('period_year', currentYear)
+        .eq('goal_type', 'sdr');
+
+      if (individualGoals && individualGoals.length > 0) {
+        for (const g of individualGoals) {
+          if (g.target_user_id) map[g.target_user_id] = Math.round(Number(g.sqo_percentage) || 0);
+        }
+        return map;
+      }
+
+      // Fallback: team goal for all SDRs
+      const { data: teamGoal } = await supabase
+        .from('goals')
+        .select('sqo_percentage')
+        .is('target_user_id', null)
+        .eq('period_month', currentMonth)
+        .eq('period_year', currentYear)
+        .eq('goal_type', 'sdr')
+        .maybeSingle();
+
+      if (teamGoal) {
+        const val = Math.round(Number(teamGoal.sqo_percentage) || 0);
+        for (const id of sdrOnlyIds) map[id] = val;
+      }
+      return map;
+    },
+    enabled: sdrOnlyIds.length > 0,
+    staleTime: 120_000,
+  });
+
+  // Projection helper
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysPassed = now.getDate();
+
   const totals = metrics || { totalLeads: 0, stalledLeads: 0, lostWithoutAttempt: 0, promotedSQO: 0, meetingsCount: 0, sqoForRate: 0 };
   const sqoRate = totals.meetingsCount > 0 ? Math.round((totals.sqoForRate / totals.meetingsCount) * 100) : 0;
 
@@ -283,10 +332,17 @@ export const SDRPerformancePanel = ({ selectedSdrId, dateRange }: SDRPerformance
                      <th className="text-center px-3 py-2.5 font-bold uppercase tracking-widest text-muted-foreground">Agendados (SQL)</th>
                      <th className="text-center px-3 py-2.5 font-bold uppercase tracking-widest text-muted-foreground">Reuniões confirmadas</th>
                      <th className="text-center px-3 py-2.5 font-bold uppercase tracking-widest text-muted-foreground">SQO</th>
+                     <th className="text-center px-3 py-2.5 font-bold uppercase tracking-widest text-muted-foreground">Meta SQO</th>
+                     <th className="text-center px-3 py-2.5 font-bold uppercase tracking-widest text-muted-foreground">% Realizado</th>
+                     <th className="text-center px-3 py-2.5 font-bold uppercase tracking-widest text-muted-foreground">Projeção</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {perSdrBreakdown.map((s) => (
+                  {perSdrBreakdown.map((s) => {
+                    const meta = sdrGoalsMap[s.id] || 0;
+                    const pctRealizado = meta > 0 ? Math.round((s.sqo / meta) * 100) : 0;
+                    const projecao = daysPassed > 0 ? Math.round(s.sqo + ((s.sqo / daysPassed) * (daysInMonth - daysPassed))) : 0;
+                    return (
                     <tr key={s.id} className="hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-2.5 font-medium text-foreground">{s.name}</td>
                       <td className="text-center px-3 py-2.5">
@@ -298,8 +354,16 @@ export const SDRPerformancePanel = ({ selectedSdrId, dateRange }: SDRPerformance
                       <td className="text-center px-3 py-2.5">
                         <button onClick={() => setDetailModal({ sdrId: s.id, sdrName: s.name, metric: 'sqo' })} className="text-[hsl(var(--chart-3))] font-semibold hover:underline cursor-pointer">{s.sqo}</button>
                       </td>
+                      <td className="text-center px-3 py-2.5 tabular-nums text-muted-foreground">{meta || '—'}</td>
+                      <td className={cn("text-center px-3 py-2.5 tabular-nums font-semibold", pctRealizado >= 100 ? 'text-[hsl(var(--chart-3))]' : pctRealizado >= 50 ? 'text-[hsl(var(--chart-2))]' : 'text-destructive')}>
+                        {meta > 0 ? `${pctRealizado}%` : '—'}
+                      </td>
+                      <td className={cn("text-center px-3 py-2.5 tabular-nums font-semibold", projecao >= meta && meta > 0 ? 'text-[hsl(var(--chart-3))]' : 'text-foreground')}>
+                        {projecao}
+                      </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

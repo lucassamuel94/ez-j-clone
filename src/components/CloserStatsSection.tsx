@@ -126,20 +126,22 @@ const fetchPeriodStats = async (
   const wonData = wonRes.data ?? [];
   const wonQty = wonData.length;
 
-  // Fetch proposal setup_total for won opportunities (same logic as Ranking)
+  // Fetch proposal setup_total — use LATEST proposal per opp only
   let wonValue = 0;
   if (wonQty > 0) {
     const wonIds = wonData.map((o: any) => o.id).filter(Boolean);
     const { data: proposals } = await supabase
       .from('proposals')
-      .select('opportunity_id, setup_total')
+      .select('opportunity_id, setup_total, created_at')
       .in('opportunity_id', wonIds.slice(0, 500))
+      .order('created_at', { ascending: false })
       .limit(5000);
 
+    // Keep only the latest proposal per opportunity
     const proposalMap: Record<string, number> = {};
     (proposals || []).forEach((p: any) => {
-      if (p.opportunity_id) {
-        proposalMap[p.opportunity_id] = (proposalMap[p.opportunity_id] || 0) + Number(p.setup_total || 0);
+      if (p.opportunity_id && !(p.opportunity_id in proposalMap)) {
+        proposalMap[p.opportunity_id] = Number(p.setup_total || 0);
       }
     });
 

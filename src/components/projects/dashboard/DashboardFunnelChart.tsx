@@ -1,8 +1,13 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { Progress } from '@/components/ui/progress';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { DashboardChartWrapper } from './DashboardChartWrapper';
 import { CHART_PALETTE } from './constants';
+
+const funnelChartConfig = {
+  count: { label: 'Projetos' },
+} satisfies ChartConfig;
 
 interface FunnelEntry {
   phase: string;
@@ -13,17 +18,6 @@ interface DashboardFunnelChartProps {
   data: FunnelEntry[];
 }
 
-function FunnelTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="rounded-lg border border-border/50 bg-background px-3 py-2 text-xs shadow-lg" role="status" aria-live="polite">
-      <p className="font-medium text-foreground">{label || payload[0]?.name}</p>
-      {payload.map((p: any, i: number) => (
-        <p key={i} className="text-muted-foreground tabular-nums">{p.value} projetos</p>
-      ))}
-    </div>
-  );
-}
 
 export function DashboardFunnelChart({ data }: DashboardFunnelChartProps) {
   const isMobile = useIsMobile();
@@ -44,21 +38,19 @@ export function DashboardFunnelChart({ data }: DashboardFunnelChartProps) {
           ))}
         </div>
       ) : (
-        <div className="h-[280px]">
-          <ResponsiveContainer width="100%" height="100%">
+        <ChartContainer config={funnelChartConfig} className="h-[280px] [&_.recharts-wrapper]:!aspect-auto">
             <BarChart data={data} layout="vertical" margin={{ left: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis type="number" fontSize={11} stroke="hsl(var(--muted-foreground))" />
               <YAxis type="category" dataKey="phase" fontSize={11} stroke="hsl(var(--muted-foreground))" width={85} />
-              <Tooltip content={<FunnelTooltip />} />
+              <ChartTooltip content={<ChartTooltipContent />} />
               <Bar dataKey="count" radius={[0, 4, 4, 0]}>
                 {data.map((_, i) => (
                   <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
                 ))}
               </Bar>
             </BarChart>
-          </ResponsiveContainer>
-        </div>
+        </ChartContainer>
       )}
     </DashboardChartWrapper>
   );

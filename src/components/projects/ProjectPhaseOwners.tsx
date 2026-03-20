@@ -27,6 +27,8 @@ const PROJECT_ROLE_FIELDS: { field: string; label: string; phaseEquiv?: string; 
   { field: 'ux_po_user_id', label: 'UX/PO', phaseEquiv: 'ux_po', appRole: 'ux_po' },
   { field: 'dev_user_id', label: 'Dev', phaseEquiv: 'dev_chatbot', appRole: 'dev_chatbot' },
   { field: 'treinamento_user_id', label: 'Treinamento / Ativação', phaseEquiv: 'treinamento', appRole: 'treinamento', multiRole: ['treinamento', 'ativacao'] },
+  { field: 'verificacao_bm_user_id', label: 'Verificação BM', phaseEquiv: 'verificacao_bm', appRole: 'verificacao_bm' },
+  { field: 'go_live_user_id', label: 'Go Live', phaseEquiv: 'go_live_assistido', appRole: 'head_pos_venda' },
   { field: 'closer_user_id', label: 'Closer', multiRole: ['closer', 'admin', 'manager', 'head_pos_venda'] },
   { field: 'sdr_user_id', label: 'SDR', appRole: 'sdr' },
 ];
@@ -37,6 +39,8 @@ const PHASE_TO_PROJECT_FIELD: Record<string, string> = {
   dev_chatbot: 'dev_user_id',
   treinamento: 'treinamento_user_id',
   ativacao: 'ativacao_user_id',
+  verificacao_bm: 'verificacao_bm_user_id',
+  go_live_assistido: 'go_live_user_id',
 };
 
 function OwnerPopoverSelect({

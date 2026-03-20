@@ -16,6 +16,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -42,9 +43,11 @@ interface UserManagementTableProps {
   users: UserWithRole[];
   roles: RoleOption[];
   onToggleActive: (userId: string, active: boolean) => void;
+  onToggleExcludeAutoAssign: (userId: string, exclude: boolean) => void;
   onUpdateRole: (userId: string, roleId: string) => void;
   onUpdateName: (userId: string, name: string) => void;
   isUpdating: boolean;
+  isAdmin: boolean;
 }
 
 const ONLINE_THRESHOLD_MS = 3 * 60 * 1000;
@@ -58,9 +61,11 @@ export const UserManagementTable = ({
   users,
   roles,
   onToggleActive,
+  onToggleExcludeAutoAssign,
   onUpdateRole,
   onUpdateName,
   isUpdating,
+  isAdmin,
 }: UserManagementTableProps) => {
   const [editingUser, setEditingUser] = useState<UserWithRole | null>(null);
   const [editName, setEditName] = useState('');
@@ -221,6 +226,35 @@ export const UserManagementTable = ({
         );
       },
     },
+    ...(isAdmin ? [{
+      accessorFn: (row: UserWithRole) => row.exclude_from_auto_assign,
+      id: 'exclude_auto_assign',
+      header: ({ column }: any) => <TableColumnHeader column={column} title="Auto-assign" />,
+      cell: ({ row }: any) => {
+        const user = row.original as UserWithRole;
+        return (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={user.exclude_from_auto_assign}
+                  onCheckedChange={(checked) => onToggleExcludeAutoAssign(user.id, !!checked)}
+                  disabled={isUpdating}
+                />
+                <span className="text-xs text-muted-foreground">
+                  {user.exclude_from_auto_assign ? 'Excluído' : 'Incluído'}
+                </span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              {user.exclude_from_auto_assign
+                ? 'Usuário recebe projetos apenas por atribuição manual'
+                : 'Usuário participa da atribuição automática de projetos'}
+            </TooltipContent>
+          </Tooltip>
+        );
+      },
+    }] as ColumnDef<UserWithRole>[] : []),
     {
       id: 'actions',
       header: () => <span className="text-xs">Ações</span>,
@@ -257,7 +291,7 @@ export const UserManagementTable = ({
         );
       },
     },
-  ], [roles, isUpdating, onUpdateRole, onToggleActive, resendingId, loggingOut]);
+  ], [roles, isUpdating, isAdmin, onUpdateRole, onToggleActive, onToggleExcludeAutoAssign, resendingId, loggingOut]);
 
   return (
     <>

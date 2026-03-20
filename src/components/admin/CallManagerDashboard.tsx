@@ -6,14 +6,35 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCallAnalysisStats } from '@/hooks/useCallAnalyses';
 import { useSystemUsers } from '@/hooks/useSystemUsers';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, PieChart, Pie, Cell, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  LineChart, Line, PieChart, Pie, Cell,
 } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Phone, TrendingUp, Target, AlertTriangle, Trophy, Presentation, ThumbsUp, Lightbulb } from 'lucide-react';
 
 type ViewMode = 'sdr_call' | 'demo_closer';
 
 const PIE_COLORS = ['#6366f1', '#f59e0b', '#ef4444', '#10b981', '#3b82f6', '#8b5cf6', '#f97316', '#14b8a6'];
+
+const monthlyChartConfig = {
+  avgScore: { label: 'Score Médio', color: 'hsl(var(--primary))' },
+} satisfies ChartConfig;
+
+const objectionChartConfig = {
+  count: { label: 'Frequência' },
+} satisfies ChartConfig;
+
+const strengthsChartConfig = {
+  count: { label: 'Frequência', color: '#10b981' },
+} satisfies ChartConfig;
+
+const improvementsChartConfig = {
+  count: { label: 'Frequência', color: '#f59e0b' },
+} satisfies ChartConfig;
+
+const recommendationsChartConfig = {
+  count: { label: 'Frequência', color: 'hsl(var(--primary))' },
+} satisfies ChartConfig;
 
 function extractFeedbackItems(
   feedback: string,
@@ -246,15 +267,15 @@ export const CallManagerDashboard = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={200}>
+              <ChartContainer config={monthlyChartConfig} className="h-[200px] [&_.recharts-wrapper]:!aspect-auto">
                 <LineChart data={monthlyData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                   <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="avgScore" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4 }} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Line type="monotone" dataKey="avgScore" stroke="var(--color-avgScore)" strokeWidth={2} dot={{ r: 4 }} />
                 </LineChart>
-              </ResponsiveContainer>
+              </ChartContainer>
             </CardContent>
           </Card>
         )}
@@ -268,7 +289,7 @@ export const CallManagerDashboard = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={260}>
+              <ChartContainer config={objectionChartConfig} className="h-[260px] [&_.recharts-wrapper]:!aspect-auto">
                 <PieChart>
                   <Pie
                     data={objectionData}
@@ -283,15 +304,10 @@ export const CallManagerDashboard = () => {
                       <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value, name) => [value, name]} />
-                  <Legend
-                    iconType="circle"
-                    iconSize={8}
-                    formatter={(value: string) => truncateLabel(value, 32)}
-                    wrapperStyle={{ fontSize: '10px', lineHeight: '18px' }}
-                  />
+                  <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
+                  <ChartLegend content={<ChartLegendContent nameKey="name" />} />
                 </PieChart>
-              </ResponsiveContainer>
+              </ChartContainer>
             </CardContent>
           </Card>
         )}
@@ -309,7 +325,7 @@ export const CallManagerDashboard = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={220}>
+                <ChartContainer config={strengthsChartConfig} className="h-[220px] [&_.recharts-wrapper]:!aspect-auto">
                   <BarChart data={feedbackCharts.strengths} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" tick={{ fontSize: 9 }} allowDecimals={false} />
@@ -320,10 +336,10 @@ export const CallManagerDashboard = () => {
                       tick={{ fontSize: 9 }}
                       tickFormatter={(v: string) => truncateLabel(v)}
                     />
-                    <Tooltip formatter={(value) => [value, 'Frequência']} />
-                    <Bar dataKey="count" fill="#10b981" radius={[0, 4, 4, 0]} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="count" fill="var(--color-count)" radius={[0, 4, 4, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
+                </ChartContainer>
               </CardContent>
             </Card>
           )}
@@ -337,7 +353,7 @@ export const CallManagerDashboard = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={220}>
+                <ChartContainer config={improvementsChartConfig} className="h-[220px] [&_.recharts-wrapper]:!aspect-auto">
                   <BarChart data={feedbackCharts.improvements} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" tick={{ fontSize: 9 }} allowDecimals={false} />
@@ -348,10 +364,10 @@ export const CallManagerDashboard = () => {
                       tick={{ fontSize: 9 }}
                       tickFormatter={(v: string) => truncateLabel(v)}
                     />
-                    <Tooltip formatter={(value) => [value, 'Frequência']} />
-                    <Bar dataKey="count" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="count" fill="var(--color-count)" radius={[0, 4, 4, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
+                </ChartContainer>
               </CardContent>
             </Card>
           )}
@@ -365,7 +381,7 @@ export const CallManagerDashboard = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={220}>
+                <ChartContainer config={recommendationsChartConfig} className="h-[220px] [&_.recharts-wrapper]:!aspect-auto">
                   <BarChart data={feedbackCharts.recommendations} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" tick={{ fontSize: 9 }} allowDecimals={false} />
@@ -376,10 +392,10 @@ export const CallManagerDashboard = () => {
                       tick={{ fontSize: 9 }}
                       tickFormatter={(v: string) => truncateLabel(v)}
                     />
-                    <Tooltip formatter={(value) => [value, 'Frequência']} />
-                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="count" fill="var(--color-count)" radius={[0, 4, 4, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
+                </ChartContainer>
               </CardContent>
             </Card>
           )}

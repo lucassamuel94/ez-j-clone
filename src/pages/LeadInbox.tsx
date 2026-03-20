@@ -8,15 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-  PaginationEllipsis,
-} from '@/components/ui/pagination';
 import { Lead, FilterType, LeadTemperature, LeadStatus } from '@/types/lead';
 import { useLeadsPaginated, useLeadTabCounts, useUpdateLead, useBulkDeleteLeads } from '@/hooks/useLeads';
 import { bulkDiscardLeads } from '@/services/leadService';
@@ -49,6 +40,8 @@ import {
   LayoutGrid,
   ArrowDownWideNarrow,
   Download,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
@@ -1059,9 +1052,11 @@ const LeadInbox = () => {
               </div>
 
               {/* ═══ Pagination ═══ */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>Mostrar</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    Mostrando {Math.min((currentPage - 1) * itemsPerPage + 1, totalFiltered)}–{Math.min(currentPage * itemsPerPage, totalFiltered)} de {totalFiltered}
+                  </p>
                   <Select
                     value={itemsPerPage.toString()}
                     onValueChange={(value) => {
@@ -1070,7 +1065,7 @@ const LeadInbox = () => {
                       localStorage.setItem('sdr_items_per_page', value);
                     }}
                   >
-                    <SelectTrigger className="w-[70px] h-8 text-xs">
+                    <SelectTrigger className="h-7 w-[72px] text-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1079,63 +1074,17 @@ const LeadInbox = () => {
                       <SelectItem value="100">100</SelectItem>
                     </SelectContent>
                   </Select>
-                  <span>por página</span>
+                  <span className="text-xs text-muted-foreground">por página</span>
                 </div>
-
-                <div className="text-xs text-muted-foreground">
-                  Mostrando {displayedLeads.length > 0 ? ((currentPage - 1) * itemsPerPage) + 1 : 0} a {Math.min(currentPage * itemsPerPage, totalFiltered)} de {totalFiltered} leads
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-xs font-medium px-2">{currentPage} / {totalPages}</span>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
                 </div>
-
-                {totalPages > 1 && (
-                  <Pagination>
-                    <PaginationContent>
-                      <PaginationItem>
-                        <PaginationPrevious 
-                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                          className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                        />
-                      </PaginationItem>
-                      
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let pageNum: number;
-                        if (totalPages <= 5) {
-                          pageNum = i + 1;
-                        } else if (currentPage <= 3) {
-                          pageNum = i + 1;
-                        } else if (currentPage >= totalPages - 2) {
-                          pageNum = totalPages - 4 + i;
-                        } else {
-                          pageNum = currentPage - 2 + i;
-                        }
-                        
-                        return (
-                          <PaginationItem key={pageNum}>
-                            <PaginationLink
-                              onClick={() => setCurrentPage(pageNum)}
-                              isActive={currentPage === pageNum}
-                              className="cursor-pointer"
-                            >
-                              {pageNum}
-                            </PaginationLink>
-                          </PaginationItem>
-                        );
-                      })}
-                      
-                      {totalPages > 5 && currentPage < totalPages - 2 && (
-                        <PaginationItem>
-                          <PaginationEllipsis />
-                        </PaginationItem>
-                      )}
-                      
-                      <PaginationItem>
-                        <PaginationNext 
-                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                          className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                        />
-                      </PaginationItem>
-                    </PaginationContent>
-                  </Pagination>
-                )}
               </div>
             </>
           )}

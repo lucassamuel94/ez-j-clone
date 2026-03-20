@@ -49,6 +49,7 @@ import {
   Activity,
   Video,
   FileText,
+  Target,
 } from 'lucide-react';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -69,7 +70,7 @@ const COLORS = [
 
 export const ReportsCloserSection = () => {
   const [selectedCloserId, setSelectedCloserId] = useState<string>('all');
-  const [datePeriod, setDatePeriod] = useState<ExecDatePeriod | 'custom'>('today');
+  const [datePeriod, setDatePeriod] = useState<ExecDatePeriod | 'custom'>('month');
   const [customDate, setCustomDate] = useState<Date | undefined>(undefined);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -121,6 +122,78 @@ export const ReportsCloserSection = () => {
 
   const { data: activityMetrics, isLoading: isLoadingActivity } = useCloserActivityMetrics({ closerId: closerFilter, dateRange });
   const { data: activityBreakdown = [] } = useCloserActivityBreakdown(dateRange);
+
+  // Setup Fechado + Pipeline Ativo: from Performance por Closer table data
+  const { setupFechado, pipelineAtivo } = useMemo(() => {
+    const rows = closerFilter ? breakdown.filter(r => r.id === closerFilter) : breakdown;
+    return {
+      setupFechado: rows.reduce((s, r) => s + r.revenue, 0),
+      pipelineAtivo: rows.reduce((s, r) => s + r.pendingContractsValue, 0),
+    };
+  }, [breakdown, closerFilter]);
+
+  // Monthly goal for closers
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+  const { data: closerGoal } = useQuery({
+    queryKey: ['closer-goal-admin', currentMonth, currentYear, closerFilter],
+    queryFn: async () => {
+      if (closerFilter) {
+        const { data: individual } = await supabase
+          .from('goals')
+          .select('setup_revenue_goal')
+          .eq('target_user_id', closerFilter)
+          .eq('period_month', currentMonth)
+          .eq('period_year', currentYear)
+          .eq('goal_type', 'closer')
+          .maybeSingle();
+        if (individual) return Number(individual.setup_revenue_goal) || 0;
+      }
+      // Sum all individual closer goals, or fall back to team goal × closer count
+      const { data: individualGoals } = await supabase
+        .from('goals')
+        .select('setup_revenue_goal, target_user_id')
+        .not('target_user_id', 'is', null)
+        .eq('period_month', currentMonth)
+        .eq('period_year', currentYear)
+        .eq('goal_type', 'closer');
+
+      if (individualGoals && individualGoals.length > 0) {
+        return individualGoals.reduce((s, g) => s + (Number(g.setup_revenue_goal) || 0), 0);
+      }
+
+      const { data: teamGoal } = await supabase
+        .from('goals')
+        .select('setup_revenue_goal')
+        .is('target_user_id', null)
+        .eq('period_month', currentMonth)
+        .eq('period_year', currentYear)
+        .eq('goal_type', 'closer')
+        .maybeSingle();
+
+      if (teamGoal) {
+        const closerCount = closerProfiles.length || 1;
+        return (Number(teamGoal.setup_revenue_goal) || 0) * closerCount;
+      }
+      return 0;
+    },
+    staleTime: 60_000,
+  });
+
+  const metaMensal = closerGoal || 0;
+  const faltaParaMeta = Math.max(0, metaMensal - setupFechado);
+
+  // Projeção: (setup fechado / dias trabalhados) × dias restantes no mês
+  const projecao = useMemo(() => {
+    const today = new Date();
+    const daysPassed = today.getDate();
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const daysRemaining = daysInMonth - daysPassed;
+    if (daysPassed === 0) return 0;
+    const dailyAvg = setupFechado / daysPassed;
+    return setupFechado + (dailyAvg * daysRemaining);
+  }, [setupFechado]);
 
   const stageTotal = stageData.reduce((s, i) => s + i.count, 0);
   const lostTotal = lostReasons.reduce((s, i) => s + i.count, 0);
@@ -220,25 +293,8 @@ export const ReportsCloserSection = () => {
         </div>
       ) : (
         <TooltipProvider delayDuration={300}>
+          {/* Row 1: Ganhas - Setup Fechado - Ticket Médio - Pipeline Ativo */}
           <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardContent className="p-4">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-center gap-2 mb-1 cursor-help">
-                      <Handshake className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">Oportunidades</span>
-                      <Info className="h-3 w-3 text-muted-foreground/50" />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    <p className="text-xs">Total de oportunidades criadas no período</p>
-                  </TooltipContent>
-                </Tooltip>
-                <p className="text-2xl font-bold text-foreground font-display">{fmt(metrics?.totalOpportunities || 0)}</p>
-              </CardContent>
-            </Card>
-
             <Card>
               <CardContent className="p-4">
                 <Tooltip>
@@ -263,15 +319,15 @@ export const ReportsCloserSection = () => {
                   <TooltipTrigger asChild>
                     <div className="flex items-center gap-2 mb-1 cursor-help">
                       <DollarSign className="h-4 w-4 text-primary" />
-                      <span className="text-xs text-muted-foreground">Receita Fechada</span>
+                      <span className="text-xs text-muted-foreground">Setup Fechado</span>
                       <Info className="h-3 w-3 text-muted-foreground/50" />
                     </div>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
-                    <p className="text-xs">Soma do valor dos deals ganhos no período</p>
+                    <p className="text-xs">Soma do setup_total das propostas vinculadas às oportunidades ganhas no período</p>
                   </TooltipContent>
                 </Tooltip>
-                <p className="text-2xl font-bold text-foreground font-display">{fmtCurrency(metrics?.revenue || 0)}</p>
+                <p className="text-2xl font-bold text-foreground font-display">{fmtCurrency(setupFechado)}</p>
               </CardContent>
             </Card>
 
@@ -280,23 +336,39 @@ export const ReportsCloserSection = () => {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className="flex items-center gap-2 mb-1 cursor-help">
-                      <XCircle className="h-4 w-4 text-destructive" />
-                      <span className="text-xs text-muted-foreground">Perdidas</span>
+                      <Receipt className="h-4 w-4 text-[hsl(var(--chart-2))]" />
+                      <span className="text-xs text-muted-foreground">Ticket Médio</span>
                       <Info className="h-3 w-3 text-muted-foreground/50" />
                     </div>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
-                    <p className="text-xs">Oportunidades marcadas como perdidas no período</p>
+                    <p className="text-xs">Setup Fechado ÷ Quantidade de deals ganhos</p>
                   </TooltipContent>
                 </Tooltip>
-                <p className={cn('text-2xl font-bold font-display', (metrics?.lost || 0) > 0 ? 'text-destructive' : 'text-foreground')}>
-                  {fmt(metrics?.lost || 0)}
-                </p>
+                <p className="text-2xl font-bold text-foreground font-display">{fmtCurrency(metrics?.avgTicket || 0)}</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2 mb-1 cursor-help">
+                      <TrendingUp className="h-4 w-4 text-[hsl(var(--chart-3))]" />
+                      <span className="text-xs text-muted-foreground">Pipeline Ativo</span>
+                      <Info className="h-3 w-3 text-muted-foreground/50" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p className="text-xs">Soma do setup de oportunidades em &apos;Contrato enviado&apos; e &apos;Aguardando pagamento&apos; (Oportunidades + Evoluções)</p>
+                  </TooltipContent>
+                </Tooltip>
+                <p className="text-2xl font-bold text-foreground font-display">{fmtCurrency(pipelineAtivo)}</p>
               </CardContent>
             </Card>
           </div>
 
-          {/* Operational Metrics */}
+          {/* Row 2: Taxa de Conversão - Oportunidades Criadas - Perdidas - Ciclo Médio */}
           <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 mt-3">
             <Card>
               <CardContent className="p-4">
@@ -321,16 +393,38 @@ export const ReportsCloserSection = () => {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className="flex items-center gap-2 mb-1 cursor-help">
-                      <Receipt className="h-4 w-4 text-[hsl(var(--chart-2))]" />
-                      <span className="text-xs text-muted-foreground">Ticket Médio</span>
+                      <Target className="h-4 w-4 text-[hsl(var(--chart-2))]" />
+                      <span className="text-xs text-muted-foreground">Falta para a Meta</span>
                       <Info className="h-3 w-3 text-muted-foreground/50" />
                     </div>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
-                    <p className="text-xs">Receita total ÷ Quantidade de deals ganhos</p>
+                    <p className="text-xs">Total de vendas de setup que falta para bater a meta mensal</p>
                   </TooltipContent>
                 </Tooltip>
-                <p className="text-2xl font-bold text-foreground font-display">{fmtCurrency(metrics?.avgTicket || 0)}</p>
+                <p className={cn('text-2xl font-bold font-display', faltaParaMeta > 0 ? 'text-[hsl(var(--chart-2))]' : 'text-[hsl(var(--chart-3))]')}>
+                  {fmtCurrency(faltaParaMeta)}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2 mb-1 cursor-help">
+                      <BarChart3 className="h-4 w-4 text-primary" />
+                      <span className="text-xs text-muted-foreground">Projeção</span>
+                      <Info className="h-3 w-3 text-muted-foreground/50" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p className="text-xs">Setup fechado ÷ dias trabalhados × dias totais do mês</p>
+                  </TooltipContent>
+                </Tooltip>
+                <p className={cn('text-2xl font-bold font-display', projecao >= metaMensal && metaMensal > 0 ? 'text-[hsl(var(--chart-3))]' : 'text-foreground')}>
+                  {fmtCurrency(projecao)}
+                </p>
               </CardContent>
             </Card>
 
@@ -348,27 +442,9 @@ export const ReportsCloserSection = () => {
                     <p className="text-xs">Média de dias entre criação e fechamento dos deals ganhos</p>
                   </TooltipContent>
                 </Tooltip>
-                 <p className="text-2xl font-bold text-foreground font-display">
+                <p className="text-2xl font-bold text-foreground font-display">
                   {metrics?.avgCycleDays || 0} <span className="text-sm font-normal text-muted-foreground">dias</span>
                 </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-center gap-2 mb-1 cursor-help">
-                      <TrendingUp className="h-4 w-4 text-[hsl(var(--chart-3))]" />
-                      <span className="text-xs text-muted-foreground">Pipeline Ativo</span>
-                      <Info className="h-3 w-3 text-muted-foreground/50" />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    <p className="text-xs">Valor total de oportunidades em estágios ativos (não Ganho/Perdido)</p>
-                  </TooltipContent>
-                </Tooltip>
-                <p className="text-2xl font-bold text-foreground font-display">{fmtCurrency(metrics?.activePipelineValue || 0)}</p>
               </CardContent>
             </Card>
           </div>
@@ -449,88 +525,7 @@ export const ReportsCloserSection = () => {
         </div>
       )}
 
-      {/* Activity Breakdown by Closer */}
-      {selectedCloserId === 'all' && activityBreakdown.length > 0 && (
-        <TooltipProvider delayDuration={300}>
-        <Card>
-          <CardContent className="p-0">
-            <div className="px-4 py-3 border-b flex items-center gap-2">
-              <Activity className="h-4 w-4 text-primary" />
-              <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Atividade por Closer</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b bg-muted/30">
-                    <th className="text-left px-4 py-2.5 font-bold uppercase tracking-widest text-muted-foreground">Closer</th>
-                    <th className="text-center px-3 py-2.5 font-bold uppercase tracking-widest text-muted-foreground">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                           <span className="inline-flex items-center gap-1 cursor-help">Oport. Trabalhadas <Info className="h-3 w-3 text-muted-foreground/50" /></span>
-                         </TooltipTrigger>
-                         <TooltipContent side="bottom">
-                           <p className="text-xs">Oportunidades cujo lead recebeu alguma nota ou registro no período</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </th>
-                    <th className="text-center px-3 py-2.5 font-bold uppercase tracking-widest text-muted-foreground">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="inline-flex items-center gap-1 cursor-help">Atividades <Info className="h-3 w-3 text-muted-foreground/50" /></span>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">
-                          <p className="text-xs">Total de registros: ligações, e-mails, WhatsApp, tarefas e observações</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </th>
-                    <th className="text-center px-3 py-2.5 font-bold uppercase tracking-widest text-muted-foreground">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="inline-flex items-center gap-1 cursor-help">Reuniões <Info className="h-3 w-3 text-muted-foreground/50" /></span>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">
-                          <p className="text-xs">Oportunidades com data de reunião dentro do período selecionado</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </th>
-                    <th className="text-center px-3 py-2.5 font-bold uppercase tracking-widest text-muted-foreground">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="inline-flex items-center gap-1 cursor-help">Propostas <Info className="h-3 w-3 text-muted-foreground/50" /></span>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">
-                          <p className="text-xs">Propostas comerciais criadas no período (novas + evoluções)</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {activityBreakdown.map((row) => (
-                    <tr key={row.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-2.5 font-medium text-foreground">{row.name}</td>
-                      <td className="text-center px-3 py-2.5 tabular-nums">
-                        <button onClick={() => setDetailModal({ closerId: row.id, closerName: row.name, metric: 'opportunities_worked' })} className="hover:text-primary hover:underline cursor-pointer transition-colors">{fmt(row.opportunitiesWorked)}</button>
-                      </td>
-                      <td className="text-center px-3 py-2.5 tabular-nums font-semibold">
-                        <button onClick={() => setDetailModal({ closerId: row.id, closerName: row.name, metric: 'activities' })} className="hover:text-primary hover:underline cursor-pointer transition-colors">{fmt(row.activities)}</button>
-                      </td>
-                      <td className="text-center px-3 py-2.5 tabular-nums text-[hsl(var(--chart-3))]">
-                        <button onClick={() => setDetailModal({ closerId: row.id, closerName: row.name, metric: 'meetings' })} className="hover:text-primary hover:underline cursor-pointer transition-colors">{fmt(row.meetings)}</button>
-                      </td>
-                      <td className="text-center px-3 py-2.5 tabular-nums text-[hsl(var(--chart-4))]">
-                        <button onClick={() => setDetailModal({ closerId: row.id, closerName: row.name, metric: 'proposals' })} className="hover:text-primary hover:underline cursor-pointer transition-colors">{fmt(row.proposals)}</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-        </TooltipProvider>
-      )}
-
+      {/* Performance by Closer */}
       {selectedCloserId === 'all' && breakdown.length > 1 && (
         <TooltipProvider delayDuration={300}>
         <Card>
@@ -620,6 +615,88 @@ export const ReportsCloserSection = () => {
                       <td className="text-center px-3 py-2.5 tabular-nums font-semibold text-[hsl(var(--chart-2))]">{fmtCurrency(row.pendingContractsValue)}</td>
                       <td className="text-center px-3 py-2.5 tabular-nums font-semibold">{fmtCurrency(row.revenue)}</td>
                       <td className="text-center px-3 py-2.5 tabular-nums">{row.rate}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+        </TooltipProvider>
+      )}
+
+      {/* Activity Breakdown by Closer */}
+      {selectedCloserId === 'all' && activityBreakdown.length > 0 && (
+        <TooltipProvider delayDuration={300}>
+        <Card>
+          <CardContent className="p-0">
+            <div className="px-4 py-3 border-b flex items-center gap-2">
+              <Activity className="h-4 w-4 text-primary" />
+              <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Atividade por Closer</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    <th className="text-left px-4 py-2.5 font-bold uppercase tracking-widest text-muted-foreground">Closer</th>
+                    <th className="text-center px-3 py-2.5 font-bold uppercase tracking-widest text-muted-foreground">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                           <span className="inline-flex items-center gap-1 cursor-help">Oport. Trabalhadas <Info className="h-3 w-3 text-muted-foreground/50" /></span>
+                         </TooltipTrigger>
+                         <TooltipContent side="bottom">
+                           <p className="text-xs">Oportunidades cujo lead recebeu alguma nota ou registro no período</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </th>
+                    <th className="text-center px-3 py-2.5 font-bold uppercase tracking-widest text-muted-foreground">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center gap-1 cursor-help">Atividades <Info className="h-3 w-3 text-muted-foreground/50" /></span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          <p className="text-xs">Total de registros: ligações, e-mails, WhatsApp, tarefas e observações</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </th>
+                    <th className="text-center px-3 py-2.5 font-bold uppercase tracking-widest text-muted-foreground">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center gap-1 cursor-help">Reuniões <Info className="h-3 w-3 text-muted-foreground/50" /></span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          <p className="text-xs">Oportunidades com data de reunião dentro do período selecionado</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </th>
+                    <th className="text-center px-3 py-2.5 font-bold uppercase tracking-widest text-muted-foreground">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center gap-1 cursor-help">Propostas <Info className="h-3 w-3 text-muted-foreground/50" /></span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          <p className="text-xs">Propostas comerciais criadas no período (novas + evoluções)</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {activityBreakdown.map((row) => (
+                    <tr key={row.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-2.5 font-medium text-foreground">{row.name}</td>
+                      <td className="text-center px-3 py-2.5 tabular-nums">
+                        <button onClick={() => setDetailModal({ closerId: row.id, closerName: row.name, metric: 'opportunities_worked' })} className="hover:text-primary hover:underline cursor-pointer transition-colors">{fmt(row.opportunitiesWorked)}</button>
+                      </td>
+                      <td className="text-center px-3 py-2.5 tabular-nums font-semibold">
+                        <button onClick={() => setDetailModal({ closerId: row.id, closerName: row.name, metric: 'activities' })} className="hover:text-primary hover:underline cursor-pointer transition-colors">{fmt(row.activities)}</button>
+                      </td>
+                      <td className="text-center px-3 py-2.5 tabular-nums text-[hsl(var(--chart-3))]">
+                        <button onClick={() => setDetailModal({ closerId: row.id, closerName: row.name, metric: 'meetings' })} className="hover:text-primary hover:underline cursor-pointer transition-colors">{fmt(row.meetings)}</button>
+                      </td>
+                      <td className="text-center px-3 py-2.5 tabular-nums text-[hsl(var(--chart-4))]">
+                        <button onClick={() => setDetailModal({ closerId: row.id, closerName: row.name, metric: 'proposals' })} className="hover:text-primary hover:underline cursor-pointer transition-colors">{fmt(row.proposals)}</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

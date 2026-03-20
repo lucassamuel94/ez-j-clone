@@ -49,8 +49,8 @@ Deno.serve(async (req) => {
         .eq("id", logEntry.id);
     }
 
-    // For reply detection — auto-unenroll
-    if (eventType === "email.replied" || eventType === "email.complained") {
+    // Clicked a link — strong engagement signal, stop the sequence
+    if (eventType === "email.clicked") {
       await supabase
         .from("email_sequence_logs")
         .update({ replied_at: new Date().toISOString() })
@@ -59,6 +59,14 @@ Deno.serve(async (req) => {
       await supabase
         .from("email_sequence_enrollments")
         .update({ status: "replied", updated_at: new Date().toISOString() })
+        .eq("id", logEntry.enrollment_id);
+    }
+
+    // Bounced or complained — stop the sequence
+    if (eventType === "email.bounced" || eventType === "email.complained") {
+      await supabase
+        .from("email_sequence_enrollments")
+        .update({ status: "unsubscribed", updated_at: new Date().toISOString() })
         .eq("id", logEntry.enrollment_id);
     }
 

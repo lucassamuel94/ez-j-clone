@@ -566,6 +566,10 @@ async function resolveContext(
   if (trigger_key === 'parciais_sdr' || trigger_key.startsWith('parciais_sdr:')) {
     await resolveSDRMetrics(supabase, vars);
   }
+
+  if (trigger_key === 'parciais_closers' || trigger_key.startsWith('parciais_closers:')) {
+    await resolveCloserMetrics(supabase, vars);
+  }
 }
 
 /** Resolve SDR scheduling metrics for parciais_sdr reports */
@@ -690,6 +694,105 @@ async function resolveSDRMetrics(
     console.log(`[resolveSDRMetrics] today=${totalToday}, month=${totalMonth}, goal=${totalGoal}, sdrs=${allSdrIds.length}`);
   } catch (err) {
     console.error("[resolveSDRMetrics] error:", err);
+  }
+}
+
+/** Resolve Closer sales metrics for parciais_closers reports */
+async function resolveCloserMetrics(
+  supabase: ReturnType<typeof createClient>,
+  vars: Record<string, string>
+): Promise<void> {
+  try {
+    const now = new Date();
+    const spTime = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hour12: false,
+    }).format(now);
+    const spMonth = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo", month: "numeric" });
+    const spYear = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo", year: "numeric" });
+
+    // Use the existing RPC that returns real closer ranking data
+    const { data: ranking, error } = await (supabase.rpc("get_closer_ranking") as any);
+
+    if (error) {
+      console.error("[resolveCloserMetrics] RPC error:", error);
+      return;
+    }
+
+    const formatBRL = (v: number) =>
+      new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
+
+    // Build ranking lines sorted by setup_revenue (already sorted by the RPC)
+    const lines: string[] = [];
+    let totalSetup = 0;
+    let totalWon = 0;
+    let totalOpps = 0;
+
+    for (const r of (ranking || []) as any[]) {
+      const setup = Number(r.setup_revenue) || 0;
+      const won = Number(r.won_count) || 0;
+      const total = Number(r.total_count) || 0;
+      const name = (r.closer_name || "Closer") as string;
+
+      totalSetup += setup;
+      totalWon += won;
+      totalOpps += total;
+
+      if (setup > 0 || won > 0) {
+        lines.push(`${lines.length + 1}. ${name}: ${formatBRL(setup)} (${won} venda${won !== 1 ? "s" : ""})`);
+      }
+    }
+
+    // Set variables matching the UI chips exactly
+    // {{closer}} — the ranking text (used in the AI prompt)
+    vars.closer = lines.length > 0 ? lines.join("\n") : "Nenhuma venda registrada neste mês ainda.";
+    vars.total_vendas = String(totalWon);
+    vars.valor_vendas = formatBRL(totalSetup);
+    vars.total_propostas = String(totalOpps);
+    vars.horario = spTime;
+
+    // Fetch closer goals for meta/percentual
+    const closerIds = ((ranking || []) as any[]).map((r: any) => r.closer_id as string);
+    if (closerIds.length > 0) {
+      const { data: goals } = await (supabase
+        .from("goals")
+        .select("target_user_id, sales_goal") as any)
+        .eq("goal_type", "closer")
+        .eq("period_month", parseInt(spMonth))
+        .eq("period_year", parseInt(spYear))
+        .in("target_user_id", closerIds);
+
+      let totalGoal = 0;
+      for (const g of (goals || []) as any[]) {
+        totalGoal += Number(g.sales_goal) || 0;
+      }
+
+      vars.meta_vendas = totalGoal > 0 ? formatBRL(totalGoal) : "Sem meta definida";
+      vars.percentual_vendas = totalGoal > 0 ? `${Math.round((totalSetup / totalGoal) * 100)}%` : "N/A";
+    } else {
+      vars.meta_vendas = "Sem meta definida";
+      vars.percentual_vendas = "N/A";
+    }
+
+    // Business days calculation (São Paulo timezone)
+    const spNow = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+    const year = spNow.getFullYear();
+    const month = spNow.getMonth();
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    let elapsed = 0;
+    let remaining = 0;
+    for (let d = 1; d <= lastDay; d++) {
+      const dayOfWeek = new Date(year, month, d).getDay();
+      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+        if (d <= spNow.getDate()) elapsed++;
+        else remaining++;
+      }
+    }
+    vars.dias_uteis_decorridos = String(elapsed);
+    vars.dias_uteis_restantes = String(remaining);
+
+    console.log(`[resolveCloserMetrics] closers=${(ranking || []).length}, totalSetup=${totalSetup}, totalWon=${totalWon}, elapsed=${elapsed}, remaining=${remaining}`);
+  } catch (err) {
+    console.error("[resolveCloserMetrics] error:", err);
   }
 }
 

@@ -9,6 +9,7 @@ export interface MyClient {
   state: string | null;
   lifecycle_stage: string;
   situacao_cadastral: string | null;
+  account_owner_id: string | null;
   account_owner_name: string | null;
   closer_name: string | null;
   sdr_name: string | null;
@@ -22,6 +23,7 @@ export interface MyClient {
   health_score: number;
   health_label: 'green' | 'yellow' | 'red';
   products: string[];
+  status: string;
 }
 
 function computeHealth(daysSinceActivity: number | null, activeProjects: number): { score: number; label: 'green' | 'yellow' | 'red' } {
@@ -40,6 +42,26 @@ function computeHealth(daysSinceActivity: number | null, activeProjects: number)
   return { score, label };
 }
 
+// Helper: fetch with .in() in chunks to avoid PostgREST URL length limits
+async function fetchInChunks<T>(
+  table: string,
+  select: string,
+  filterCol: string,
+  ids: string[],
+  extra?: (q: any) => any,
+): Promise<T[]> {
+  const CHUNK = 200;
+  const all: T[] = [];
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK);
+    let q = (supabase.from as any)(table).select(select).in(filterCol, chunk);
+    if (extra) q = extra(q);
+    const { data } = await q;
+    if (data) all.push(...(data as T[]));
+  }
+  return all;
+}
+
 export function useMyClients(
   userId: string | null,
   viewMode: 'closer' | 'sdr' | 'admin',
@@ -50,43 +72,67 @@ export function useMyClients(
       // 1. Fetch all client accounts
       const { data: accounts, error } = await supabase
         .from('accounts')
-        .select(`
-          id, company_name, cnpj, city, state, lifecycle_stage, situacao_cadastral,
-          account_owner:profiles!accounts_account_owner_id_profiles_fkey(name)
-        `)
+        .select('id, company_name, cnpj, city, state, lifecycle_stage, situacao_cadastral, account_owner_id, status')
         .eq('lifecycle_stage', 'client')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(5000);
 
       if (error) throw error;
+
       if (!accounts || accounts.length === 0) return [];
+
+      // Fetch owner names separately (the profiles FK join doesn't work in this project)
+      const ownerIds = [...new Set(accounts.map((a: any) => a.account_owner_id).filter(Boolean))];
+      const ownerMap = new Map<string, string>();
+      if (ownerIds.length > 0) {
+        const ownerChunks = [];
+        for (let i = 0; i < ownerIds.length; i += 200) {
+          ownerChunks.push(ownerIds.slice(i, i + 200));
+        }
+        for (const chunk of ownerChunks) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, name')
+            .in('id', chunk);
+          if (profiles) {
+            for (const p of profiles) {
+              ownerMap.set(p.id, p.name);
+            }
+          }
+        }
+      }
 
       const accountIds = accounts.map((a: any) => a.id);
 
-      // 2. Fetch ALL opportunities for these accounts (won + active)
-      const { data: allOpps } = await supabase
-        .from('opportunities')
-        .select(`
-          id, account_id, stage, opportunity_type, deal_value, won_at, updated_at,
-          assigned_to_user_id,
-          closer:profiles!opportunities_assigned_to_user_id_fkey(name),
-          sdr:profiles!opportunities_sdr_user_id_fkey(name),
-          sdr_user_id
-        `)
-        .in('account_id', accountIds);
-
-      // 3. Fetch projects count per account
-      const { data: projectCounts } = await supabase
-        .from('projects')
-        .select('account_id')
-        .in('account_id', accountIds)
-        .not('overall_status', 'in', '("cancelado")');
-
-      // 4. Fetch last activity per account
-      const { data: lastActivities } = await supabase
-        .from('account_activity_logs')
-        .select('account_id, created_at')
-        .in('account_id', accountIds)
-        .order('created_at', { ascending: false });
+      // 2-4. Fetch related data in chunks (parallel)
+      const [allOpps, projectCounts, lastActivities] = await Promise.all([
+        fetchInChunks<any>(
+          'opportunities',
+          `id, account_id, stage, opportunity_type, deal_value, won_at, updated_at,
+           assigned_to_user_id,
+           closer:profiles!opportunities_assigned_to_user_id_fkey(name),
+           sdr:profiles!opportunities_sdr_user_id_fkey(name),
+           sdr_user_id`,
+          'account_id',
+          accountIds,
+          (q) => q.not('stage', 'eq', 'Perdido'),
+        ),
+        fetchInChunks<any>(
+          'projects',
+          'account_id',
+          'account_id',
+          accountIds,
+          (q) => q.not('overall_status', 'in', '("cancelado")'),
+        ),
+        // Only fetch latest activity per account (limit per chunk)
+        fetchInChunks<any>(
+          'account_activity_logs',
+          'account_id, created_at',
+          'account_id',
+          accountIds,
+          (q) => q.order('created_at', { ascending: false }).limit(1000),
+        ),
+      ]);
 
       // Build maps
       const now = new Date();
@@ -155,9 +201,11 @@ export function useMyClients(
       for (const a of accounts as any[]) {
         const opp = oppMap.get(a.id);
 
-        // Role filter
-        if (viewMode === 'closer' && opp?.closerUserId !== userId) continue;
-        if (viewMode === 'sdr' && opp?.sdrUserId !== userId) continue;
+        // Role filter: use opportunity closer/sdr, fallback to account_owner_id
+        const closerMatch = opp?.closerUserId === userId || (a as any).account_owner_id === userId;
+        const sdrMatch = opp?.sdrUserId === userId || (a as any).account_owner_id === userId;
+        if (viewMode === 'closer' && !closerMatch) continue;
+        if (viewMode === 'sdr' && !sdrMatch) continue;
 
         const lastActivity = activityMap.get(a.id) || opp?.wonOpp?.won_at || null;
         const daysSince = lastActivity
@@ -175,8 +223,10 @@ export function useMyClients(
           state: a.state,
           lifecycle_stage: a.lifecycle_stage,
           situacao_cadastral: a.situacao_cadastral,
-          account_owner_name: (a.account_owner as any)?.name || null,
-          closer_name: opp?.closerName || null,
+          account_owner_id: a.account_owner_id || null,
+          account_owner_name: ownerMap.get(a.account_owner_id) || null,
+          closer_name: opp?.closerName || ownerMap.get(a.account_owner_id) || null,
+          status: a.status || 'active',
           sdr_name: opp?.sdrName || null,
           won_at: opp?.wonOpp?.won_at || null,
           deal_value: opp?.wonOpp?.deal_value || null,
@@ -194,6 +244,7 @@ export function useMyClients(
       return result;
     },
     enabled: viewMode === 'admin' || !!userId,
-    staleTime: 30_000,
+    staleTime: 120_000,
+    gcTime: 300_000,
   });
 }
