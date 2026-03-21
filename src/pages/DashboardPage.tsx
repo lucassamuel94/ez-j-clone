@@ -22,6 +22,8 @@ import { PageHeader } from '@/components/PageHeader';
 import { format, isToday, isTomorrow, isPast, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { isTaskCompleted } from '@/utils/taskStatus';
+import { DailyBriefingCard } from '@/components/DailyBriefingCard';
+import { useUserRole } from '@/hooks/useUserRole';
 
 interface QuickCard {
   to: string;
@@ -40,6 +42,7 @@ export default function DashboardPage() {
   const { data: tasks = [] } = useMyTasks();
   const { data: counts } = useDashboardCounts();
   const { hasPermission } = usePermissions();
+  const { role } = useUserRole();
 
   const canAccessCommercial = hasPermission('view_sdr_leads') || hasPermission('view_closer_pipeline');
   const canAccessProjects = hasPermission('view_projects');
@@ -130,6 +133,20 @@ export default function DashboardPage() {
           <PageHeader
             title={`${greeting}, ${firstName} 👋`}
             subtitle="Aqui está o resumo do seu espaço de trabalho."
+          />
+
+          {/* Daily AI Briefing */}
+          <DailyBriefingCard
+            role={role || 'sdr'}
+            stats={{
+              hotLeads: 0,
+              pendingReturns: 0,
+              scheduledMeetings: 0,
+              activeOpps: activeOppsCount,
+              stuckDeals: 0,
+              pendingTasks: pendingTasks.length,
+              overdueItems: overdueTasks.length,
+            }}
           />
 
           {/* Alert bar */}

@@ -101,37 +101,69 @@ Deno.serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     let aiAnalysis = "";
 
+    interface IcpProfile {
+      porte_tipico: string;
+      cnae_principal: string;
+      regiao_principal: string;
+      faturamento_tipico: string;
+      funcionarios_tipico: string;
+      resumo_narrativo: string;
+    }
+
+    interface Estrategia {
+      titulo: string;
+      descricao: string;
+      impacto: "alto" | "medio";
+    }
+
+    let icpProfile: IcpProfile | null = null;
+    let estrategias: Estrategia[] = [];
+
     if (LOVABLE_API_KEY) {
-      const prompt = `Você é um analista de perfil de cliente ideal (ICP) para uma empresa de tecnologia brasileira.
+      const prompt = `Analise os seguintes dados agregados de ${clients.length} clientes ativos:
 
-Analise os seguintes dados agregados de ${clients.length} clientes ativos:
-
-**Top 10 CNAEs (atividades econômicas):**
+Top 10 CNAEs (atividades econômicas):
 ${top_cnaes.map((c) => `- ${c.name}: ${c.value} empresas`).join("\n")}
 
-**Top 15 CNAEs Secundários (sub-atividades):**
+Top 15 CNAEs Secundários (sub-atividades):
 ${top_sub_cnaes.map((c) => `- ${c.name}: ${c.value} empresas`).join("\n")}
 
-**Distribuição por Porte:**
+Distribuição por Porte:
 ${porte_distribution.map((c) => `- ${c.name}: ${c.value} empresas`).join("\n")}
 
-**Top Cidades/Estados:**
+Top Cidades/Estados:
 ${top_locations.map((c) => `- ${c.name}: ${c.value} empresas`).join("\n")}
 
-**Faixa de Faturamento:**
+Faixa de Faturamento:
 ${revenue_distribution.map((c) => `- ${c.name}: ${c.value} empresas`).join("\n")}
 
-**Faixa de Funcionários:**
+Faixa de Funcionários:
 ${employee_distribution.map((c) => `- ${c.name}: ${c.value} empresas`).join("\n")}
 
-Com base nesses dados, gere um relatório completo contendo:
-1. **Perfil Ideal de Cliente (ICP)**: Descreva o perfil ideal com base nos padrões encontrados
-2. **Padrões Identificados**: Quais são os padrões mais relevantes na base de clientes
-3. **Recomendações para SDRs**: Dicas práticas para os SDRs na prospecção
-4. **CNAEs e Segmentos Prioritários**: Quais setores devem ser priorizados
-5. **Insights sobre Porte e Faturamento**: O que os dados de porte e faturamento revelam
+Com base nesses dados, retorne um JSON com a seguinte estrutura exata:
+{
+  "perfil_icp": {
+    "porte_tipico": "porte mais comum entre os clientes",
+    "cnae_principal": "CNAE mais frequente",
+    "regiao_principal": "região/cidade mais frequente",
+    "faturamento_tipico": "faixa de faturamento mais comum",
+    "funcionarios_tipico": "faixa de funcionários mais comum",
+    "resumo_narrativo": "2-3 frases descrevendo o perfil ideal de cliente com base nos padrões encontrados"
+  },
+  "estrategias": [
+    {
+      "titulo": "título curto da estratégia",
+      "descricao": "1-2 frases explicando a estratégia e como aplicá-la na prospecção",
+      "impacto": "alto" ou "medio"
+    }
+  ]
+}
 
-Escreva em português do Brasil, de forma clara e objetiva.`;
+Regras:
+- Retorne entre 3 e 6 estratégias
+- Baseie tudo nos dados fornecidos, sem inventar números
+- O resumo_narrativo deve ser claro e objetivo
+- Escreva em português do Brasil`;
 
       try {
         const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -143,7 +175,10 @@ Escreva em português do Brasil, de forma clara e objetiva.`;
           body: JSON.stringify({
             model: "google/gemini-3-flash-preview",
             messages: [
-              { role: "system", content: "Você é um analista de ICP (Perfil de Cliente Ideal). Responda em português do Brasil." },
+              {
+                role: "system",
+                content: "Você é um analista de ICP (Perfil de Cliente Ideal). Responda SOMENTE com JSON válido, sem markdown, sem blocos de código, sem texto adicional. Apenas o objeto JSON puro.",
+              },
               { role: "user", content: prompt },
             ],
           }),
@@ -151,7 +186,27 @@ Escreva em português do Brasil, de forma clara e objetiva.`;
 
         if (aiRes.ok) {
           const aiData = await aiRes.json();
-          aiAnalysis = aiData.choices?.[0]?.message?.content || "";
+          const rawContent: string = aiData.choices?.[0]?.message?.content || "";
+
+          try {
+            // Strip markdown code fences if present
+            const cleanedContent = rawContent
+              .replace(/^```(?:json)?\s*/i, "")
+              .replace(/\s*```$/i, "")
+              .trim();
+
+            const parsed = JSON.parse(cleanedContent) as {
+              perfil_icp: IcpProfile;
+              estrategias: Estrategia[];
+            };
+
+            icpProfile = parsed.perfil_icp || null;
+            estrategias = parsed.estrategias || [];
+            aiAnalysis = icpProfile?.resumo_narrativo || "";
+          } catch (parseError) {
+            console.error("Failed to parse AI JSON response, using raw content:", parseError);
+            aiAnalysis = rawContent;
+          }
         } else if (aiRes.status === 429) {
           console.warn("AI rate limited, saving analysis without AI text");
         } else if (aiRes.status === 402) {
@@ -165,6 +220,14 @@ Escreva em português do Brasil, de forma clara e objetiva.`;
       }
     } else {
       console.warn("LOVABLE_API_KEY not configured, skipping AI analysis");
+    }
+
+    // Enrich statistics with structured AI data
+    if (icpProfile) {
+      (statistics as Record<string, unknown>).icp_profile = icpProfile;
+    }
+    if (estrategias.length > 0) {
+      (statistics as Record<string, unknown>).estrategias = estrategias;
     }
 
     // Get user from auth header

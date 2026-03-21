@@ -42,6 +42,9 @@ verify_jwt = false
 [functions.calculate-lead-scores]
 verify_jwt = false
 
+[functions.deepgram-webhook]
+verify_jwt = false
+
 [functions.transcribe-call]
 verify_jwt = false
 
@@ -63,8 +66,6 @@ verify_jwt = false
 [functions.generate-auto-message]
 verify_jwt = false
 
-[functions.clickup-import]
-verify_jwt = false
 
 [functions.import-projects]
 verify_jwt = false
@@ -133,4 +134,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.notify-business-rules-query]
+verify_jwt = false
+
+[functions.recover-stuck-call-analyses]
 verify_jwt = false

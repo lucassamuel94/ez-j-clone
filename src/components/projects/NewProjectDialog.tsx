@@ -224,7 +224,14 @@ export const NewProjectDialog = ({ open, onOpenChange }: NewProjectDialogProps) 
       const assignments = await resolveAutoAssignments();
 
       const now = new Date();
-      const dueDate = addBusinessDays(now, 15);
+      // Default deadlines by project type (business days) — adjust values to match actual SLA
+      const DEFAULT_DEADLINE_BY_TYPE: Record<string, number> = {
+        venda: 15,
+        migracao: 20,
+        evolucao: 10,
+        api_oficial: 10,
+      };
+      const dueDate = addBusinessDays(now, DEFAULT_DEADLINE_BY_TYPE[projectType] ?? 15);
 
       const phases = PHASES_BY_TYPE[projectType];
       const firstPhase = phases[0];

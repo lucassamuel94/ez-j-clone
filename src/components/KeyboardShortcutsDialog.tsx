@@ -17,6 +17,8 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
     title: 'Navegação Geral',
     shortcuts: [
       { keys: ['⌘', 'B'], description: 'Abrir/fechar barra lateral' },
+      { keys: ['⌘', 'J'], description: 'Busca global' },
+      { keys: ['⌘', '⇧', 'K'], description: 'Busca inteligente com IA' },
       { keys: ['?'], description: 'Abrir atalhos de teclado' },
     ],
   },
@@ -27,6 +29,15 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: ['Alt', 'S'], description: 'Visualização por semana' },
       { keys: ['Alt', 'D'], description: 'Visualização por dia' },
       { keys: ['T'], description: 'Ir para hoje' },
+    ],
+  },
+  {
+    title: 'Editor de Texto',
+    shortcuts: [
+      { keys: ['⌘', 'B'], description: 'Negrito' },
+      { keys: ['⌘', 'I'], description: 'Itálico' },
+      { keys: ['⌘', 'U'], description: 'Sublinhado' },
+      { keys: ['⌘', '↵'], description: 'Enviar formulário' },
     ],
   },
 ];

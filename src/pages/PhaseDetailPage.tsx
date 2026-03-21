@@ -7,6 +7,16 @@ import { ProjectDetailModal } from "@/components/projects/ProjectDetailModal";
 import { ProjectDeliveryDialog } from "@/components/projects/ProjectDeliveryDialog";
 import { PauseReasonDialog, type TransitionType } from "@/components/projects/PauseReasonDialog";
 import { ComplexityLevelDialog } from "@/components/projects/ComplexityLevelDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // Wrapper that fetches full project data before opening DeliveryDialog
 function DeliveryDialogWithFullData({ open, onOpenChange, projectId, onDelivered }: {
@@ -31,6 +41,13 @@ import {
   loadFieldConfig,
   saveFieldConfig,
 } from "@/components/projects/ProjectViewConfig";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
+import { Popover as DatePopover, PopoverContent as DatePopoverContent, PopoverTrigger as DatePopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
+import { createCuradoriaProject } from "@/services/projectService";
 
 import { usePhaseDetail, PhaseDetailItem } from "@/hooks/usePhaseDetail";
 import { PhaseKanbanCard } from "@/components/projects/PhaseKanbanCard";
@@ -39,7 +56,7 @@ import { useSystemUsers } from "@/hooks/useSystemUsers";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { usePermissions } from "@/hooks/usePermissions";
 import { NewProjectDialog } from "@/components/projects/NewProjectDialog";
-import { ClickUpQuickImportDialog } from "@/components/projects/ClickUpQuickImportDialog";
+
 import { PHASE_LABELS, PHASE_STATUSES, PHASES_BY_TYPE, PRIORITY_LABELS, ProjectPriority, ProjectType } from "@/types/project";
 import { usePhaseStatuses } from "@/hooks/usePhaseStatuses";
 import { Badge } from "@/components/ui/badge";
@@ -220,6 +237,202 @@ const QUICK_FILTER_META: Record<
   },
 };
 
+// ──────── New Curadoria Dialog (inline) ────────
+function NewCuradoriaDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const queryClient = useQueryClient();
+  const { data: systemUsers = [] } = useSystemUsers();
+  const [saving, setSaving] = useState(false);
+  const [companySearch, setCompanySearch] = useState('');
+  const [selectedAccount, setSelectedAccount] = useState<{ id: string; company_name: string; cnpj: string | null } | null>(null);
+  const [accountResults, setAccountResults] = useState<{ id: string; company_name: string; cnpj: string | null }[]>([]);
+  const [searchingAccounts, setSearchingAccounts] = useState(false);
+  const [assignedUserId, setAssignedUserId] = useState('');
+  const [dueDate, setDueDate] = useState<Date | undefined>();
+  const [contactName, setContactName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [notes, setNotes] = useState('');
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resetForm = useCallback(() => {
+    setCompanySearch('');
+    setSelectedAccount(null);
+    setAccountResults([]);
+    setAssignedUserId('');
+    setDueDate(undefined);
+    setContactName('');
+    setContactPhone('');
+    setContactEmail('');
+    setNotes('');
+  }, []);
+
+  useEffect(() => {
+    if (!open) resetForm();
+  }, [open, resetForm]);
+
+  const handleCompanySearch = useCallback((value: string) => {
+    setCompanySearch(value);
+    setSelectedAccount(null);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (value.trim().length < 2) { setAccountResults([]); return; }
+    searchTimerRef.current = setTimeout(async () => {
+      setSearchingAccounts(true);
+      try {
+        const { data } = await supabase
+          .from('accounts')
+          .select('id, company_name, cnpj')
+          .or(`company_name.ilike.%${value}%,cnpj.ilike.%${value}%`)
+          .limit(10);
+        setAccountResults(data || []);
+      } catch { setAccountResults([]); }
+      finally { setSearchingAccounts(false); }
+    }, 400);
+  }, []);
+
+  const selectAccount = useCallback((acc: { id: string; company_name: string; cnpj: string | null }) => {
+    setSelectedAccount(acc);
+    setCompanySearch(acc.company_name);
+    setAccountResults([]);
+  }, []);
+
+  const isValid = !!((selectedAccount || companySearch.trim()) && dueDate && contactName.trim());
+
+  const handleSubmit = async () => {
+    if (!isValid) return;
+    setSaving(true);
+    try {
+      const projectId = await createCuradoriaProject({
+        companyName: selectedAccount?.company_name || companySearch.trim(),
+        cnpj: selectedAccount?.cnpj || undefined,
+        assignedUserId: assignedUserId || undefined,
+        dueDate: dueDate!.toISOString().split('T')[0],
+        contactName: contactName.trim(),
+        contactPhone: contactPhone.trim() || undefined,
+        contactEmail: contactEmail.trim() || undefined,
+        notes: notes.trim() || undefined,
+      });
+      toast.success('Projeto de curadoria criado com sucesso');
+      queryClient.invalidateQueries({ queryKey: ['phase-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['phase-project-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      onOpenChange(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao criar projeto';
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Brain className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <DialogTitle className="text-lg font-bold text-foreground">Novo projeto de curadoria</DialogTitle>
+              <p className="text-sm text-muted-foreground mt-0.5">Criar projeto diretamente na fase Curadoria IA</p>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {/* Empresa */}
+          <div className="space-y-1.5 relative">
+            <Label className="text-xs font-medium">Empresa <span className="text-destructive">*</span></Label>
+            <div className="relative">
+              <Input
+                placeholder="Buscar por nome ou CNPJ..."
+                value={companySearch}
+                onChange={(e) => handleCompanySearch(e.target.value)}
+                className="h-9 text-sm"
+              />
+              {searchingAccounts && <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-muted-foreground" />}
+            </div>
+            {accountResults.length > 0 && !selectedAccount && (
+              <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                {accountResults.map((acc) => (
+                  <button
+                    key={acc.id}
+                    type="button"
+                    className="flex flex-col w-full px-3 py-2 hover:bg-accent transition-colors text-left"
+                    onClick={() => selectAccount(acc)}
+                  >
+                    <span className="text-sm font-medium">{acc.company_name}</span>
+                    {acc.cnpj && <span className="text-xs text-muted-foreground">{acc.cnpj}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Responsável */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">Responsável</Label>
+            <Select value={assignedUserId} onValueChange={setAssignedUserId}>
+              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+              <SelectContent>
+                {systemUsers.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Prazo */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">Prazo <span className="text-destructive">*</span></Label>
+            <DatePopover>
+              <DatePopoverTrigger asChild>
+                <Button variant="outline" className={cn("w-full h-9 text-sm justify-start text-left font-normal", !dueDate && "text-muted-foreground")}>
+                  <Calendar className="h-4 w-4 mr-2" />
+                  {dueDate ? format(dueDate, "dd/MM/yyyy") : "Selecione a data"}
+                </Button>
+              </DatePopoverTrigger>
+              <DatePopoverContent className="w-auto p-0" align="start">
+                <CalendarPicker mode="single" selected={dueDate} onSelect={setDueDate} initialFocus className="p-3 pointer-events-auto" />
+              </DatePopoverContent>
+            </DatePopover>
+          </div>
+
+          {/* Contato */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs font-medium">Nome do contato <span className="text-destructive">*</span></Label>
+              <Input placeholder="Nome completo" value={contactName} onChange={(e) => setContactName(e.target.value)} className="h-9 text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Telefone</Label>
+              <Input placeholder="(00) 00000-0000" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} className="h-9 text-sm" type="tel" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Email</Label>
+              <Input placeholder="email@empresa.com" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} className="h-9 text-sm" type="email" />
+            </div>
+          </div>
+
+          {/* Observações */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">Observações</Label>
+            <Textarea placeholder="Informações adicionais..." value={notes} onChange={(e) => setNotes(e.target.value)} className="min-h-[80px] text-sm" />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
+          <Button onClick={handleSubmit} disabled={!isValid || saving}>
+            {saving && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+            Criar projeto
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 const PhaseDetailPage = () => {
   const { phaseName } = useParams<{ phaseName: string }>();
   const navigate = useNavigate();
@@ -239,7 +452,8 @@ const PhaseDetailPage = () => {
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [newBmOpen, setNewBmOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
-  const [clickupImportOpen, setClickupImportOpen] = useState(false);
+  const [newCuradoriaOpen, setNewCuradoriaOpen] = useState(false);
+  
   const [deliveryDialogOpen, setDeliveryDialogOpen] = useState(false);
   const [pendingDeliveryDrop, setPendingDeliveryDrop] = useState<{
     item: PhaseDetailItem; oldStatus: string;
@@ -270,8 +484,9 @@ const PhaseDetailPage = () => {
   const { hasPermission } = usePermissions();
   const { data: items, isLoading } = usePhaseDetail(phaseName, onlyMine, currentUser?.id);
   const canCreateProject = hasPermission('access_admin') || hasPermission('view_project_phases');
-  const canImportClickup = true;
+  
   const showCreateButton = canCreateProject && (phaseName === 'validacao' || phaseName === 'ux_po');
+  const isCuradoriaPhase = phaseName === 'curadoria_ia';
   const [userSearch, setUserSearch] = useState("");
 
   // D&D state
@@ -510,6 +725,12 @@ const PhaseDetailPage = () => {
   const [complexityDialogOpen, setComplexityDialogOpen] = useState(false);
   const [pendingComplexityItem, setPendingComplexityItem] = useState<{ item: PhaseDetailItem; targetStatus: string } | null>(null);
 
+  // IA confirmation dialog state (dev_chatbot → CONCLUÍDO)
+  const [iaDialogOpen, setIaDialogOpen] = useState(false);
+  const [iaDialogValue, setIaDialogValue] = useState<boolean | null>(null);
+  const [pendingIaItem, setPendingIaItem] = useState<PhaseDetailItem | null>(null);
+  const [iaDialogLoading, setIaDialogLoading] = useState(false);
+
   const executePhaseStatusUpdate = (item: PhaseDetailItem, targetStatus: string, reason?: string) => {
     setTransitioning(true);
     updatePhaseStatus.mutate(
@@ -553,7 +774,47 @@ const PhaseDetailPage = () => {
       setPauseReasonOpen(true);
       return;
     }
+    // IA confirmation for dev_chatbot → CONCLUÍDO (venda, evolucao, migracao)
+    if (
+      upper === "CONCLUÍDO" &&
+      item.phase_name === "dev_chatbot" &&
+      item.project?.project_type &&
+      ["venda", "evolucao", "migracao"].includes(item.project.project_type)
+    ) {
+      setPendingIaItem(item);
+      // Pre-fill with current has_ai value
+      (async () => {
+        const { data } = await supabase
+          .from("projects")
+          .select("has_ai")
+          .eq("id", item.project_id)
+          .single();
+        setIaDialogValue(data?.has_ai ?? null);
+        setIaDialogOpen(true);
+      })();
+      return;
+    }
     executePhaseStatusUpdate(item, targetStatus);
+  };
+
+  const handleIaDialogConfirm = async () => {
+    if (iaDialogValue === null || !pendingIaItem) return;
+    setIaDialogLoading(true);
+    try {
+      // Save has_ai value
+      await supabase
+        .from("projects")
+        .update({ has_ai: iaDialogValue } as any)
+        .eq("id", pendingIaItem.project_id);
+      // Proceed with phase completion
+      executePhaseStatusUpdate(pendingIaItem, "CONCLUÍDO");
+      setIaDialogOpen(false);
+      setPendingIaItem(null);
+    } catch {
+      toast.error("Erro ao salvar informação de IA");
+    } finally {
+      setIaDialogLoading(false);
+    }
   };
 
   const handleDeliveryCompleted = () => {
@@ -581,7 +842,7 @@ const PhaseDetailPage = () => {
       if (projType) {
         const allPhases = PHASES_BY_TYPE[projType];
         const isLastPhase = allPhases[allPhases.length - 1] === phaseName;
-        const requiresDeliveryForm = (isLastPhase || phaseName === "dev_chatbot") && phaseName !== "go_live_assistido";
+        const requiresDeliveryForm = isLastPhase && phaseName !== "go_live_assistido";
         if (requiresDeliveryForm) {
           setPendingDeliveryDrop({ item, oldStatus: item.status });
           setDeliveryDialogOpen(true);
@@ -852,12 +1113,6 @@ const PhaseDetailPage = () => {
             }
             actions={
               <>
-                {canImportClickup && (
-                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5 rounded-lg" onClick={() => setClickupImportOpen(true)}>
-                    <Download className="h-3.5 w-3.5" strokeWidth={1.5} />
-                    Importar ClickUp
-                  </Button>
-                )}
                 {showCreateButton && (
                   <Button size="sm" className="h-8 text-xs gap-1.5 rounded-lg" onClick={() => setNewProjectOpen(true)}>
                     <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />
@@ -868,6 +1123,12 @@ const PhaseDetailPage = () => {
                   <Button size="sm" className="h-8 text-xs gap-1.5 rounded-lg" onClick={() => setNewBmOpen(true)}>
                     <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />
                     Nova Verificação
+                  </Button>
+                )}
+                {isCuradoriaPhase && canCreateProject && (
+                  <Button size="sm" className="h-8 text-xs gap-1.5 rounded-lg" onClick={() => setNewCuradoriaOpen(true)}>
+                    <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    Novo projeto de curadoria
                   </Button>
                 )}
                 <div className="flex items-center bg-muted/30 rounded-xl p-1 border border-border/30">
@@ -1111,17 +1372,8 @@ const PhaseDetailPage = () => {
           {/* New BM Verification Dialog */}
           <NewBMVerificationDialog open={newBmOpen} onOpenChange={setNewBmOpen} />
           <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} />
-          <ClickUpQuickImportDialog
-            open={clickupImportOpen}
-            onOpenChange={setClickupImportOpen}
-            defaultPhase={phaseName}
-            onImported={(projectId) => {
-              queryClient.invalidateQueries({ queryKey: ["phase-detail"] });
-              queryClient.invalidateQueries({ queryKey: ["projects"] });
-              queryClient.invalidateQueries({ queryKey: ["phase-project-counts"] });
-              openProject(projectId);
-            }}
-          />
+          {/* New Curadoria Dialog */}
+          <NewCuradoriaDialog open={newCuradoriaOpen} onOpenChange={setNewCuradoriaOpen} />
         </div>
       </div>
 
@@ -1155,6 +1407,49 @@ const PhaseDetailPage = () => {
           }
         }}
       />
+
+      {/* IA confirmation dialog for dev_chatbot completion */}
+      <AlertDialog open={iaDialogOpen} onOpenChange={(v) => { if (!v) { setIaDialogOpen(false); setPendingIaItem(null); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Brain className="h-5 w-5 text-primary" />
+              Este projeto utiliza IA?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Ao concluir a fase de Dev Chatbot, informe se o projeto utiliza Inteligência Artificial. Isso determina as próximas etapas do projeto.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex gap-3 py-2">
+            <Button
+              variant={iaDialogValue === true ? "default" : "outline"}
+              className="flex-1"
+              onClick={() => setIaDialogValue(true)}
+            >
+              <Check className="h-4 w-4 mr-1.5" />
+              Sim, utiliza IA
+            </Button>
+            <Button
+              variant={iaDialogValue === false ? "default" : "outline"}
+              className="flex-1"
+              onClick={() => setIaDialogValue(false)}
+            >
+              <X className="h-4 w-4 mr-1.5" />
+              Não utiliza IA
+            </Button>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setPendingIaItem(null); }}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={iaDialogValue === null || iaDialogLoading}
+              onClick={(e) => { e.preventDefault(); handleIaDialogConfirm(); }}
+            >
+              {iaDialogLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+              Confirmar e concluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 };

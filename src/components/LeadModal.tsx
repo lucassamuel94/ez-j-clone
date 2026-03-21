@@ -21,6 +21,8 @@ import { CompanyInfoSection, isCompanyInfoComplete, getMissingQualificationField
 import { CompanyDataSection, isCompanyDataComplete, getMissingCompanyDataFields } from "./CompanyDataSection";
 import { SQOValidationSection } from "./SQOValidationSection";
 import { InsightsSection } from "./InsightsSection";
+import { CallBriefingCard } from "./CallBriefingCard";
+import { LeadScoreBreakdown } from "./LeadScoreBreakdown";
 
 import { DeleteLeadDialog } from "./DeleteLeadDialog";
 import { ActivityLogSection } from "./ActivityLogSection";
@@ -528,8 +530,12 @@ export const LeadModal = ({
                               <SQOValidationSection lead={lead} onUpdateLead={actions.handleLeadUpdateWithLogging} readOnly={actions.isSdr} />
                             </TabsContent>
                           )}
-                          <TabsContent value="insights" className="m-0 px-4 py-4">
+                          <TabsContent value="insights" className="m-0 px-4 py-4 space-y-4">
                             <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-4">Insights</h3>
+                            <div className="grid md:grid-cols-2 gap-4">
+                              <LeadScoreBreakdown lead={lead as unknown as Record<string, unknown>} />
+                              <CallBriefingCard lead={lead as unknown as Record<string, unknown>} interactions={interactions as unknown as Record<string, unknown>[]} />
+                            </div>
                             <InsightsSection lead={lead} onUpdateLead={actions.handleLeadUpdateWithLogging} />
                           </TabsContent>
                         </ScrollArea>

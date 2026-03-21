@@ -9,6 +9,9 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { RoleSimulationBanner } from '@/components/admin/RoleSimulationBanner';
 import { useRoleSimulation } from '@/stores/useRoleSimulation';
+import { GlobalCommandPalette } from '@/components/GlobalCommandPalette';
+import { SmartSearchDialog } from '@/components/SmartSearchDialog';
+import { useState, useEffect } from 'react';
 import ezsoftLogo from '@/assets/ez-journey-logo-color.svg';
 import ezsoftLogoWhite from '@/assets/ez-journey-logo-white.svg';
 import { Link } from 'react-router-dom';
@@ -17,10 +20,25 @@ export const AppLayout = React.forwardRef<HTMLDivElement, { children: React.Reac
   const { collapsed, isMobile, setMobileOpen } = useSidebar();
   const { user: currentUser } = useCurrentUser();
   const { isSimulating } = useRoleSimulation();
+  const [smartSearchOpen, setSmartSearchOpen] = useState(false);
+
+  // Ctrl+Shift+K to open Smart Search
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'k') {
+        e.preventDefault();
+        setSmartSearchOpen(true);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
 
   return (
     <div className="min-h-[100dvh] bg-sidebar">
       <RoleSimulationBanner />
+      <GlobalCommandPalette />
+      <SmartSearchDialog open={smartSearchOpen} onOpenChange={setSmartSearchOpen} />
       <div className={cn(isSimulating && 'pt-8')}>
       <AppSidebar />
 

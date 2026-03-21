@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { sanitizeHtml } from '@/utils/sanitize';
+import { sanitizeHtml } from "@/utils/sanitize";
 import { ProjectTagsEditor } from "./ProjectTagsEditor";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ListGroup } from "@/components/kibo-ui/list";
@@ -33,7 +33,13 @@ import { ProjectPhaseTimeline } from "./ProjectPhaseTimeline";
 import { ProjectActivitySidebar } from "./ProjectActivitySidebar";
 import { ProjectAttachments } from "./ProjectAttachments";
 import { ProjectPhaseOwners } from "./ProjectPhaseOwners";
-import { useProjectPhases, useProjectTransitions, useUpdatePhaseStatus, useForcePhaseMove, useSoftDeleteProject } from "@/hooks/useProjects";
+import {
+  useProjectPhases,
+  useProjectTransitions,
+  useUpdatePhaseStatus,
+  useForcePhaseMove,
+  useSoftDeleteProject,
+} from "@/hooks/useProjects";
 import { PauseReasonDialog, type TransitionType } from "./PauseReasonDialog";
 import { ComplexityLevelDialog } from "./ComplexityLevelDialog";
 import {
@@ -91,6 +97,7 @@ import {
   Figma,
   ShieldCheck,
   Tag,
+  Brain,
 } from "lucide-react";
 
 interface ProjectDetailModalProps {
@@ -146,10 +153,11 @@ const ADMIN_EDITABLE_FIELDS = [
   "cnpj",
   "has_integration",
   "has_coexistence",
+  "has_ai",
   "website",
 ];
 // Fields all users can edit
-const ALL_USER_EDITABLE_FIELDS = ["contact_name", "contact_phone"];
+const ALL_USER_EDITABLE_FIELDS = ["contact_name", "contact_phone", "contact_email"];
 
 // Dropdown options
 const FIELD_OPTIONS: Record<string, { label: string; value: string }[]> = {
@@ -176,12 +184,6 @@ const FIELD_OPTIONS: Record<string, { label: string; value: string }[]> = {
     { label: "3 anos", value: "3 anos" },
     { label: "4 anos", value: "4 anos" },
     { label: "5 anos", value: "5 anos" },
-    // Legacy underscore format from DB
-    { label: "1 ano", value: "1_ano" },
-    { label: "2 anos", value: "2_anos" },
-    { label: "3 anos", value: "3_anos" },
-    { label: "4 anos", value: "4_anos" },
-    { label: "5 anos", value: "5_anos" },
   ],
 
   has_integration: [
@@ -190,6 +192,11 @@ const FIELD_OPTIONS: Record<string, { label: string; value: string }[]> = {
   ],
 
   has_coexistence: [
+    { label: "Sim", value: "true" },
+    { label: "Não", value: "false" },
+  ],
+
+  has_ai: [
     { label: "Sim", value: "true" },
     { label: "Não", value: "false" },
   ],
@@ -202,8 +209,8 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
   const updatePhaseStatus = useUpdatePhaseStatus();
   const forcePhaseMove = useForcePhaseMove();
   const { hasPermission } = usePermissions();
-  const canEditAdmin = hasPermission('access_admin');
-  const canEditProject = canEditAdmin || hasPermission('view_projects');
+  const canEditAdmin = hasPermission("access_admin");
+  const canEditProject = canEditAdmin || hasPermission("view_projects");
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
@@ -216,7 +223,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
 
   const bmData = useMemo(() => {
     if (!phases) return null;
-    const bmPhase = phases.find((p: any) => p.phase_name === 'verificacao_bm');
+    const bmPhase = phases.find((p: any) => p.phase_name === "verificacao_bm");
     return (bmPhase?.bm_data as Record<string, unknown>) ?? null;
   }, [phases]);
 
@@ -241,7 +248,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
-  
+
   const [mobileTab, setMobileTab] = useState<string>("details");
   const [showEmptyFields, setShowEmptyFields] = useState(false);
   const [customFieldsOpen, setCustomFieldsOpen] = useState(true);
@@ -254,7 +261,6 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
     phaseName: string;
     oldStatus: string;
   } | null>(null);
-
 
   // Reset editData when project changes or editing mode is entered
   const projectId = project?.id;
@@ -315,7 +321,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
       { projectId: project.id, currentStatus: project.overall_status },
       {
         onSuccess: () => onOpenChange(false),
-      }
+      },
     );
   };
 
@@ -338,7 +344,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
       if (!project) return;
       try {
         let saveValue: any = value || null;
-        if (field === "has_integration" || field === "has_coexistence") {
+        if (field === "has_integration" || field === "has_coexistence" || field === "has_ai") {
           saveValue = value === "true" ? true : value === "false" ? false : null;
         }
         if (field === "coexistence_quantity") {
@@ -358,13 +364,19 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
   const [pauseReasonOpen, setPauseReasonOpen] = useState(false);
   const [pauseReasonType, setPauseReasonType] = useState<TransitionType>("pause");
   const [pendingPauseParams, setPendingPauseParams] = useState<{
-    phaseId: string; phaseName: string; newStatus: string; oldStatus: string;
+    phaseId: string;
+    phaseName: string;
+    newStatus: string;
+    oldStatus: string;
   } | null>(null);
 
   // Complexity level dialog state
   const [complexityDialogOpen, setComplexityDialogOpen] = useState(false);
   const [pendingComplexityRetry, setPendingComplexityRetry] = useState<{
-    phaseId: string; phaseName: string; newStatus: string; oldStatus: string;
+    phaseId: string;
+    phaseName: string;
+    newStatus: string;
+    oldStatus: string;
   } | null>(null);
 
   const handleStatusChange = useCallback(
@@ -391,7 +403,8 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
         const allPhases = PHASES_BY_TYPE[projectType];
         if (allPhases) {
           const isLastPhase = allPhases[allPhases.length - 1] === phaseName;
-          const requiresDeliveryForm = (isLastPhase || phaseName === "dev_chatbot") && phaseName !== "go_live_assistido";
+          const requiresDeliveryForm =
+            (isLastPhase || phaseName === "dev_chatbot") && phaseName !== "go_live_assistido";
           if (requiresDeliveryForm) {
             setPendingDeliveryPhase({ phaseId, phaseName, oldStatus });
             setDeliveryDialogOpen(true);
@@ -403,7 +416,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
         { phaseId, projectId: project.id, phaseName, newStatus, oldStatus },
         {
           onError: (err: Error) => {
-            if (err.message?.includes('complexidade')) {
+            if (err.message?.includes("complexidade")) {
               setPendingComplexityRetry({ phaseId, phaseName, newStatus, oldStatus });
               setComplexityDialogOpen(true);
             }
@@ -481,8 +494,47 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
     [canEditProject],
   );
 
+  // Field group type
+  type FieldGroup = 'contato' | 'tecnico' | 'comercial';
+
+  const FIELD_GROUP_MAP: Record<string, FieldGroup> = {
+    cnpj: 'contato', contact_name: 'contato', contact_phone: 'contato',
+    contact_email: 'contato', website: 'contato',
+    version: 'tecnico', api_type: 'tecnico', broker: 'tecnico',
+    storage_time: 'tecnico', has_integration: 'tecnico', has_ai: 'tecnico', figma_url: 'tecnico',
+    has_coexistence: 'tecnico', coexistence_quantity: 'tecnico', activation_phone: 'tecnico',
+    plan_name: 'comercial',
+  };
+
+  const GROUP_LABELS: Record<FieldGroup, string> = {
+    contato: 'Contato',
+    tecnico: 'Configuração técnica',
+    comercial: 'Comercial',
+  };
+
   const allCustomFields = useMemo(() => {
     if (!project) return [];
+    const pt = project.project_type as string;
+
+    // Visibility rules per field by project_type
+    const FIELD_TYPE_VISIBILITY: Record<string, string[]> = {
+      plan_name: ["venda", "migracao"],
+      broker: ["venda", "migracao", "api_oficial"],
+      has_coexistence: ["api_oficial"],
+      coexistence_quantity: ["api_oficial"],
+      activation_phone: ["api_oficial"],
+      storage_time: ["venda", "migracao", "evolucao"],
+      has_integration: ["venda", "migracao", "evolucao"],
+      version: ["venda", "migracao", "evolucao"],
+      api_type: ["venda", "migracao", "evolucao"],
+      has_ai: ["venda", "migracao", "evolucao"],
+    };
+
+    const isVisible = (key: string) => {
+      const allowed = FIELD_TYPE_VISIBILITY[key];
+      return !allowed || allowed.includes(pt);
+    };
+
     const fields: {
       key: string;
       label: string;
@@ -494,151 +546,101 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
       selectOptions?: { label: string; value: string }[];
       isBooleanField?: boolean;
       linkable?: "url" | "email";
+      group: FieldGroup;
     }[] = [
       {
-        key: "cnpj",
-        label: "CNPJ",
-        value: project.cnpj,
+        key: "cnpj", label: "CNPJ", value: project.cnpj,
         icon: <Building2 className="h-3.5 w-3.5" strokeWidth={1.5} />,
-        editable: true,
-        field: "cnpj",
-        copyable: true,
+        editable: true, field: "cnpj", copyable: true, group: 'contato',
       },
       {
-        key: "contact_name",
-        label: "Responsável",
-        value: project.contact_name,
+        key: "contact_name", label: "Responsável", value: project.contact_name,
         icon: <User className="h-3.5 w-3.5" strokeWidth={1.5} />,
-        editable: true,
-        field: "contact_name",
+        editable: true, field: "contact_name", group: 'contato',
       },
       {
-        key: "contact_phone",
-        label: "Telefone",
-        value: project.contact_phone,
+        key: "contact_phone", label: "Telefone", value: project.contact_phone,
         icon: <Phone className="h-3.5 w-3.5" strokeWidth={1.5} />,
-        editable: true,
-        field: "contact_phone",
+        editable: true, field: "contact_phone", group: 'contato',
       },
       {
-        key: "contact_email",
-        label: "E-mail",
-        value: project.contact_email,
+        key: "contact_email", label: "E-mail", value: project.contact_email,
         icon: <Mail className="h-3.5 w-3.5" strokeWidth={1.5} />,
-        editable: true,
-        field: "contact_email",
-        linkable: "email",
+        editable: true, field: "contact_email", linkable: "email", group: 'contato',
       },
       {
-        key: "website",
-        label: "Site",
-        value: project.website,
+        key: "website", label: "Site", value: project.website,
         icon: <Globe className="h-3.5 w-3.5" strokeWidth={1.5} />,
-        editable: true,
-        field: "website",
-        copyable: true,
-        linkable: "url",
+        editable: true, field: "website", copyable: true, linkable: "url", group: 'contato',
       },
       {
-        key: "figma_url",
-        label: "Figma",
-        value: project.figma_url,
+        key: "figma_url", label: "Figma", value: project.figma_url,
         icon: <Figma className="h-3.5 w-3.5" strokeWidth={1.5} />,
-        editable: true,
-        field: "figma_url",
-        copyable: true,
-        linkable: "url",
+        editable: true, field: "figma_url", copyable: true, linkable: "url", group: 'tecnico',
       },
       {
-        key: "version",
-        label: "Versão",
-        value: project.version,
+        key: "version", label: "Versão", value: project.version,
         icon: <Code className="h-3.5 w-3.5" strokeWidth={1.5} />,
-        editable: true,
-        field: "version",
-        selectOptions: FIELD_OPTIONS.version,
+        editable: true, field: "version", selectOptions: FIELD_OPTIONS.version, group: 'tecnico',
       },
       {
-        key: "api_type",
-        label: "Tipo de API",
-        value: project.api_type,
+        key: "api_type", label: "Tipo de API", value: project.api_type,
         icon: <Code className="h-3.5 w-3.5" strokeWidth={1.5} />,
-        editable: true,
-        field: "api_type",
-        selectOptions: FIELD_OPTIONS.api_type,
+        editable: true, field: "api_type", selectOptions: FIELD_OPTIONS.api_type, group: 'tecnico',
       },
       {
-        key: "plan_name",
-        label: "Plano",
-        value: project.plan_name,
+        key: "plan_name", label: "Plano", value: project.plan_name,
         icon: <CreditCard className="h-3.5 w-3.5" strokeWidth={1.5} />,
-        editable: true,
-        field: "plan_name",
+        editable: true, field: "plan_name", group: 'comercial',
       },
       {
-        key: "broker",
-        label: "Broker",
-        value: project.broker,
+        key: "broker", label: "Broker", value: project.broker,
         icon: <Radio className="h-3.5 w-3.5" strokeWidth={1.5} />,
-        editable: true,
-        field: "broker",
-        selectOptions: FIELD_OPTIONS.broker,
+        editable: true, field: "broker", selectOptions: FIELD_OPTIONS.broker, group: 'tecnico',
       },
       {
-        key: "storage_time",
-        label: "Armazenamento",
-        value: project.storage_time || project.extra_storage,
+        key: "storage_time", label: "Armazenamento",
+        value: (project.storage_time || project.extra_storage || "")?.replace(/_/g, " ") || null,
         icon: <Layers className="h-3.5 w-3.5" strokeWidth={1.5} />,
-        editable: true,
-        field: "storage_time",
-        selectOptions: FIELD_OPTIONS.storage_time,
+        editable: true, field: "storage_time", selectOptions: FIELD_OPTIONS.storage_time, group: 'tecnico',
       },
       {
-        key: "has_integration",
-        label: "Integração",
+        key: "has_integration", label: "Integração",
         value: project.has_integration != null ? (project.has_integration ? "Sim" : "Não") : null,
         icon: <Plug className="h-3.5 w-3.5" strokeWidth={1.5} />,
-        editable: true,
-        field: "has_integration",
-        selectOptions: FIELD_OPTIONS.has_integration,
-        isBooleanField: true,
+        editable: true, field: "has_integration", selectOptions: FIELD_OPTIONS.has_integration, isBooleanField: true, group: 'tecnico',
       },
       {
-        key: "has_coexistence",
-        label: "Coexistência",
+        key: "has_coexistence", label: "Coexistência",
         value: project.has_coexistence != null ? (project.has_coexistence ? "Sim" : "Não") : null,
         icon: <Layers className="h-3.5 w-3.5" strokeWidth={1.5} />,
-        editable: true,
-        field: "has_coexistence",
-        selectOptions: FIELD_OPTIONS.has_coexistence,
-        isBooleanField: true,
+        editable: true, field: "has_coexistence", selectOptions: FIELD_OPTIONS.has_coexistence, isBooleanField: true, group: 'tecnico',
+      },
+      {
+        key: "has_ai", label: "Utiliza IA",
+        value: project.has_ai != null ? (project.has_ai ? "Sim" : "Não") : null,
+        icon: <Brain className="h-3.5 w-3.5" strokeWidth={1.5} />,
+        editable: true, field: "has_ai", selectOptions: FIELD_OPTIONS.has_ai, isBooleanField: true, group: 'tecnico',
       },
       ...(project.has_coexistence
-        ? [
-            {
-              key: "coexistence_quantity",
-              label: "Qtd. Coexistência",
-              value: project.coexistence_quantity != null ? String(project.coexistence_quantity) : null,
-              icon: <Hash className="h-3.5 w-3.5" strokeWidth={1.5} />,
-              editable: true,
-              field: "coexistence_quantity",
-            },
-          ]
+        ? [{
+            key: "coexistence_quantity", label: "Qtd. Coexistência",
+            value: project.coexistence_quantity != null ? String(project.coexistence_quantity) : null,
+            icon: <Hash className="h-3.5 w-3.5" strokeWidth={1.5} />,
+            editable: true, field: "coexistence_quantity", group: 'tecnico' as FieldGroup,
+          }]
         : []),
       {
-        key: "activation_phone",
-        label: "Nº API Oficial",
-        value: project.activation_phone,
+        key: "activation_phone", label: "Nº API Oficial", value: project.activation_phone,
         icon: <Phone className="h-3.5 w-3.5" strokeWidth={1.5} />,
-        editable: true,
-        field: "activation_phone",
+        editable: true, field: "activation_phone", group: 'tecnico',
       },
     ];
 
-    return fields;
+    return fields.filter((f) => isVisible(f.key));
   }, [project]);
 
-  const emptyFieldsCount = useMemo(() => allCustomFields.filter((f) => !f.value).length, [allCustomFields]);
+  
   const visibleFields = useMemo(
     () => (showEmptyFields ? allCustomFields : allCustomFields.filter((f) => !!f.value)),
     [allCustomFields, showEmptyFields],
@@ -769,7 +771,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
           </div>
           <div
             className={cn(
-              "text-sm text-foreground/80 leading-relaxed mt-2 prose prose-sm max-w-none break-words [overflow-wrap:anywhere] max-h-[240px] overflow-y-auto scroll-smooth",
+              "text-sm text-foreground/80 leading-relaxed mt-2 prose prose-sm max-w-none break-words [overflow-wrap:anywhere]",
               isMobile && !descExpanded && "max-h-[100px] overflow-hidden relative",
             )}
             dangerouslySetInnerHTML={{ __html: sanitizeHtml(project.project_description) }}
@@ -806,24 +808,6 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
         </div>
       )}
 
-      {/* Notes */}
-      {editing ? (
-        <div className="rounded-xl border border-border/30 bg-card p-4 shadow-sm">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Observações</span>
-          <Textarea
-            value={editData.notes}
-            onChange={(e) => setEditData({ ...editData, notes: e.target.value })}
-            rows={2}
-            className="mt-2 text-xs rounded-xl border-border/30"
-          />
-        </div>
-      ) : project.notes ? (
-        <div className="rounded-xl border border-border/30 bg-card p-4 shadow-sm">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Observações</span>
-          <p className="text-sm text-foreground leading-relaxed mt-2">{project.notes}</p>
-        </div>
-      ) : null}
-
       {editing && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <DatePickerField
@@ -839,84 +823,127 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
         </div>
       )}
 
-      {/* Custom Fields — Atlassian-style with kibo-ui ListGroup */}
-      <ListGroup label="Detalhes" count={visibleFields.length} defaultOpen={customFieldsOpen}>
-        <div className="divide-y divide-border/10">
-          {visibleFields.map((f) => (
-            <div key={f.key} className="flex items-center gap-3 px-3 py-2 group hover:bg-muted/30 transition-colors">
-              <span className="text-primary/40 flex-shrink-0">{f.icon}</span>
-              <span className="text-[10px] sm:text-[11px] text-muted-foreground uppercase tracking-widest min-w-[80px] sm:min-w-[100px] flex-shrink-0 font-semibold">
-                {f.label}
-              </span>
-              <div className="flex-1 min-w-0">
-                {f.editable && f.field && f.selectOptions ? (
-                  <InlineSelectField
-                    label={f.label}
-                    field={f.field}
-                    value={
-                      f.isBooleanField ? (project[f.field] != null ? String(project[f.field]) : "") : f.value || ""
-                    }
-                    options={f.selectOptions}
-                    canEdit={canEditField(f.key)}
-                    onSave={handleInlineFieldSave}
-                  />
-                ) : f.editable && f.field ? (
-                  <InlineEditField
-                    label={f.label}
-                    field={f.field}
-                    value={f.value}
-                    canEdit={canEditField(f.key)}
-                    onSave={handleInlineFieldSave}
-                    linkable={f.linkable as "url" | "email" | undefined}
-                  />
-                ) : (
-                  <span className="text-xs text-foreground font-medium truncate block" title={f.value || undefined}>
-                    {f.value || <span className="text-muted-foreground/25 italic font-normal">—</span>}
-                  </span>
+      {/* Grouped Details */}
+      <div className="px-4 sm:px-6 py-4 space-y-0">
+        {(['contato', 'tecnico', 'comercial'] as FieldGroup[]).map((groupKey, groupIdx) => {
+          const groupFields = visibleFields.filter((f) => FIELD_GROUP_MAP[f.key] === groupKey);
+          const groupEmptyCount = allCustomFields.filter((f) => FIELD_GROUP_MAP[f.key] === groupKey && !f.value).length;
+          if (groupFields.length === 0 && !showEmptyFields) return null;
+          return (
+            <div key={groupKey}>
+              {groupIdx > 0 && <div className="h-px bg-border/30 my-3" />}
+              <div className="mb-1">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest px-2 mb-1.5">
+                  {GROUP_LABELS[groupKey]}
+                </p>
+                {groupFields.map((f) => (
+                  <div key={f.key} className="flex items-center gap-2 px-2 py-[5px] rounded-md hover:bg-muted/40 transition-colors group">
+                    <span className="text-[11px] text-muted-foreground min-w-[110px] flex-shrink-0">{f.label}</span>
+                    <div className="flex-1 min-w-0">
+                      {f.editable && f.field && f.selectOptions ? (
+                        <InlineSelectField
+                          label={f.label}
+                          field={f.field}
+                          value={f.isBooleanField ? (project[f.field] != null ? String(project[f.field]) : "") : f.value || ""}
+                          options={f.selectOptions}
+                          canEdit={canEditField(f.key)}
+                          onSave={handleInlineFieldSave}
+                        />
+                      ) : f.editable && f.field ? (
+                        <InlineEditField
+                          label={f.label}
+                          field={f.field}
+                          value={f.value}
+                          canEdit={canEditField(f.key)}
+                          onSave={handleInlineFieldSave}
+                          linkable={f.linkable as "url" | "email" | undefined}
+                        />
+                      ) : (
+                        <span className={cn(
+                          "text-[12px] text-foreground truncate block",
+                          f.key === "cnpj" && "font-mono text-[11px]",
+                          f.key === "contact_phone" && "text-primary",
+                          (f.key === "version" && f.value) && "inline-flex bg-muted rounded px-1.5 py-0.5 text-[11px]",
+                        )} title={f.value || undefined}>
+                          {f.isBooleanField && f.value ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className={cn("h-1.5 w-1.5 rounded-full", f.value === "Sim" ? "bg-chart-3" : "bg-muted-foreground/30")} />
+                              <span className={f.value === "Não" ? "text-muted-foreground" : ""}>{f.value}</span>
+                            </span>
+                          ) : f.value || <span className="text-muted-foreground/25 italic font-normal">—</span>}
+                        </span>
+                      )}
+                    </div>
+                    {f.copyable && f.value && (
+                      <button
+                        onClick={() => handleCopy(f.value!)}
+                        className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1"
+                      >
+                        <Copy className="h-3 w-3 text-muted-foreground/30 hover:text-primary transition-colors" strokeWidth={1.5} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {!showEmptyFields && groupEmptyCount > 0 && (
+                  <button
+                    onClick={() => setShowEmptyFields(true)}
+                    className="text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors px-2 mt-1"
+                  >
+                    + {groupEmptyCount} campos vazios
+                  </button>
                 )}
               </div>
-              {f.copyable && f.value && (
-                <button
-                  onClick={() => handleCopy(f.value!)}
-                  className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1"
-                >
-                  <Copy
-                    className="h-3 w-3 text-muted-foreground/30 hover:text-primary transition-colors"
-                    strokeWidth={1.5}
-                  />
-                </button>
-              )}
             </div>
-          ))}
-        </div>
-        {emptyFieldsCount > 0 && (
+          );
+        })}
+        {showEmptyFields && (
           <button
-            onClick={() => setShowEmptyFields(!showEmptyFields)}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors px-3 py-2"
+            onClick={() => setShowEmptyFields(false)}
+            className="text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors px-2 mt-2"
           >
-            {showEmptyFields ? (
-              <EyeOff className="h-3 w-3" strokeWidth={1.5} />
-            ) : (
-              <Eye className="h-3 w-3" strokeWidth={1.5} />
-            )}
-            {showEmptyFields ? "Ocultar" : "Mostrar"} {emptyFieldsCount} campos vazios
+            Ocultar campos vazios
           </button>
         )}
-      </ListGroup>
+
+        <div className="h-px bg-border/30 my-3" />
+
+        {/* Anexos */}
+        <ProjectAttachments projectId={project.id} canEdit={canEditProject} />
+      </div>
 
       {/* Verificação BM data (from project_phases.bm_data) */}
-      {project.project_type === 'api_oficial' && bmData && (
+      {project.project_type === "api_oficial" && bmData && (
         <ListGroup label="Verificação BM" defaultOpen>
           <div className="divide-y divide-border/10">
             {[
-              { label: 'Tipo de Cliente', value: bmData.tipo_cliente as string, icon: <Tag className="h-3.5 w-3.5" strokeWidth={1.5} /> },
-              { label: 'Executivo', value: (bmData.executivo as string) || null, icon: <User className="h-3.5 w-3.5" strokeWidth={1.5} /> },
-              { label: 'Resp. Verificação', value: (bmData.responsavel_verificacao as string) || null, icon: <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.5} /> },
-              { label: 'Site', value: (bmData.site as string) || null, icon: <Globe className="h-3.5 w-3.5" strokeWidth={1.5} /> },
-              { label: 'Versão', value: (bmData.versao_plataforma as string) || null, icon: <Code className="h-3.5 w-3.5" strokeWidth={1.5} /> },
+              {
+                label: "Tipo de Cliente",
+                value: bmData.tipo_cliente as string,
+                icon: <Tag className="h-3.5 w-3.5" strokeWidth={1.5} />,
+              },
+              {
+                label: "Executivo",
+                value: (bmData.executivo as string) || null,
+                icon: <User className="h-3.5 w-3.5" strokeWidth={1.5} />,
+              },
+              {
+                label: "Resp. Verificação",
+                value: (bmData.responsavel_verificacao as string) || null,
+                icon: <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.5} />,
+              },
+              {
+                label: "Site",
+                value: (bmData.site as string) || null,
+                icon: <Globe className="h-3.5 w-3.5" strokeWidth={1.5} />,
+              },
+              {
+                label: "Versão",
+                value: (bmData.versao_plataforma as string) || null,
+                icon: <Code className="h-3.5 w-3.5" strokeWidth={1.5} />,
+              },
             ]
-              .filter(f => !!f.value)
-              .map(f => (
+              .filter((f) => !!f.value)
+              .map((f) => (
                 <div key={f.label} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/30 transition-colors">
                   <span className="text-primary/40 flex-shrink-0">{f.icon}</span>
                   <span className="text-[10px] sm:text-[11px] text-muted-foreground uppercase tracking-widest min-w-[80px] sm:min-w-[100px] flex-shrink-0 font-semibold">
@@ -937,8 +964,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
         </ListGroup>
       )}
 
-      {/* Attachments */}
-      <ProjectAttachments projectId={project.id} canEdit={canEditProject} />
+
     </div>
   );
 
@@ -986,7 +1012,9 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
                         <Link2 className="h-3.5 w-3.5" strokeWidth={1.5} />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-xs">Copiar link do projeto</TooltipContent>
+                    <TooltipContent side="bottom" className="text-xs">
+                      Copiar link do projeto
+                    </TooltipContent>
                   </Tooltip>
                   {canEditProject && !editing && (
                     <Button
@@ -1011,10 +1039,11 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                        <AlertDialogTitle>Mover para lixeira?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          O projeto <strong>{project.company_name}</strong> será movido para a lixeira e poderá ser restaurado em até 30 dias.
-                        </AlertDialogDescription>
+                          <AlertDialogTitle>Mover para lixeira?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            O projeto <strong>{project.company_name}</strong> será movido para a lixeira e poderá ser
+                            restaurado em até 30 dias.
+                          </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancelar</AlertDialogCancel>
@@ -1055,15 +1084,12 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
                   </DialogTitle>
                   <Badge
                     variant="outline"
-                    className={cn(
-                      "text-[11px] h-5 px-2 rounded-md font-medium shrink-0 border",
-                      {
-                        "bg-primary/10 text-primary border-primary/30": project.project_type === "venda",
-                        "bg-chart-2/10 text-chart-2 border-chart-2/30": project.project_type === "evolucao",
-                        "bg-chart-5/10 text-chart-5 border-chart-5/30": project.project_type === "api_oficial",
-                        "bg-chart-4/10 text-chart-4 border-chart-4/30": project.project_type === "migracao",
-                      },
-                    )}
+                    className={cn("text-[11px] h-5 px-2 rounded-md font-medium shrink-0 border", {
+                      "bg-primary/10 text-primary border-primary/30": project.project_type === "venda",
+                      "bg-chart-2/10 text-chart-2 border-chart-2/30": project.project_type === "evolucao",
+                      "bg-chart-5/10 text-chart-5 border-chart-5/30": project.project_type === "api_oficial",
+                      "bg-chart-4/10 text-chart-4 border-chart-4/30": project.project_type === "migracao",
+                    })}
                   >
                     {PROJECT_TYPE_LABELS[project.project_type as ProjectType] || project.project_type}
                   </Badge>
@@ -1071,49 +1097,49 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
               )}
 
               {/* Row 3: Progress bar */}
-              {!editing && (() => {
-                const totalPhasesForType =
-                  project.project_type && PHASES_BY_TYPE[project.project_type as ProjectType]
-                    ? PHASES_BY_TYPE[project.project_type as ProjectType].length
-                    : phases?.length || 1;
-                const completedCount = phases?.filter((p: any) => p.status === "CONCLUÍDO").length || 0;
-                return (
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[11px] text-muted-foreground font-medium">
-                        Progresso do projeto
-                      </span>
-                      <span className="text-[11px] text-muted-foreground font-medium tabular-nums">
-                        {completedCount} / {totalPhasesForType} fases · {progressPercent}%
-                      </span>
+              {!editing &&
+                (() => {
+                  const totalPhasesForType = phases?.length
+                    ? phases.length
+                    : project.project_type && PHASES_BY_TYPE[project.project_type as ProjectType]
+                      ? PHASES_BY_TYPE[project.project_type as ProjectType].length
+                      : 1;
+                  const completedCount = phases?.filter((p: any) => p.status === "CONCLUÍDO").length || 0;
+                  return (
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[11px] text-muted-foreground font-medium">Progresso do projeto</span>
+                        <span className="text-[11px] text-muted-foreground font-medium tabular-nums">
+                          {completedCount} / {totalPhasesForType} fases · {progressPercent}%
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all"
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className="h-full bg-primary rounded-full transition-all"
-                        style={{ width: `${progressPercent}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })()}
+                  );
+                })()}
 
               {/* Row 4: Metadata chips */}
-              <div className="flex flex-wrap items-center gap-3 text-xs">
+              <div className="flex flex-wrap items-center gap-3 text-xs my-3">
                 {/* Status */}
                 {canEditProject ? (
                   <Select
                     value={project.overall_status}
                     onValueChange={(v) => handleInlineStatusChange("overall_status", v)}
                   >
-                    <SelectTrigger
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/40 bg-background text-xs cursor-pointer hover:bg-muted/50 transition-colors h-8 w-auto min-w-0 shadow-none focus:ring-0"
-                    >
-                      <span className={cn("h-2 w-2 rounded-full shrink-0", {
-                        "bg-chart-3": project.overall_status === "ativo",
-                        "bg-chart-5": project.overall_status === "em_pausa",
-                        "bg-primary": project.overall_status === "concluido",
-                        "bg-destructive": project.overall_status === "cancelado",
-                      })} />
+                    <SelectTrigger className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/40 bg-background text-xs cursor-pointer hover:bg-muted/50 transition-colors h-8 w-auto min-w-0 shadow-none focus:ring-0">
+                      <span
+                        className={cn("h-2 w-2 rounded-full shrink-0", {
+                          "bg-chart-3": project.overall_status === "ativo",
+                          "bg-chart-5": project.overall_status === "em_pausa",
+                          "bg-primary": project.overall_status === "concluido",
+                          "bg-destructive": project.overall_status === "cancelado",
+                        })}
+                      />
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1126,13 +1152,17 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
                   </Select>
                 ) : (
                   <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/40 bg-background text-xs h-8">
-                    <span className={cn("h-2 w-2 rounded-full shrink-0", {
-                      "bg-chart-3": project.overall_status === "ativo",
-                      "bg-chart-5": project.overall_status === "em_pausa",
-                      "bg-primary": project.overall_status === "concluido",
-                      "bg-destructive": project.overall_status === "cancelado",
-                    })} />
-                    <span className="font-medium">{statusLabels[project.overall_status] || project.overall_status}</span>
+                    <span
+                      className={cn("h-2 w-2 rounded-full shrink-0", {
+                        "bg-chart-3": project.overall_status === "ativo",
+                        "bg-chart-5": project.overall_status === "em_pausa",
+                        "bg-primary": project.overall_status === "concluido",
+                        "bg-destructive": project.overall_status === "cancelado",
+                      })}
+                    />
+                    <span className="font-medium">
+                      {statusLabels[project.overall_status] || project.overall_status}
+                    </span>
                   </div>
                 )}
 
@@ -1142,10 +1172,11 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
                     value={project.priority || "media"}
                     onValueChange={(v) => handleInlineStatusChange("priority", v)}
                   >
-                    <SelectTrigger
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/40 bg-background text-xs cursor-pointer hover:bg-muted/50 transition-colors h-8 w-auto min-w-0 shadow-none focus:ring-0"
-                    >
-                      <Flag className={cn("h-3.5 w-3.5", priorityFlagColors[project.priority || "media"])} strokeWidth={1.5} />
+                    <SelectTrigger className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/40 bg-background text-xs cursor-pointer hover:bg-muted/50 transition-colors h-8 w-auto min-w-0 shadow-none focus:ring-0">
+                      <Flag
+                        className={cn("h-3.5 w-3.5", priorityFlagColors[project.priority || "media"])}
+                        strokeWidth={1.5}
+                      />
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1158,8 +1189,13 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
                   </Select>
                 ) : (
                   <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/40 bg-background text-xs h-8">
-                    <Flag className={cn("h-3.5 w-3.5", priorityFlagColors[project.priority || "media"])} strokeWidth={1.5} />
-                    <span className="font-medium">{PRIORITY_LABELS[project.priority as keyof typeof PRIORITY_LABELS] || "Média"}</span>
+                    <Flag
+                      className={cn("h-3.5 w-3.5", priorityFlagColors[project.priority || "media"])}
+                      strokeWidth={1.5}
+                    />
+                    <span className="font-medium">
+                      {PRIORITY_LABELS[project.priority as keyof typeof PRIORITY_LABELS] || "Média"}
+                    </span>
                   </div>
                 )}
 
@@ -1192,9 +1228,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
                     {project.start_date ? formatDateBR(project.start_date) : "—"}
                   </span>
                   <ArrowRight className="h-3 w-3 opacity-30" strokeWidth={1.5} />
-                  <span className="font-medium text-xs">
-                    {project.due_date ? formatDateBR(project.due_date) : "—"}
-                  </span>
+                  <span className="font-medium text-xs">{project.due_date ? formatDateBR(project.due_date) : "—"}</span>
                   {(() => {
                     if (!project.start_date) return null;
                     const days = differenceInDays(
@@ -1202,17 +1236,32 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
                       new Date(project.start_date),
                     );
                     return (
-                      <span className={cn(
-                        "text-[11px] font-medium tabular-nums ml-0.5",
-                        project.due_date && new Date(project.due_date) < new Date()
-                          ? "text-destructive"
-                          : "text-muted-foreground",
-                      )}>
+                      <span
+                        className={cn(
+                          "text-[11px] font-medium tabular-nums ml-0.5",
+                          project.due_date && new Date(project.due_date) < new Date()
+                            ? "text-destructive"
+                            : "text-muted-foreground",
+                        )}
+                      >
                         {days}d
                       </span>
                     );
                   })()}
                 </div>
+
+                {/* Late badge */}
+                {project.due_date &&
+                  new Date(project.due_date) < new Date() &&
+                  project.overall_status !== "concluido" &&
+                  project.overall_status !== "cancelado" && (
+                    <Badge
+                      variant="outline"
+                      className="text-[11px] h-6 px-2 rounded-md font-medium border bg-destructive/10 text-destructive border-destructive/20"
+                    >
+                      Atrasado
+                    </Badge>
+                  )}
               </div>
 
               {/* Row 5: Tags */}
@@ -1259,9 +1308,7 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
           ) : (
             <div className="grid grid-cols-[2fr_3fr] flex-1 min-h-0 overflow-hidden">
               {/* Left column — 40% */}
-              <div className="overflow-y-auto border-r border-border/40 min-w-0">
-                {renderMainContent()}
-              </div>
+              <div className="overflow-y-auto border-r border-border/40 min-w-0">{renderMainContent()}</div>
               {/* Right column — 60% */}
               <div className="overflow-y-auto min-w-0">
                 <ProjectActivitySidebar
@@ -1334,7 +1381,6 @@ export function ProjectDetailModal({ open, onOpenChange, project, topSlot }: Pro
           onSaved={handleComplexitySaved}
         />
       )}
-
     </>
   );
 }
@@ -1427,7 +1473,7 @@ function InlineEditField({
         {value ? (
           linkable && !canEdit ? (
             <a
-              href={linkable === "email" ? `mailto:${value}` : (value.startsWith("http") ? value : `https://${value}`)}
+              href={linkable === "email" ? `mailto:${value}` : value.startsWith("http") ? value : `https://${value}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-sm text-primary font-medium hover:underline truncate block"
@@ -1438,7 +1484,7 @@ function InlineEditField({
             </a>
           ) : linkable ? (
             <a
-              href={linkable === "email" ? `mailto:${value}` : (value.startsWith("http") ? value : `https://${value}`)}
+              href={linkable === "email" ? `mailto:${value}` : value.startsWith("http") ? value : `https://${value}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-sm text-primary font-medium hover:underline truncate block"
@@ -1448,7 +1494,9 @@ function InlineEditField({
               {value}
             </a>
           ) : (
-            <span className="text-sm text-foreground font-medium truncate block" title={value}>{value}</span>
+            <span className="text-sm text-foreground font-medium truncate block" title={value}>
+              {value}
+            </span>
           )
         ) : (
           <span className="text-sm text-muted-foreground/25 italic">Vazio</span>
@@ -1536,7 +1584,9 @@ function InlineSelectField({
     >
       <div className="flex-1 min-w-0 truncate">
         {displayLabel ? (
-          <span className="text-foreground font-medium truncate block" title={displayLabel}>{displayLabel}</span>
+          <span className="text-foreground font-medium truncate block" title={displayLabel}>
+            {displayLabel}
+          </span>
         ) : (
           <span className="text-muted-foreground/25 italic">Vazio</span>
         )}

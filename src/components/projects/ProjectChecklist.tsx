@@ -45,6 +45,7 @@ export const ProjectChecklist = ({ open, onOpenChange, opportunity, onSuccess, d
 
   // Section 2 — Dados da Empresa
   const [razaoSocial, setRazaoSocial] = useState(opportunity.lead_razao_social || opportunity.lead_company || '');
+  const nomeFantasia = opportunity.lead_nome_fantasia || '';
   const [cnpj, setCnpj] = useState(opportunity.lead_cnpj || '');
 
   // Section 3 — Responsável do Cliente
@@ -84,6 +85,7 @@ export const ProjectChecklist = ({ open, onOpenChange, opportunity, onSuccess, d
       checklistData = {
         type: projectType,
         razao_social: razaoSocial,
+        nome_fantasia: nomeFantasia,
         cnpj,
         versao: versao as 'V2' | 'VP',
         responsavel_nome: responsavelNome,
@@ -102,6 +104,7 @@ export const ProjectChecklist = ({ open, onOpenChange, opportunity, onSuccess, d
       checklistData = {
         type: 'evolucao',
         razao_social: razaoSocial,
+        nome_fantasia: nomeFantasia,
         cnpj,
         versao_atual: versao as 'V2' | 'VP',
         responsavel_nome: responsavelNome,
@@ -118,6 +121,7 @@ export const ProjectChecklist = ({ open, onOpenChange, opportunity, onSuccess, d
       checklistData = {
         type: 'api_oficial',
         razao_social: razaoSocial,
+        nome_fantasia: nomeFantasia,
         cnpj,
         versao: versao as string,
         responsavel_nome: responsavelNome,

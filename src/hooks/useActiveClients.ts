@@ -87,6 +87,7 @@ export const useActiveClients = (search?: string) => {
           .from('accounts')
           .select('*, account_owner:profiles!accounts_account_owner_id_profiles_fkey(name)')
           .eq('lifecycle_stage', 'client')
+          .is('deleted_at', null)
           .order('created_at', { ascending: false })
           .range(from, from + PAGE_SIZE - 1);
 

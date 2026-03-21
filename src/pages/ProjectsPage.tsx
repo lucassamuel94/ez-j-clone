@@ -7,6 +7,7 @@ import { ProjectDetailModal } from "@/components/projects/ProjectDetailModal";
 import { NewProjectDialog } from "@/components/projects/NewProjectDialog";
 import { ProjectTrashView } from "@/components/projects/ProjectTrashView";
 import { ProjectImportDialog } from "@/components/projects/ProjectImportDialog";
+import { MyResultsTab } from "@/components/projects/MyResultsTab";
 import { GlobalSearchDropdown, GlobalSearchResult } from "@/components/GlobalSearchDropdown";
 import { LeadModal } from "@/components/LeadModal";
 import { useLeadModal } from "@/hooks/useLeadModal";
@@ -49,7 +50,7 @@ const FILTERS_STORAGE_KEY = "projects-filters";
 const TAB_STORAGE_KEY = "projects-active-tab-v2";
 
 type UnifiedPeriod = "today" | "week" | "month" | "last_month" | "quarter" | "last_quarter" | "semester";
-type Tab = "queue" | "overview" | "dashboard" | "operacional" | "api" | "carga";
+type Tab = "queue" | "overview" | "dashboard" | "operacional" | "api" | "carga" | "results";
 type OperacionalSubTab = "fila" | "travados" | "equipes";
 
 const PERIOD_OPTIONS: { value: UnifiedPeriod; label: string }[] = [
@@ -75,6 +76,7 @@ const TABS_WITH_PERIOD = new Set<Tab>(["dashboard", "operacional", "carga", "ove
 // Role-based tab visibility
 const ADMIN_TABS = new Set<Tab>(["overview", "dashboard", "operacional", "carga"]);
 const API_TAB_ROLES = new Set(["admin", "head_pos_venda", "verificacao_bm"]);
+const RESULTS_TAB_ROLES = new Set(["ux_po", "dev_chatbot", "treinamento", "ativacao"]);
 
 interface TabOption {
   value: Tab;
@@ -99,6 +101,10 @@ function getVisibleTabs(role: string | null | undefined): TabOption[] {
 
   if (isAdminLike) {
     tabs.push({ value: "carga", label: "Carga" });
+  }
+
+  if (RESULTS_TAB_ROLES.has(r) || r === 'admin') {
+    tabs.push({ value: "results", label: "Meus Resultados" });
   }
 
   return tabs;
@@ -565,6 +571,15 @@ const ProjectsPage = () => {
                   <PosVendaWorkloadTab data={workloadData} />
                 ) : null}
               </Suspense>
+            )}
+
+            {/* Meus Resultados */}
+            {activeTab === "results" && currentUser && (
+              <MyResultsTab
+                userId={currentUser.id}
+                userRole={role || ''}
+                userName={currentUser.name || ''}
+              />
             )}
           </div>
         </main>

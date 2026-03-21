@@ -13,9 +13,7 @@ import {
   restoreProject,
   permanentDeleteProject,
   finalizeEvolutionProject,
-  advanceEvolutionToAICuration,
   CreateProjectInput,
-  AdvanceToAICurationResult,
 } from '@/services/projectService';
 import { toast } from 'sonner';
 
@@ -99,8 +97,11 @@ export const useUpdatePhaseStatus = () => {
       queryClient.invalidateQueries({ queryKey: ['phase-detail'] });
       queryClient.invalidateQueries({ queryKey: ['phase-project-counts'] });
 
-      // Contextual toast for evolution curadoria_ia completion
-      if (vars.phaseName === 'curadoria_ia' && vars.newStatus === 'CONCLUÍDO') {
+      // Contextual toast for terminal phase completion
+      if (
+        (vars.phaseName === 'curadoria_ia' || vars.phaseName === 'go_live_assistido') &&
+        vars.newStatus === 'CONCLUÍDO'
+      ) {
         toast.success('Projeto concluído com sucesso 🎉');
       } else {
         toast.success('Status atualizado');
@@ -197,23 +198,3 @@ export const useFinalizeEvolution = () => {
   });
 };
 
-export const useAdvanceToAICuration = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ projectId, currentSortOrder }: { projectId: string; currentSortOrder: number }) =>
-      advanceEvolutionToAICuration(projectId, currentSortOrder),
-    onSuccess: (result: AdvanceToAICurationResult) => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      queryClient.invalidateQueries({ queryKey: ['phase-detail'] });
-      queryClient.invalidateQueries({ queryKey: ['phase-project-counts'] });
-      toast.success('Projeto avançou para Curadoria de IA');
-      if (result.usedFallback) {
-        toast.warning('Prazo padrão de 25 dias aplicado', {
-          description: 'O nível de dificuldade do projeto não está definido. Considere ajustá-lo.',
-          duration: 8000,
-        });
-      }
-    },
-    onError: () => toast.error('Erro ao avançar projeto'),
-  });
-};

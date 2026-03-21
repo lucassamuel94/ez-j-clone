@@ -1,15 +1,21 @@
-import { memo, useState, useMemo } from 'react';
+import { memo, useState, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { Building2, TrendingUp, FolderKanban, FileText, Clock, MapPin, Briefcase, Activity, Rocket } from 'lucide-react';
+import { Building2, TrendingUp, FolderKanban, FileText, Clock, MapPin, Briefcase, Activity, Rocket, Trash2, Loader2 } from 'lucide-react';
 import { useClientDeals, type ClientDeal } from '@/hooks/useClientDeals';
 import { useClientProjects, type ClientProject } from '@/hooks/useClientProjects';
 import { useClientProposals, type ClientProposal } from '@/hooks/useClientProposals';
 import { useClientTimeline, type ClientTimelineEntry } from '@/hooks/useClientTimeline';
+import { usePermissions } from '@/hooks/usePermissions';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import type { MyClient } from '@/hooks/useMyClients';
 
 const formatCurrency = (v: number) =>
@@ -135,34 +141,98 @@ const ResumoTab = memo(({ client }: { client: MyClient }) => {
 });
 ResumoTab.displayName = 'ResumoTab';
 
-// ── Tab: Negociações ──
-const DealsTab = memo(({ accountId, cnpj }: { accountId: string; cnpj: string | null }) => {
+// ── Tab: Negociações (com propostas inline) ──
+const DealsTab = memo(({ accountId, cnpj, onDealClick }: { accountId: string; cnpj: string | null; onDealClick?: (leadId: string, oppId: string) => void }) => {
   const cleanCnpj = cnpj?.replace(/\D/g, '') || '';
   const { data: dealsData, isLoading } = useClientDeals(cleanCnpj ? [cleanCnpj] : []);
   const deals = useMemo(() => dealsData?.dealsMap.get(cleanCnpj) || [], [dealsData, cleanCnpj]);
+  const { data: proposals = [], isLoading: proposalsLoading } = useClientProposals(accountId);
 
-  if (isLoading) return <p className="text-sm text-muted-foreground py-6 text-center">Carregando...</p>;
-  if (deals.length === 0) return <p className="text-sm text-muted-foreground py-6 text-center">Nenhuma negociação encontrada</p>;
+  const proposalsByOpp = useMemo(() => {
+    const map = new Map<string, ClientProposal[]>();
+    for (const p of proposals) {
+      if (!p.opportunity_id) continue;
+      if (!map.has(p.opportunity_id)) map.set(p.opportunity_id, []);
+      map.get(p.opportunity_id)!.push(p);
+    }
+    return map;
+  }, [proposals]);
+
+  const orphanProposals = useMemo(() => {
+    const dealIds = new Set(deals.map(d => d.id));
+    return proposals.filter(p => !p.opportunity_id || !dealIds.has(p.opportunity_id));
+  }, [proposals, deals]);
+
+  if (isLoading || proposalsLoading) return <p className="text-sm text-muted-foreground py-6 text-center">Carregando...</p>;
+  if (deals.length === 0 && proposals.length === 0) return <p className="text-sm text-muted-foreground py-6 text-center">Nenhuma negociação encontrada</p>;
 
   return (
     <div className="space-y-2">
-      {deals.map((deal: ClientDeal) => (
-        <div key={deal.id} className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-card hover:bg-accent/20 transition-colors">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{deal.lead_company || '—'}</p>
-            <div className="flex items-center gap-2 mt-0.5">
-              <Badge variant="outline" className={cn('text-[10px] h-4', STAGE_COLORS[deal.stage] || 'bg-muted text-muted-foreground')}>
-                {deal.stage}
-              </Badge>
-              <span className="text-[10px] text-muted-foreground">{deal.opportunity_type === 'evolution' ? 'Evolução' : 'Negócio novo'}</span>
+      {deals.map((deal: ClientDeal) => {
+        const dealProposals = proposalsByOpp.get(deal.id) || [];
+        return (
+          <div key={deal.id} className="rounded-lg border border-border/50 bg-card overflow-hidden">
+            <div className="flex items-center justify-between p-3 hover:bg-accent/20 transition-colors cursor-pointer" onClick={() => onDealClick?.(deal.lead_id, deal.id)}>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{deal.lead_company || '—'}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <Badge variant="outline" className={cn('text-[10px] h-4', STAGE_COLORS[deal.stage] || 'bg-muted text-muted-foreground')}>
+                    {deal.stage}
+                  </Badge>
+                  <span className="text-[10px] text-muted-foreground">{deal.opportunity_type === 'evolution' ? 'Evolução' : 'Negócio novo'}</span>
+                </div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                {deal.deal_value ? <p className="text-sm font-semibold">{formatCurrency(deal.deal_value)}</p> : null}
+                {deal.assigned_to_name && <p className="text-[10px] text-muted-foreground">{deal.assigned_to_name}</p>}
+              </div>
             </div>
+            {dealProposals.length > 0 && (
+              <div className="border-t border-border/30 bg-muted/20 px-3 py-2 space-y-1.5">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Propostas</p>
+                {dealProposals.map(prop => (
+                  <div key={prop.id} className="flex items-center justify-between py-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="h-3 w-3 text-muted-foreground/60 shrink-0" />
+                      <Badge variant="outline" className={cn('text-[10px] h-4', PROPOSAL_STATUS_COLORS[prop.status] || '')}>
+                        {PROPOSAL_STATUS_LABELS[prop.status] || prop.status}
+                      </Badge>
+                      {prop.view_count > 0 && <span className="text-[10px] text-muted-foreground">{prop.view_count} view(s)</span>}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      {prop.total_monthly ? <span className="text-[11px] font-medium">{formatCurrency(prop.total_monthly)}/mês</span> : null}
+                      <span className="text-[10px] text-muted-foreground ml-2">{formatDate(prop.created_at)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="text-right flex-shrink-0">
-            {deal.deal_value ? <p className="text-sm font-semibold">{formatCurrency(deal.deal_value)}</p> : null}
-            {deal.assigned_to_name && <p className="text-[10px] text-muted-foreground">{deal.assigned_to_name}</p>}
-          </div>
-        </div>
-      ))}
+        );
+      })}
+      {orphanProposals.length > 0 && (
+        <>
+          {deals.length > 0 && <div className="h-px bg-border/30 my-2" />}
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-1">Propostas avulsas</p>
+          {orphanProposals.map(prop => (
+            <div key={prop.id} className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-card hover:bg-accent/20 transition-colors">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{prop.company_name || '—'}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <Badge variant="outline" className={cn('text-[10px] h-4', PROPOSAL_STATUS_COLORS[prop.status] || '')}>
+                    {PROPOSAL_STATUS_LABELS[prop.status] || prop.status}
+                  </Badge>
+                  {prop.view_count > 0 && <span className="text-[10px] text-muted-foreground">{prop.view_count} visualização(ões)</span>}
+                </div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                {prop.total_monthly ? <p className="text-sm font-semibold">{formatCurrency(prop.total_monthly)}/mês</p> : null}
+                <p className="text-[10px] text-muted-foreground">{formatDate(prop.created_at)}</p>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 });
@@ -205,36 +275,6 @@ const ProjectsTab = memo(({ accountId }: { accountId: string }) => {
 });
 ProjectsTab.displayName = 'ProjectsTab';
 
-// ── Tab: Propostas ──
-const ProposalsTab = memo(({ accountId }: { accountId: string }) => {
-  const { data: proposals = [], isLoading } = useClientProposals(accountId);
-
-  if (isLoading) return <p className="text-sm text-muted-foreground py-6 text-center">Carregando...</p>;
-  if (proposals.length === 0) return <p className="text-sm text-muted-foreground py-6 text-center">Nenhuma proposta encontrada</p>;
-
-  return (
-    <div className="space-y-2">
-      {proposals.map((prop: ClientProposal) => (
-        <div key={prop.id} className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-card hover:bg-accent/20 transition-colors">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{prop.company_name || '—'}</p>
-            <div className="flex items-center gap-2 mt-0.5">
-              <Badge variant="outline" className={cn('text-[10px] h-4', PROPOSAL_STATUS_COLORS[prop.status] || '')}>
-                {PROPOSAL_STATUS_LABELS[prop.status] || prop.status}
-              </Badge>
-              {prop.view_count > 0 && <span className="text-[10px] text-muted-foreground">{prop.view_count} visualização(ões)</span>}
-            </div>
-          </div>
-          <div className="text-right flex-shrink-0">
-            {prop.total_monthly ? <p className="text-sm font-semibold">{formatCurrency(prop.total_monthly)}/mês</p> : null}
-            <p className="text-[10px] text-muted-foreground">{formatDate(prop.created_at)}</p>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-});
-ProposalsTab.displayName = 'ProposalsTab';
 
 // ── Tab: Timeline ──
 const TimelineTab = memo(({ accountId }: { accountId: string }) => {
@@ -272,28 +312,59 @@ interface ClientPortfolioModalProps {
 }
 
 export const ClientPortfolioModal = memo(({ client, open, onClose, onNewDeal }: ClientPortfolioModalProps) => {
+  const navigate = useNavigate();
   const [tab, setTab] = useState('resumo');
+  const [deleting, setDeleting] = useState(false);
+  const { hasPermission } = usePermissions();
+  const queryClient = useQueryClient();
+  const isAdmin = hasPermission('access_admin');
+
+  const handleSoftDelete = useCallback(async () => {
+    if (!client) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('accounts')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', client.id);
+      if (error) throw error;
+      toast.success(`"${client.company_name}" removido da base de clientes`);
+      queryClient.invalidateQueries({ queryKey: ['my-clients'] });
+      queryClient.invalidateQueries({ queryKey: ['active_clients'] });
+      onClose();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao remover cliente');
+    } finally {
+      setDeleting(false);
+    }
+  }, [client, queryClient, onClose]);
 
   if (!client) return null;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-        <DialogHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="flex items-center gap-2 text-base">
+        <DialogHeader className="pb-3 border-b border-border/40">
+          <div className="flex items-center gap-3 pr-8">
+            <span className="flex items-center justify-center h-8 w-8 rounded-lg bg-primary/10 shrink-0">
               <Building2 className="h-4 w-4 text-primary" />
-              {client.company_name}
-              <div className={cn('h-2.5 w-2.5 rounded-full ml-1', {
-                'bg-success': client.health_label === 'green',
-                'bg-warning': client.health_label === 'yellow',
-                'bg-destructive': client.health_label === 'red',
-              })} />
-            </DialogTitle>
+            </span>
+
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="text-sm font-semibold tracking-tight truncate">
+                {client.company_name}
+              </DialogTitle>
+              {client.cnpj && (
+                <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                  {client.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')}
+                </p>
+              )}
+            </div>
+
             {onNewDeal && (
               <Button
                 size="sm"
-                className="h-7 text-xs gap-1.5 mr-8"
+                className="h-7 text-xs gap-1.5 shrink-0"
                 onClick={() => onNewDeal(client.id)}
               >
                 <Rocket className="h-3.5 w-3.5" />
@@ -304,22 +375,52 @@ export const ClientPortfolioModal = memo(({ client, open, onClose, onNewDeal }: 
         </DialogHeader>
 
         <Tabs value={tab} onValueChange={setTab} className="flex-1 overflow-hidden flex flex-col">
-          <TabsList className="grid grid-cols-5 h-8">
+          <TabsList className="grid grid-cols-4 h-8">
             <TabsTrigger value="resumo" className="text-[11px] gap-1"><TrendingUp className="h-3 w-3" />Resumo</TabsTrigger>
             <TabsTrigger value="deals" className="text-[11px] gap-1"><Briefcase className="h-3 w-3" />Negociações</TabsTrigger>
             <TabsTrigger value="projects" className="text-[11px] gap-1"><FolderKanban className="h-3 w-3" />Projetos</TabsTrigger>
-            <TabsTrigger value="proposals" className="text-[11px] gap-1"><FileText className="h-3 w-3" />Propostas</TabsTrigger>
             <TabsTrigger value="timeline" className="text-[11px] gap-1"><Activity className="h-3 w-3" />Timeline</TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-y-auto mt-3">
             <TabsContent value="resumo" className="mt-0"><ResumoTab client={client} /></TabsContent>
-            <TabsContent value="deals" className="mt-0"><DealsTab accountId={client.id} cnpj={client.cnpj} /></TabsContent>
+            <TabsContent value="deals" className="mt-0"><DealsTab accountId={client.id} cnpj={client.cnpj} onDealClick={(leadId, oppId) => { onClose(); navigate(`/leads?lead=${leadId}&opp=${oppId}`); }} /></TabsContent>
             <TabsContent value="projects" className="mt-0"><ProjectsTab accountId={client.id} /></TabsContent>
-            <TabsContent value="proposals" className="mt-0"><ProposalsTab accountId={client.id} /></TabsContent>
             <TabsContent value="timeline" className="mt-0"><TimelineTab accountId={client.id} /></TabsContent>
           </div>
         </Tabs>
+
+        {isAdmin && (
+          <div className="border-t border-border/40 pt-3 px-1 flex justify-end">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 gap-1.5">
+                  <Trash2 className="h-3 w-3" />
+                  Remover cliente
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Remover cliente</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Tem certeza que deseja remover <strong>{client.company_name}</strong> da base de clientes? Esta ação pode ser revertida por um administrador.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleSoftDelete}
+                    disabled={deleting}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {deleting && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+                    Remover
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

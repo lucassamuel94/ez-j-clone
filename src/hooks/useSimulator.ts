@@ -13,6 +13,12 @@ export interface PlanData {
   contactsIncluded: number;
   excessMessagePrice: number;
   excessContactPrice: number;
+  // EZ Call specific fields
+  minExtensions?: number;
+  maxExtensions?: number;
+  pricePerExtension?: number;
+  customPricing?: boolean;
+  features?: string[];
 }
 
 export interface MetaCostEntry {
@@ -223,6 +229,63 @@ export function recommendPlan(
     }
   }
   return best;
+}
+
+// ─── EZ Call ────────────────────────────────────────────────
+
+export interface EZCallSimulationResult {
+  plan: PlanData;
+  extensions: number;
+  pricePerExtension: number;
+  totalMonthly: number;
+  customPricing: boolean;
+}
+
+export function calculateEZCallSimulation(
+  extensions: number,
+  plan: PlanData
+): EZCallSimulationResult {
+  const pricePerExt = plan.pricePerExtension ?? 0;
+  const isCustom = plan.customPricing ?? false;
+  const totalMonthly = isCustom ? 0 : pricePerExt * extensions;
+
+  return {
+    plan,
+    extensions,
+    pricePerExtension: pricePerExt,
+    totalMonthly,
+    customPricing: isCustom,
+  };
+}
+
+export function recommendEZCallPlan(
+  extensions: number,
+  plans: PlanData[]
+): PlanData | null {
+  // Find plans whose extension range covers the input
+  const matching = plans.filter(p => {
+    if (p.customPricing) return false;
+    const min = p.minExtensions ?? 0;
+    const max = p.maxExtensions ?? Infinity;
+    return extensions >= min && extensions <= max;
+  });
+
+  if (matching.length > 0) {
+    // Pick cheapest matching plan
+    return matching.sort((a, b) => (a.pricePerExtension ?? 0) - (b.pricePerExtension ?? 0))[0];
+  }
+
+  // No exact match — pick plan with closest max_extensions >= input, or the largest plan
+  const nonCustom = plans.filter(p => !p.customPricing);
+  if (nonCustom.length === 0) return plans[0] || null;
+
+  const above = nonCustom.filter(p => (p.maxExtensions ?? 0) >= extensions);
+  if (above.length > 0) {
+    return above.sort((a, b) => (a.pricePerExtension ?? 0) - (b.pricePerExtension ?? 0))[0];
+  }
+
+  // All plans have fewer extensions — return the largest one
+  return nonCustom.sort((a, b) => (b.maxExtensions ?? 0) - (a.maxExtensions ?? 0))[0];
 }
 
 export function simulateGrowth(

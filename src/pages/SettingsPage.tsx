@@ -27,6 +27,11 @@ import { ReportsMarketingSection } from '@/components/admin/ReportsMarketingSect
 import { IntegrationsCatalogSection } from '@/components/admin/IntegrationsCatalogSection';
 import { UTMLinkGeneratorSection } from '@/components/admin/UTMLinkGeneratorSection';
 import { BusinessRulesChatSection } from '@/components/settings/BusinessRulesChatSection';
+import { GhostCloserDashboard } from '@/components/admin/GhostCloserDashboard';
+import { GhostSdrDashboard } from '@/components/admin/GhostSdrDashboard';
+import { WinLossAnalysisSection } from '@/components/admin/WinLossAnalysisSection';
+import { DuplicateDetectionPanel } from '@/components/DuplicateDetectionPanel';
+import { CustomerHealthPanel } from '@/components/clients/CustomerHealthPanel';
 function EnrichSection() {
   return (
     <div className="space-y-6">
@@ -69,6 +74,11 @@ export default function SettingsPage() {
         <Route path="integrations-catalog" element={<IntegrationsCatalogSection />} />
         <Route path="utm-generator" element={<UTMLinkGeneratorSection />} />
         <Route path="business-chat" element={<BusinessRulesChatSection />} />
+        <Route path="win-loss" element={<WinLossAnalysisSection />} />
+        <Route path="duplicates" element={<DuplicateDetectionPanel />} />
+        <Route path="customer-health" element={<CustomerHealthPanel />} />
+        <Route path="ghost-closer" element={<GhostCloserDashboard />} />
+        <Route path="ghost-sdr" element={<GhostSdrDashboard />} />
         <Route path="system" element={<Navigate to="/settings/permissions" replace />} />
         <Route path="*" element={<Navigate to="/settings" replace />} />
       </Routes>

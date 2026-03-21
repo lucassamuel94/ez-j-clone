@@ -290,19 +290,25 @@ export function ProjectPhaseOwners({ project, phases = [], canEdit }: ProjectPha
 
   // Fields to hide based on project type
   const projectType = project.project_type as string | undefined;
-  const hiddenFieldsForEvolucao = new Set(['sdr_user_id']);
-  const hiddenFieldsForVendaOrMigracao = new Set(['sdr_user_id']);
+
+  // Fields to hide based on project type
+  const FIELD_TYPE_VISIBILITY: Record<string, string[]> = {
+    ux_po_user_id: ['venda', 'migracao', 'evolucao'],
+    dev_user_id: ['venda', 'migracao', 'evolucao'],
+    treinamento_user_id: ['venda', 'migracao'],
+    sdr_user_id: [], // SDR is tracked at lead/opportunity level, never shown on projects
+    verificacao_bm_user_id: ['api_oficial'],
+    go_live_user_id: ['venda', 'migracao'],
+  };
 
   const roleItems = PROJECT_ROLE_FIELDS
     .filter(role => {
-      // Hide Treinamento and Ativação for evolucao projects
-      if (projectType === 'evolucao' && hiddenFieldsForEvolucao.has(role.field)) {
-        return false;
-      }
-      if ((projectType === 'venda' || projectType === 'migracao') && hiddenFieldsForVendaOrMigracao.has(role.field)) {
-        return false;
-      }
-      return true;
+      const allowed = FIELD_TYPE_VISIBILITY[role.field];
+      // If no visibility rule, show for all types
+      if (!allowed) return true;
+      // Empty array means never show
+      if (allowed.length === 0) return false;
+      return !projectType || allowed.includes(projectType);
     })
     .map(role => {
       const userId = project[role.field];

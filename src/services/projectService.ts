@@ -161,7 +161,8 @@ export const createProjectFromChecklist = async (input: CreateProjectInput): Pro
   };
 
   if (checklist.type === 'venda' || checklist.type === 'migracao') {
-    projectData.company_name = checklist.razao_social;
+    // Projetos usam nome fantasia como nome principal (mais reconhecível)
+    projectData.company_name = checklist.nome_fantasia || checklist.razao_social;
     projectData.cnpj = checklist.cnpj;
     projectData.version = checklist.versao || 'VP';
     projectData.contact_name = checklist.responsavel_nome;
@@ -177,7 +178,7 @@ export const createProjectFromChecklist = async (input: CreateProjectInput): Pro
     projectData.has_ai = checklist.usa_ia ?? false;
     projectData.broker = 'EZ';
   } else if (checklist.type === 'evolucao') {
-    projectData.company_name = checklist.razao_social;
+    projectData.company_name = checklist.nome_fantasia || checklist.razao_social;
     projectData.cnpj = checklist.cnpj;
     projectData.version = checklist.versao_atual || 'VP';
     projectData.contact_name = checklist.responsavel_nome;
@@ -190,9 +191,9 @@ export const createProjectFromChecklist = async (input: CreateProjectInput): Pro
     projectData.website = checklist.website || null;
     projectData.has_ai = checklist.usa_ia ?? false;
     projectData.broker = 'EZ';
-    projectData.storage_time = '1 ano';
+    // Evolução: não sobrescrever storage_time — manter o armazenamento existente do cliente
   } else if (checklist.type === 'api_oficial') {
-    projectData.company_name = checklist.razao_social || checklist.cnpj || '';
+    projectData.company_name = checklist.nome_fantasia || checklist.razao_social || checklist.cnpj || '';
     projectData.cnpj = checklist.cnpj;
     projectData.version = checklist.versao || 'VP';
     projectData.contact_name = checklist.responsavel_nome;
@@ -754,7 +755,7 @@ export const updatePhaseStatus = async (
       const hasAI = (projectData as Record<string, unknown>)?.has_ai === true;
       if (hasAI) {
         // Com IA → avançar para curadoria_ia via função dedicada
-        await advanceEvolutionToAICuration(projectId, currentSortOrder);
+        await advanceToAICuration(projectId, currentSortOrder);
         return;
       } else {
         // Sem IA → finalizar projeto como concluído direto do dev_chatbot
@@ -772,53 +773,103 @@ export const updatePhaseStatus = async (
     // --- REGRA ESPECIAL: automação concluída (Venda/Migração) — decisão baseada em has_ai ---
     if (phaseName === 'automacao' && (projectType === 'venda' || projectType === 'migracao')) {
       const hasAI = (projectData as Record<string, unknown>)?.has_ai === true;
-      if (!hasAI) {
-        if (projectType === 'venda') {
-          // Venda sem IA → pular curadoria_ia, ir para go_live_assistido
-          const headFallback = (projectData as Record<string, unknown>)?.head_user_id as string | null;
+      if (hasAI) {
+        // Com IA → avançar para curadoria_ia
+        await advanceToAICuration(projectId, currentSortOrder);
+        return;
+      } else if (projectType === 'venda') {
+        // Venda sem IA → pular curadoria_ia, ir para go_live_assistido
+        const headFallback = (projectData as Record<string, unknown>)?.head_user_id as string | null;
 
-          const { error: phaseInsertError } = await supabase.from('project_phases').insert({
-            project_id: projectId,
-            phase_name: 'go_live_assistido',
-            status: 'BACKLOG',
-            sort_order: currentSortOrder + 2,
-            is_active: true,
-            assigned_user_id: headFallback,
-          } as any);
-          if (phaseInsertError) {
-            throw new Error(`Falha ao criar fase go_live_assistido: ${phaseInsertError.message}`);
-          }
-
-          await supabase.from('projects')
-            .update({ current_phase: 'go_live_assistido' } as any)
-            .eq('id', projectId);
-
-          await supabase.from('project_status_transitions').insert({
-            project_id: projectId,
-            phase_name: 'go_live_assistido',
-            status: 'BACKLOG',
-            entered_at: new Date().toISOString(),
-            changed_by_user_id: user.id,
-          } as any);
-
-          await supabase.from('project_activity_logs').insert({
-            project_id: projectId,
-            user_id: user.id,
-            action_type: 'phase_advanced',
-            phase_name: 'go_live_assistido',
-            old_value: 'automacao',
-            new_value: 'go_live_assistido',
-            description: 'Projeto de Venda sem IA — avançou de Automação para Go-Live Assistido (Curadoria de IA pulada)',
-          } as any);
-
-          return;
-        } else {
-          // Migração sem IA → finaliza projeto direto
-          await finalizeProjectAsDelivered(projectId, user.id, 'automacao', 'migracao');
-          return;
+        const { error: phaseInsertError } = await supabase.from('project_phases').insert({
+          project_id: projectId,
+          phase_name: 'go_live_assistido',
+          status: 'BACKLOG',
+          sort_order: currentSortOrder + 2,
+          is_active: true,
+          assigned_user_id: headFallback,
+        } as any);
+        if (phaseInsertError) {
+          throw new Error(`Falha ao criar fase go_live_assistido: ${phaseInsertError.message}`);
         }
+
+        await supabase.from('projects')
+          .update({ current_phase: 'go_live_assistido' } as any)
+          .eq('id', projectId);
+
+        await supabase.from('project_status_transitions').insert({
+          project_id: projectId,
+          phase_name: 'go_live_assistido',
+          status: 'BACKLOG',
+          entered_at: new Date().toISOString(),
+          changed_by_user_id: user.id,
+        } as any);
+
+        await supabase.from('project_activity_logs').insert({
+          project_id: projectId,
+          user_id: user.id,
+          action_type: 'phase_advanced',
+          phase_name: 'go_live_assistido',
+          old_value: 'automacao',
+          new_value: 'go_live_assistido',
+          description: 'Projeto de Venda sem IA — avançou de Automação para Go-Live Assistido (Curadoria de IA pulada)',
+        } as any);
+
+        return;
+      } else {
+        // Migração sem IA → finaliza projeto direto
+        await finalizeProjectAsDelivered(projectId, user.id, 'automacao', 'migracao');
+        return;
       }
-      // has_ai === true → continua fluxo normal (avança para curadoria_ia)
+    }
+
+    // --- REGRA ESPECIAL: ativação concluída (Venda/Migração) — decisão baseada em has_ai ---
+    if (phaseName === 'ativacao' && (projectType === 'venda' || projectType === 'migracao')) {
+      const hasAI = (projectData as Record<string, unknown>)?.has_ai === true;
+      if (hasAI) {
+        // Com IA → avançar para curadoria_ia
+        await advanceToAICuration(projectId, currentSortOrder);
+        return;
+      } else {
+        // Sem IA → avançar para go_live_assistido
+        const headFallback = (projectData as Record<string, unknown>)?.head_user_id as string | null;
+
+        const { error: phaseInsertError } = await supabase.from('project_phases').insert({
+          project_id: projectId,
+          phase_name: 'go_live_assistido',
+          status: 'BACKLOG',
+          sort_order: currentSortOrder + 2,
+          is_active: true,
+          assigned_user_id: (projectData as any)?.go_live_user_id || headFallback,
+        } as any);
+        if (phaseInsertError) {
+          throw new Error(`Falha ao criar fase go_live_assistido: ${phaseInsertError.message}`);
+        }
+
+        await supabase.from('projects')
+          .update({ current_phase: 'go_live_assistido' } as any)
+          .eq('id', projectId);
+
+        await supabase.from('project_status_transitions').insert({
+          project_id: projectId,
+          phase_name: 'go_live_assistido',
+          status: 'BACKLOG',
+          entered_at: new Date().toISOString(),
+          changed_by_user_id: user.id,
+        } as any);
+
+        await supabase.from('project_activity_logs').insert({
+          project_id: projectId,
+          user_id: user.id,
+          action_type: 'phase_advanced',
+          phase_name: 'go_live_assistido',
+          old_value: 'ativacao',
+          new_value: 'go_live_assistido',
+          description: `Projeto sem IA — avançou de Ativação para Go-Live Assistido`,
+        } as any);
+
+        return;
+      }
     }
 
     if (allPhasesForType) {
@@ -1083,8 +1134,8 @@ export interface AdvanceToAICurationResult {
   usedFallback: boolean;
 }
 
-// --- Avançar projeto Evolução para Curadoria de IA ---
-export const advanceEvolutionToAICuration = async (
+// --- Avançar projeto para Curadoria de IA ---
+const advanceToAICuration = async (
   projectId: string,
   currentSortOrder: number,
 ): Promise<AdvanceToAICurationResult> => {
@@ -1193,4 +1244,86 @@ const finalizeEvolutionFromCuradoria = async (projectId: string, userId: string)
 // --- Finalizar projeto API Oficial como "Concluído" ao concluir ativação ---
 const finalizeApiOficialProject = async (projectId: string, userId: string) => {
   await finalizeProjectAsDelivered(projectId, userId, 'ativacao', 'api_oficial');
+};
+
+// --- Create a standalone curadoria_ia project ---
+export interface CreateCuradoriaProjectInput {
+  companyName: string;
+  cnpj?: string;
+  assignedUserId?: string;
+  dueDate: string; // ISO date string
+  contactName: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  notes?: string;
+}
+
+export const createCuradoriaProject = async (input: CreateCuradoriaProjectInput): Promise<string> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Não autenticado');
+
+  const now = new Date();
+
+  const { data: project, error: projectError } = await supabase
+    .from('projects')
+    .insert({
+      project_type: 'venda', // curadoria_ia is not a valid project_type; using 'venda' as fallback
+      created_by_user_id: user.id,
+      overall_status: 'ativo',
+      priority: 'media',
+      company_name: input.companyName,
+      cnpj: input.cnpj || null,
+      contact_name: input.contactName,
+      contact_phone: input.contactPhone || null,
+      contact_email: input.contactEmail || null,
+      notes: input.notes || null,
+      current_phase: 'curadoria_ia',
+      has_ai: true,
+      start_date: now.toISOString().split('T')[0],
+      due_date: input.dueDate,
+      head_user_id: user.id,
+    } as any)
+    .select('id')
+    .single();
+
+  if (projectError) throw projectError;
+
+  const projectId = project.id;
+
+  // Assign the responsible user if provided
+  if (input.assignedUserId) {
+    await supabase
+      .from('projects')
+      .update({ dev_user_id: input.assignedUserId } as any)
+      .eq('id', projectId);
+  }
+
+  // Create curadoria_ia phase
+  await supabase.from('project_phases').insert({
+    project_id: projectId,
+    phase_name: 'curadoria_ia',
+    status: 'BACKLOG',
+    sort_order: 0,
+    is_active: true,
+    assigned_user_id: input.assignedUserId || null,
+  } as any);
+
+  // Status transition record
+  await supabase.from('project_status_transitions').insert({
+    project_id: projectId,
+    phase_name: 'curadoria_ia',
+    status: 'BACKLOG',
+    entered_at: now.toISOString(),
+    changed_by_user_id: user.id,
+  } as any);
+
+  // Activity log
+  await supabase.from('project_activity_logs').insert({
+    project_id: projectId,
+    user_id: user.id,
+    action_type: 'project_created',
+    description: 'Projeto de curadoria IA criado manualmente',
+  } as any);
+
+  return projectId;
 };

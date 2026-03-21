@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -6,7 +7,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { useMyClients, type MyClient } from '@/hooks/useMyClients';
 import { useSystemUsers } from '@/hooks/useSystemUsers';
 import { ClientPortfolioModal } from '@/components/clients/ClientPortfolioModal';
-import { NewDealFromClientDialog } from '@/components/closer/NewDealFromClientDialog';
+import { createDealFromActiveClient } from '@/services/closerService';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -57,6 +58,7 @@ function loadPageSize(): number {
 }
 
 export default function SDRMyClientsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { user } = useCurrentUser();
   const { hasPermission } = usePermissions();
@@ -73,13 +75,57 @@ export default function SDRMyClientsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkOwnerId, setBulkOwnerId] = useState('');
   const [assigning, setAssigning] = useState(false);
-  const [newDealDialogOpen, setNewDealDialogOpen] = useState(false);
-  const [dealPreselectedClientId, setDealPreselectedClientId] = useState<string | undefined>(undefined);
+  const [creatingDeal, setCreatingDeal] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [closerFilter, setCloserFilter] = useState<string>('all');
 
   const { data: clients = [], isLoading, refetch } = useMyClients(user?.id ?? null, viewMode);
   const { data: systemUsers = [] } = useSystemUsers();
+
+  // Deep-link: open client modal from ?account=ID
+  useEffect(() => {
+    const accountId = searchParams.get('account');
+    if (!accountId || selectedClient) return;
+
+    const found = clients.find(c => c.id === accountId);
+    if (found) {
+      setSelectedClient(found);
+    } else if (!isLoading && clients.length > 0) {
+      supabase
+        .from('accounts')
+        .select('id, company_name, cnpj, city, state, lifecycle_stage, account_owner_id, status')
+        .eq('id', accountId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) {
+            setSelectedClient({
+              id: data.id,
+              company_name: data.company_name,
+              cnpj: data.cnpj,
+              city: data.city,
+              state: data.state,
+              lifecycle_stage: data.lifecycle_stage,
+              situacao_cadastral: null,
+              account_owner_id: data.account_owner_id,
+              account_owner_name: null,
+              closer_name: null,
+              sdr_name: null,
+              won_at: null,
+              deal_value: null,
+              total_revenue: 0,
+              active_projects_count: 0,
+              evolution_count: 0,
+              last_activity_date: null,
+              days_since_last_activity: null,
+              health_score: 50,
+              health_label: 'yellow',
+              products: [],
+              status: data.status || 'active',
+            } as MyClient);
+          }
+        });
+    }
+  }, [searchParams, clients, isLoading, selectedClient]);
 
   // Unique closers for filter dropdown
   const closerOptions = useMemo(() => {
@@ -102,13 +148,20 @@ export default function SDRMyClientsPage() {
 
     const q = search.trim().toLowerCase();
     if (q) {
-      result = result.filter(c =>
-        c.company_name?.toLowerCase().includes(q) ||
-        c.cnpj?.includes(q) ||
-        c.city?.toLowerCase().includes(q) ||
-        c.closer_name?.toLowerCase().includes(q) ||
-        c.sdr_name?.toLowerCase().includes(q),
-      );
+      const qDigits = q.replace(/\D/g, '');
+      result = result.filter(c => {
+        if (c.company_name?.toLowerCase().includes(q)) return true;
+        if (c.city?.toLowerCase().includes(q)) return true;
+        if (c.closer_name?.toLowerCase().includes(q)) return true;
+        if (c.sdr_name?.toLowerCase().includes(q)) return true;
+        // CNPJ: compare normalized digits
+        if (c.cnpj && qDigits.length >= 3) {
+          const cnpjDigits = c.cnpj.replace(/\D/g, '');
+          if (cnpjDigits.includes(qDigits)) return true;
+        }
+        if (c.cnpj?.toLowerCase().includes(q)) return true;
+        return false;
+      });
     }
     return result;
   }, [clients, search, statusFilter, closerFilter]);
@@ -134,11 +187,30 @@ export default function SDRMyClientsPage() {
     setSelectedClient(client);
   }, []);
 
-  const handleNewDeal = useCallback((clientId: string) => {
-    setDealPreselectedClientId(clientId);
-    setSelectedClient(null);
-    setNewDealDialogOpen(true);
-  }, []);
+  const handleNewDeal = useCallback(async (clientId: string) => {
+    if (creatingDeal) return;
+    setCreatingDeal(true);
+    try {
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !authUser) throw new Error('Usuário não autenticado');
+      await createDealFromActiveClient(clientId, authUser.id, 'evolution');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['closer-opportunities'] }),
+        queryClient.invalidateQueries({ queryKey: ['closer-opportunities-paginated'] }),
+        queryClient.invalidateQueries({ queryKey: ['closer-tab-counts'] }),
+        queryClient.invalidateQueries({ queryKey: ['closer-kanban-data'] }),
+        queryClient.invalidateQueries({ queryKey: ['client_deals'] }),
+        queryClient.invalidateQueries({ queryKey: ['my-clients'] }),
+      ]);
+      toast.success('Negociação criada com sucesso!');
+      setSelectedClient(null);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erro ao criar negociação';
+      toast.error(message);
+    } finally {
+      setCreatingDeal(false);
+    }
+  }, [creatingDeal, queryClient]);
 
   const handleSearch = useCallback((value: string) => {
     setSearch(value);
@@ -248,7 +320,10 @@ export default function SDRMyClientsPage() {
               subtitle={subtitle}
               icon={<UserCheck className="h-5 w-5" />}
               actions={
-                <Button size="sm" className="h-8 text-xs font-medium gap-1.5" onClick={() => setNewDealDialogOpen(true)}>
+                <Button size="sm" className="h-8 text-xs font-medium gap-1.5" disabled={creatingDeal} onClick={() => {
+                  // Placeholder — New deal flow needs a selected client
+                  toast.info('Selecione um cliente na tabela para criar uma negociação');
+                }}>
                   <Rocket className="h-3.5 w-3.5" />
                   Nova negociação
                 </Button>
@@ -581,20 +656,17 @@ export default function SDRMyClientsPage() {
       <ClientPortfolioModal
         client={selectedClient}
         open={!!selectedClient}
-        onClose={() => setSelectedClient(null)}
+        onClose={() => {
+          setSelectedClient(null);
+          if (searchParams.has('account')) {
+            const next = new URLSearchParams(searchParams);
+            next.delete('account');
+            setSearchParams(next, { replace: true });
+          }
+        }}
         onNewDeal={handleNewDeal}
       />
 
-      <NewDealFromClientDialog
-        open={newDealDialogOpen}
-        onOpenChange={setNewDealDialogOpen}
-        preSelectedClientId={dealPreselectedClientId}
-        onSuccess={() => {
-          setDealPreselectedClientId(undefined);
-          queryClient.invalidateQueries({ queryKey: ['my-clients'] });
-        }}
-        opportunityType="evolution"
-      />
     </AppLayout>
   );
 }

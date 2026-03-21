@@ -391,7 +391,7 @@ export const AIPromptsSection = () => {
               <Bot className="h-4.5 w-4.5 text-primary" />
             </div>
             <div>
-              <CardTitle className="text-base">Ações de IA</CardTitle>
+              <CardTitle className="text-base">Prompts de IA</CardTitle>
               <CardDescription className="text-xs">
                 Gerencie os prompts utilizados nas funcionalidades de Inteligência Artificial do sistema.
                 Alterações aqui afetam diretamente as respostas da IA para todos os usuários.

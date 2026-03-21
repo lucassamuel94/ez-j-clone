@@ -34,6 +34,10 @@ import {
   MessageCircle,
   Link as LinkIcon,
   BrainCircuit,
+  HeartPulse,
+  BarChart3 as BarChartIcon,
+  Copy,
+  Ghost,
 } from 'lucide-react';
 
 interface SettingsNavItem {
@@ -129,7 +133,7 @@ function SettingsNavContent({ onNavigate }: { onNavigate?: () => void }) {
   // ── Inteligência ────────────────────────────────────────────────────────
   const intelItems: SettingsNavItem[] = [];
   if (hasPermission('manage_ai')) {
-    intelItems.push({ to: '/settings/ai', icon: <Bot className="h-4 w-4" />, label: 'IA' });
+    intelItems.push({ to: '/settings/ai', icon: <Bot className="h-4 w-4" />, label: 'Prompts de IA' });
   }
   if (hasPermission('manage_enrichment')) {
     intelItems.push({ to: '/settings/enrich', icon: <Database className="h-4 w-4" />, label: 'Enriquecimento de Dados' });
@@ -140,6 +144,11 @@ function SettingsNavContent({ onNavigate }: { onNavigate?: () => void }) {
   if (hasPermission('access_admin')) {
     intelItems.push({ to: '/settings/integrations-catalog', icon: <Blocks className="h-4 w-4" />, label: 'Catálogo de Integrações' });
     intelItems.push({ to: '/settings/business-chat', icon: <BrainCircuit className="h-4 w-4" />, label: 'Regras de Negócio' });
+    intelItems.push({ to: '/settings/win-loss', icon: <BarChartIcon className="h-4 w-4" />, label: 'Análise Win/Loss' });
+    intelItems.push({ to: '/settings/duplicates', icon: <Copy className="h-4 w-4" />, label: 'Detecção de Duplicatas' });
+    intelItems.push({ to: '/settings/customer-health', icon: <HeartPulse className="h-4 w-4" />, label: 'Saúde dos Clientes' });
+    intelItems.push({ to: '/settings/ghost-closer', icon: <Ghost className="h-4 w-4" />, label: 'Ghost Closer' });
+    intelItems.push({ to: '/settings/ghost-sdr', icon: <Ghost className="h-4 w-4" />, label: 'Ghost SDR' });
   }
 
   // ── Marketing ───────────────────────────────────────────────────────────

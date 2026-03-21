@@ -171,6 +171,7 @@ export type Database = {
           country: string | null
           created_at: string
           data_inicio_atividade: string | null
+          deleted_at: string | null
           email: string | null
           employee_count: string | null
           id: string
@@ -209,6 +210,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           data_inicio_atividade?: string | null
+          deleted_at?: string | null
           email?: string | null
           employee_count?: string | null
           id?: string
@@ -247,6 +249,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           data_inicio_atividade?: string | null
+          deleted_at?: string | null
           email?: string | null
           employee_count?: string | null
           id?: string

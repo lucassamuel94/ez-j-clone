@@ -3,13 +3,30 @@ import { sanitizeHtml } from '@/utils/sanitize';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
-import { Sparkles, Loader2, Clock, Users, Building2 } from 'lucide-react';
+import { Sparkles, Loader2, Clock, Users, Building2, ChevronDown, Target, BarChart3, Lightbulb, MessageSquareText } from 'lucide-react';
 import { useICPAnalysis } from '@/hooks/useICPAnalysis';
 import { ICPChatSection } from './ICPChatSection';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
+
+interface ICPProfile {
+  porte_tipico: string;
+  cnae_principal: string;
+  regiao_principal: string;
+  faturamento_tipico: string;
+  funcionarios_tipico: string;
+  resumo_narrativo: string;
+}
+
+interface Estrategia {
+  titulo: string;
+  descricao: string;
+  impacto: 'alto' | 'medio';
+}
 
 const COLORS = [
   'hsl(var(--primary))',
@@ -143,16 +160,74 @@ function formatAIMarkdown(text: string): string {
   return html;
 }
 
+interface AccordionSectionProps {
+  id: string;
+  icon: React.ReactNode;
+  title: string;
+  summary: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}
+
+function AccordionSection({ id, icon, title, summary, open, onToggle, children }: AccordionSectionProps) {
+  return (
+    <Collapsible open={open} onOpenChange={onToggle}>
+      <Card>
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              'flex w-full items-center justify-between px-6 py-4 text-left transition-colors hover:bg-muted/50',
+              open && 'border-b border-border'
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+                open ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+              )}>
+                {icon}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">{title}</p>
+                {!open && (
+                  <p className="text-xs text-muted-foreground mt-0.5">{summary}</p>
+                )}
+              </div>
+            </div>
+            <ChevronDown className={cn(
+              'h-4 w-4 text-muted-foreground transition-transform duration-200',
+              open && 'rotate-180'
+            )} />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="px-6 py-5">
+            {children}
+          </div>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
+  );
+}
+
 export function ICPAnalysisSection() {
   const { data: analyses = [], isLoading, generateAnalysis } = useICPAnalysis();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [openSection, setOpenSection] = useState<string>('perfil');
   const isGenerating = generateAnalysis.isPending;
+
+  const toggle = (section: string) => setOpenSection(prev => prev === section ? '' : section);
 
   const latest = selectedId
     ? analyses.find(a => a.id === selectedId)
     : analyses[0];
 
-  const stats = (latest?.statistics || {}) as Record<string, ChartData[]>;
+  const stats = (latest?.statistics || {}) as Record<string, unknown>;
+  const chartStats = stats as Record<string, ChartData[]>;
+  const icpProfile = stats.icp_profile as ICPProfile | undefined;
+  const estrategias = (stats.estrategias || []) as Estrategia[];
 
   const formattedAiAnalysis = useMemo(() => {
     if (!latest?.ai_analysis) return '';
@@ -161,27 +236,40 @@ export function ICPAnalysisSection() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground font-display">Análise de Perfil ICP</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Perfil ideal de cliente baseado na sua base ativa
+            Entenda quem é seu cliente ideal e como direcionar sua estratégia.
           </p>
         </div>
-        <Button onClick={() => generateAnalysis.mutate()} disabled={isGenerating}>
-          {isGenerating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
-          {isGenerating ? 'Analisando clientes…' : 'Gerar Análise de Perfil'}
-        </Button>
+        <div className="flex flex-col items-end gap-1">
+          <Button onClick={() => generateAnalysis.mutate()} disabled={isGenerating}>
+            {isGenerating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
+            {isGenerating ? 'Analisando clientes…' : 'Gerar Nova Análise'}
+          </Button>
+          {latest && (
+            <p className="text-xs text-muted-foreground">
+              Última análise: {format(new Date(latest.created_at), "dd/MM/yyyy", { locale: ptBR })} · {latest.clients_analyzed} clientes
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* Progress feedback during generation */}
+      {/* Progress bar during generation */}
       {isGenerating && (
         <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="flex items-center gap-3 py-4">
-            <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            <div>
-              <p className="text-sm font-medium text-foreground">Gerando análise de perfil…</p>
-              <p className="text-xs text-muted-foreground">Enriquecendo dados e consultando IA. Isso pode levar até 1 minuto.</p>
+          <CardContent className="py-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <div>
+                <p className="text-sm font-medium">Gerando análise de perfil…</p>
+                <p className="text-xs text-muted-foreground">Analisando clientes enriquecidos e gerando insights com IA...</p>
+              </div>
+            </div>
+            <div className="h-1.5 bg-primary/10 rounded-full overflow-hidden">
+              <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: '65%' }} />
             </div>
           </CardContent>
         </Card>
@@ -199,69 +287,181 @@ export function ICPAnalysisSection() {
             <p className="text-xs text-muted-foreground">Importe e enriqueça seus clientes primeiro, depois gere a análise.</p>
           </CardContent>
         </Card>
-      ) : (
+      ) : latest && (
         <>
-          {/* History tabs */}
-          {analyses.length > 1 && (
-            <div className="flex gap-2 flex-wrap">
-              {analyses.map(a => (
-                <Badge
-                  key={a.id}
-                  variant={a.id === (latest?.id) ? 'default' : 'outline'}
-                  className="cursor-pointer text-xs"
-                  onClick={() => setSelectedId(a.id)}
-                >
-                  <Clock className="h-3 w-3 mr-1" />
-                  {format(new Date(a.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
-                  <span className="ml-1 opacity-70">({a.clients_analyzed} clientes)</span>
-                </Badge>
-              ))}
-            </div>
-          )}
+          {/* Accordion sections */}
+          <div className="space-y-3">
+            {/* ① Perfil ICP */}
+            <AccordionSection
+              id="perfil"
+              icon={<Target className="h-4 w-4" />}
+              title="Perfil ICP"
+              summary="Persona ideal, porte, CNAE, região e resumo narrativo"
+              open={openSection === 'perfil'}
+              onToggle={() => toggle('perfil')}
+            >
+              <div className="space-y-5">
+                {/* Persona card */}
+                <div className="rounded-xl bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 p-5">
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Porte típico</p>
+                      <Badge variant="secondary" className="text-xs">
+                        {icpProfile?.porte_tipico || '—'}
+                      </Badge>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">CNAE Principal</p>
+                      <Badge variant="secondary" className="text-xs">
+                        {icpProfile?.cnae_principal || '—'}
+                      </Badge>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Região</p>
+                      <Badge variant="secondary" className="text-xs">
+                        {icpProfile?.regiao_principal || '—'}
+                      </Badge>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Faturamento</p>
+                      <Badge variant="secondary" className="text-xs">
+                        {icpProfile?.faturamento_tipico || '—'}
+                      </Badge>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Nº Funcionários</p>
+                      <Badge variant="secondary" className="text-xs">
+                        {icpProfile?.funcionarios_tipico || '—'}
+                      </Badge>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Base Analisada</p>
+                      <Badge variant="secondary" className="text-xs">
+                        {latest.clients_analyzed} clientes
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
 
-          {latest && (
-            <>
-              {/* Summary */}
-              <div className="flex gap-4">
-                <Badge variant="secondary" className="gap-1.5">
-                  <Users className="h-3 w-3" /> {latest.clients_analyzed} clientes analisados
-                </Badge>
-                <Badge variant="outline" className="gap-1.5">
-                  <Clock className="h-3 w-3" /> {format(new Date(latest.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                </Badge>
-              </div>
-
-              {/* ICP Chat */}
-              <ICPChatSection analysisId={latest.id} />
-
-              {/* Charts grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ICPBarChart title="Top CNAEs" data={stats.top_cnaes} />
-                <ICPBarChart title="Top CNAEs Secundários" data={stats.top_sub_cnaes} />
-                <ICPPieChart title="Distribuição por Porte" data={stats.porte_distribution} />
-                <ICPBarChart title="Top Cidades/Estados" data={stats.top_locations} />
-                <ICPBarChart title="Faixa de Faturamento" data={stats.revenue_distribution} />
-                <ICPBarChart title="Faixa de Funcionários" data={stats.employee_distribution} />
-              </div>
-
-              {/* AI Analysis — now with markdown rendering */}
-              {latest.ai_analysis && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-sm">
-                      <Sparkles className="h-4 w-4 text-primary" />
-                      Análise Descritiva (IA)
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
+                {/* Narrative text */}
+                {icpProfile?.resumo_narrativo ? (
+                  <div className="border-l-4 border-primary pl-4">
+                    <p className="text-sm text-foreground leading-relaxed">
+                      {icpProfile.resumo_narrativo}
+                    </p>
+                  </div>
+                ) : formattedAiAnalysis ? (
+                  <div className="border-l-4 border-primary pl-4">
                     <div
                       className="prose prose-sm max-w-none text-foreground [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-1.5 [&_li]:py-0.5 [&_p]:my-1"
                       dangerouslySetInnerHTML={{ __html: formattedAiAnalysis }}
                     />
-                  </CardContent>
-                </Card>
+                  </div>
+                ) : null}
+              </div>
+            </AccordionSection>
+
+            {/* ② Dados da Base */}
+            <AccordionSection
+              id="dados"
+              icon={<BarChart3 className="h-4 w-4" />}
+              title="Dados da Base"
+              summary="Gráficos detalhados de CNAE, porte, região, faturamento e funcionários"
+              open={openSection === 'dados'}
+              onToggle={() => toggle('dados')}
+            >
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <ICPBarChart title="Top CNAEs" data={chartStats.top_cnaes as ChartData[]} />
+                <ICPBarChart title="Top CNAEs Secundários" data={chartStats.top_sub_cnaes as ChartData[]} />
+                <ICPPieChart title="Distribuição por Porte" data={chartStats.porte_distribution as ChartData[]} />
+                <ICPBarChart title="Top Cidades/Estados" data={chartStats.top_locations as ChartData[]} />
+                <ICPBarChart title="Faixa de Faturamento" data={chartStats.revenue_distribution as ChartData[]} />
+                <ICPBarChart title="Faixa de Funcionários" data={chartStats.employee_distribution as ChartData[]} />
+              </div>
+            </AccordionSection>
+
+            {/* ③ Estratégias Recomendadas */}
+            <AccordionSection
+              id="estrategias"
+              icon={<Lightbulb className="h-4 w-4" />}
+              title="Estratégias Recomendadas"
+              summary={`${estrategias.length} ações priorizadas por impacto`}
+              open={openSection === 'estrategias'}
+              onToggle={() => toggle('estrategias')}
+            >
+              {estrategias.length > 0 ? (
+                <div className="space-y-3">
+                  {estrategias.map((estrategia, index) => (
+                    <div
+                      key={index}
+                      className={cn(
+                        'flex items-start gap-4 rounded-lg border p-4 transition-colors',
+                        index === 0 && 'bg-primary/5 border-primary/20'
+                      )}
+                    >
+                      <div className={cn(
+                        'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold',
+                        index === 0
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground'
+                      )}>
+                        {index + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="text-sm font-bold text-foreground">{estrategia.titulo}</p>
+                          <Badge
+                            variant={estrategia.impacto === 'alto' ? 'default' : 'outline'}
+                            className={cn(
+                              'text-[10px] uppercase tracking-wider shrink-0',
+                              estrategia.impacto === 'medio' && 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800'
+                            )}
+                          >
+                            {estrategia.impacto === 'alto' ? 'Alto Impacto' : 'Médio Impacto'}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{estrategia.descricao}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Nenhuma estratégia disponível nesta análise.</p>
               )}
-            </>
+            </AccordionSection>
+
+            {/* ④ Chat IA */}
+            <AccordionSection
+              id="chat"
+              icon={<MessageSquareText className="h-4 w-4" />}
+              title="Chat IA"
+              summary="Pergunte qualquer coisa sobre o perfil da sua base"
+              open={openSection === 'chat'}
+              onToggle={() => toggle('chat')}
+            >
+              <ICPChatSection analysisId={latest.id} />
+            </AccordionSection>
+          </div>
+
+          {/* Histórico */}
+          {analyses.length > 1 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Histórico de Análises</p>
+              <div className="flex gap-2 flex-wrap">
+                {analyses.map(a => (
+                  <Badge
+                    key={a.id}
+                    variant={a.id === latest.id ? 'default' : 'outline'}
+                    className="cursor-pointer text-xs"
+                    onClick={() => setSelectedId(a.id)}
+                  >
+                    <Clock className="h-3 w-3 mr-1" />
+                    {format(new Date(a.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
+                    <span className="ml-1 opacity-70">({a.clients_analyzed} clientes)</span>
+                  </Badge>
+                ))}
+              </div>
+            </div>
           )}
         </>
       )}

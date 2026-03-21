@@ -205,6 +205,7 @@ const ProposalReviewPage = () => {
     );
   }
 
+  const isEzCall = (proposal as any).product_type === 'ez_call';
   const validUntil = new Date(proposal.created_at);
   validUntil.setDate(validUntil.getDate() + editFields.validity_days);
 
@@ -407,7 +408,7 @@ const ProposalReviewPage = () => {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Contatos estimados</Label>
+                <Label className="text-xs">{isEzCall ? 'Ramais estimados' : 'Contatos estimados'}</Label>
                 <Input
                   type="number"
                   value={editFields.estimated_contacts}
@@ -415,7 +416,7 @@ const ProposalReviewPage = () => {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Mensagens estimadas</Label>
+                <Label className="text-xs">{isEzCall ? 'Minutos estimados' : 'Mensagens estimadas'}</Label>
                 <Input
                   type="number"
                   value={editFields.estimated_messages}
@@ -426,35 +427,41 @@ const ProposalReviewPage = () => {
 
             <Separator />
 
-            <div className="flex items-center gap-3 mb-2">
-              <Switch
-                id="review-show-meta"
-                checked={editFields.show_meta_costs}
-                onCheckedChange={v => setEditFields(prev => ({ ...prev, show_meta_costs: v }))}
-              />
-              <Label htmlFor="review-show-meta" className="text-xs cursor-pointer">Incluir custos Meta na proposta</Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-xs text-xs">
-                    Quando desativado, a proposta enviada ao cliente não exibirá a estimativa de custos Meta WhatsApp.
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
+            {!isEzCall && (
+              <>
+                <div className="flex items-center gap-3 mb-2">
+                  <Switch
+                    id="review-show-meta"
+                    checked={editFields.show_meta_costs}
+                    onCheckedChange={v => setEditFields(prev => ({ ...prev, show_meta_costs: v }))}
+                  />
+                  <Label htmlFor="review-show-meta" className="text-xs cursor-pointer">Incluir custos Meta na proposta</Label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs text-xs">
+                        Quando desativado, a proposta enviada ao cliente não exibirá a estimativa de custos Meta WhatsApp.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </>
+            )}
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Custo Meta WhatsApp (R$)</Label>
-                <Input
-                  type="number"
-                  value={editFields.meta_cost}
-                  onChange={e => setEditFields(prev => ({ ...prev, meta_cost: parseFloat(e.target.value) || 0 }))}
-                  disabled={!editFields.show_meta_costs}
-                />
-              </div>
+              {!isEzCall && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Custo Meta WhatsApp (R$)</Label>
+                  <Input
+                    type="number"
+                    value={editFields.meta_cost}
+                    onChange={e => setEditFields(prev => ({ ...prev, meta_cost: parseFloat(e.target.value) || 0 }))}
+                    disabled={!editFields.show_meta_costs}
+                  />
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label className="text-xs">Total Mensal (R$)</Label>
                 <Input

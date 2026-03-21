@@ -9,10 +9,13 @@ interface ProjectProgressBarProps {
 export function ProjectProgressBar({ phases, projectType }: ProjectProgressBarProps) {
   if (!phases.length) return null;
 
-  // Item 4: Use total phases from PHASES_BY_TYPE as denominator
-  const totalPhases = projectType && PHASES_BY_TYPE[projectType as ProjectType]
-    ? PHASES_BY_TYPE[projectType as ProjectType].length
-    : phases.length;
+  // Use actual project phases count as denominator (accounts for conditional phases like curadoria_ia)
+  // Fallback to PHASES_BY_TYPE template only when no real phases data
+  const totalPhases = phases.length > 0
+    ? phases.length
+    : (projectType && PHASES_BY_TYPE[projectType as ProjectType]
+        ? PHASES_BY_TYPE[projectType as ProjectType].length
+        : 1);
   const completedCount = phases.filter((p) => p.status === 'CONCLUÍDO').length;
   const percent = Math.round((completedCount / totalPhases) * 100);
   return (

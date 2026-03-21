@@ -74,6 +74,7 @@ export function useMyClients(
         .from('accounts')
         .select('id, company_name, cnpj, city, state, lifecycle_stage, situacao_cadastral, account_owner_id, status')
         .eq('lifecycle_stage', 'client')
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(5000);
 

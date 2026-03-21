@@ -176,6 +176,7 @@ export interface ProjectActivityLog {
 export interface VendaChecklistData {
   type: 'venda';
   razao_social: string;
+  nome_fantasia?: string;
   cnpj: string;
   versao: 'V2' | 'VP';
   responsavel_nome: string;
@@ -196,6 +197,7 @@ export interface VendaChecklistData {
 export interface EvolucaoChecklistData {
   type: 'evolucao';
   razao_social: string;
+  nome_fantasia?: string;
   cnpj: string;
   versao_atual: 'V2' | 'VP';
   responsavel_nome: string;
@@ -213,6 +215,7 @@ export interface EvolucaoChecklistData {
 export interface ApiOficialChecklistData {
   type: 'api_oficial';
   razao_social: string;
+  nome_fantasia?: string;
   cnpj: string;
   versao: string;
   responsavel_nome: string;
@@ -229,6 +232,7 @@ export interface ApiOficialChecklistData {
 export interface MigracaoChecklistData {
   type: 'migracao';
   razao_social: string;
+  nome_fantasia?: string;
   cnpj: string;
   versao: 'V2' | 'VP';
   responsavel_nome: string;

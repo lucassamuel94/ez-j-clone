@@ -209,6 +209,7 @@ const ProposalPreviewPage = () => {
   }
 
   const isEvolucao = proposal.product_type === 'evolucao_ez_chat';
+  const isEzCall = proposal.product_type === 'ez_call';
 
   const validUntil = new Date(proposal.created_at);
   validUntil.setDate(validUntil.getDate() + proposal.validity_days);
@@ -301,7 +302,7 @@ const ProposalPreviewPage = () => {
               <img src={ezLogo} alt="EZ Journey" className="h-10" />
               <div className="flex items-center gap-3">
                 <img src={gptwBadge} alt="Great Place to Work" className="h-[72px] rounded" />
-                <img src={metaPartnerLogo} alt="Meta Business Partner" className="h-[52px] rounded" />
+                {!isEzCall && <img src={metaPartnerLogo} alt="Meta Business Partner" className="h-[52px] rounded" />}
               </div>
             </div>
 
@@ -516,16 +517,16 @@ const ProposalPreviewPage = () => {
                               <div className="mt-4 space-y-2 flex-1">
                                 <div className="flex items-center gap-2 text-xs text-[#555]">
                                   <Check className="h-3.5 w-3.5 text-[#7c3aed] shrink-0" />
-                                  <span>{plan.messages_included.toLocaleString('pt-BR')} mensagens incluídas</span>
+                                  <span>{plan.messages_included.toLocaleString('pt-BR')} {isEzCall ? 'minutos incluídos' : 'mensagens incluídas'}</span>
                                 </div>
                                 <div className="flex items-center gap-2 text-xs text-[#555]">
                                   <Check className="h-3.5 w-3.5 text-[#7c3aed] shrink-0" />
-                                  <span>{plan.contacts_included.toLocaleString('pt-BR')} contatos incluídos</span>
+                                  <span>{plan.contacts_included.toLocaleString('pt-BR')} {isEzCall ? 'ramais incluídos' : 'contatos incluídos'}</span>
                                 </div>
                               </div>
                               <div className="mt-3 pt-3 border-t border-[#f0f0f0] space-y-1">
                                 <p className="text-[10px] text-[#aaa]">
-                                  Excedente: {formatCurrency(plan.excess_message_price)}/msg · {formatCurrency(plan.excess_contact_price)}/contato
+                                  Excedente: {formatCurrency(plan.excess_message_price)}/{isEzCall ? 'min' : 'msg'} · {formatCurrency(plan.excess_contact_price)}/{isEzCall ? 'ramal' : 'contato'}
                                 </p>
                               </div>
                             </div>
@@ -607,18 +608,22 @@ const ProposalPreviewPage = () => {
 
           <h4 className="font-bold text-[#1a1a2e] text-sm mb-3">Premissas e Restrições</h4>
           <ul className="text-[#555] text-sm leading-relaxed space-y-2 mb-4 list-disc list-inside">
-            <li>A EZ Chat não realiza migração de dados, desenvolvimento de relatórios personalizados ou dashboards avançados.</li>
-            <li>A EZ Chat executa serviços exclusivamente em sua própria plataforma.</li>
+            <li>A {isEzCall ? 'EZ Call' : 'EZ Chat'} não realiza migração de dados, desenvolvimento de relatórios personalizados ou dashboards avançados.</li>
+            <li>A {isEzCall ? 'EZ Call' : 'EZ Chat'} executa serviços exclusivamente em sua própria plataforma.</li>
             <li>O fornecimento de acessos, tokens e credenciais é de responsabilidade da Contratante.</li>
-            <li>A responsabilidade da EZ Chat limita-se aos serviços descritos nesta proposta.</li>
+            <li>A responsabilidade da {isEzCall ? 'EZ Call' : 'EZ Chat'} limita-se aos serviços descritos nesta proposta.</li>
           </ul>
 
-          <p className="text-[#555] text-sm leading-relaxed mb-3">
-            <strong>Custos de Inteligência Artificial:</strong> Custos adicionais relacionados à contratação de provedores de IA (OpenAI, Gemini, etc.) não estão inclusos na mensalidade, sendo de responsabilidade exclusiva da Contratante.
-          </p>
-          <p className="text-[#555] text-sm leading-relaxed">
-            <strong>Pagamentos junto à Meta (WhatsApp Oficial):</strong> A contratação, gestão e pagamento dos custos relacionados ao WhatsApp Oficial são de responsabilidade exclusiva da Contratante.
-          </p>
+          {!isEzCall && (
+            <>
+              <p className="text-[#555] text-sm leading-relaxed mb-3">
+                <strong>Custos de Inteligência Artificial:</strong> Custos adicionais relacionados à contratação de provedores de IA (OpenAI, Gemini, etc.) não estão inclusos na mensalidade, sendo de responsabilidade exclusiva da Contratante.
+              </p>
+              <p className="text-[#555] text-sm leading-relaxed">
+                <strong>Pagamentos junto à Meta (WhatsApp Oficial):</strong> A contratação, gestão e pagamento dos custos relacionados ao WhatsApp Oficial são de responsabilidade exclusiva da Contratante.
+              </p>
+            </>
+          )}
         </div>
 
         {/* Suporte e SLA */}
@@ -628,10 +633,10 @@ const ProposalPreviewPage = () => {
             <h3 className="text-xl font-bold text-[#7c3aed]">Suporte e SLA</h3>
           </div>
           <p className="text-[#555] text-sm leading-relaxed">
-            As políticas de Suporte e SLA da Plataforma EZ Chat estão descritas no link abaixo:
+            As políticas de Suporte e SLA da Plataforma {isEzCall ? 'EZ Call' : 'EZ Chat'} estão descritas no link abaixo:
           </p>
           <a href="https://ezsoft.com.br/sla" target="_blank" rel="noopener noreferrer" className="text-[#7c3aed] text-sm hover:underline mt-2 inline-block">
-            Termos de suporte e acordos de nível de serviço (SLA) da Plataforma EZ Chat →
+            Termos de suporte e acordos de nível de serviço (SLA) da Plataforma {isEzCall ? 'EZ Call' : 'EZ Chat'} →
           </a>
         </div>
 
@@ -704,7 +709,7 @@ const ProposalPreviewPage = () => {
                 <tr className="border-b border-[#f0f0f0]">
                   <td className="py-3">
                     <p className="font-medium text-[#1a1a2e]">Plano {proposal.plan_name}</p>
-                    <p className="text-xs text-[#888] mt-0.5">Mensalidade da plataforma EZ Chat</p>
+                    <p className="text-xs text-[#888] mt-0.5">Mensalidade da plataforma {isEzCall ? 'EZ Call' : 'EZ Chat'}</p>
                     {(() => {
                       const matchedPlan = plans.find(p => p.name === proposal.plan_name);
                       const msgsIncl = ((proposal as any).plan_messages_included || null) ?? matchedPlan?.messages_included ?? null;
@@ -714,8 +719,8 @@ const ProposalPreviewPage = () => {
                       if (msgsIncl == null && contsIncl == null) return null;
                       return (
                         <div className="text-xs text-[#777] mt-1 space-y-0.5">
-                          <p>Inclusos: {(msgsIncl ?? 0).toLocaleString('pt-BR')} msgs + {(contsIncl ?? 0).toLocaleString('pt-BR')} contatos</p>
-                          <p>Excedente além dos limites: {formatCurrency(exMsgPrice ?? 0)}/msg · {formatCurrency(exContPrice ?? 0)}/contato</p>
+                          <p>Inclusos: {(msgsIncl ?? 0).toLocaleString('pt-BR')} {isEzCall ? 'min' : 'msgs'} + {(contsIncl ?? 0).toLocaleString('pt-BR')} {isEzCall ? 'ramais' : 'contatos'}</p>
+                          <p>Excedente além dos limites: {formatCurrency(exMsgPrice ?? 0)}/{isEzCall ? 'min' : 'msg'} · {formatCurrency(exContPrice ?? 0)}/{isEzCall ? 'ramal' : 'contato'}</p>
                         </div>
                       );
                     })()}
@@ -727,20 +732,22 @@ const ProposalPreviewPage = () => {
                     <td className="py-3">
                       <p className="font-medium text-[#1a1a2e]">Excedente estimado</p>
                       <p className="text-xs text-[#888] mt-0.5">
-                        O menor entre: {proposal.excess_messages.toLocaleString('pt-BR')} msgs excedidas ({formatCurrency(proposal.excess_message_cost)}) e {proposal.excess_contacts.toLocaleString('pt-BR')} contatos excedidos ({formatCurrency(proposal.excess_contact_cost)})
+                        O menor entre: {proposal.excess_messages.toLocaleString('pt-BR')} {isEzCall ? 'min' : 'msgs'} excedidos ({formatCurrency(proposal.excess_message_cost)}) e {proposal.excess_contacts.toLocaleString('pt-BR')} {isEzCall ? 'ramais' : 'contatos'} excedidos ({formatCurrency(proposal.excess_contact_cost)})
                       </p>
                     </td>
                     <td className="py-3 text-right font-medium text-[#1a1a2e]">{formatCurrency(proposal.applied_excess_cost)}</td>
                   </tr>
                 )}
-                <tr className="border-b border-[#f0f0f0]">
-                  <td className="py-3">
-                    <p className="font-medium text-[#1a1a2e]">Custo WhatsApp API</p>
-                    <p className="text-xs text-[#888] mt-0.5">Pago diretamente à Meta</p>
-                  </td>
-                  <td className="py-3 text-right text-[#888] text-xs">De acordo com perfil de consumo</td>
-                </tr>
-                {proposal.meta_cost > 0 && (proposal as any).show_meta_costs !== false && (
+                {!isEzCall && (
+                  <tr className="border-b border-[#f0f0f0]">
+                    <td className="py-3">
+                      <p className="font-medium text-[#1a1a2e]">Custo WhatsApp API</p>
+                      <p className="text-xs text-[#888] mt-0.5">Pago diretamente à Meta</p>
+                    </td>
+                    <td className="py-3 text-right text-[#888] text-xs">De acordo com perfil de consumo</td>
+                  </tr>
+                )}
+                {!isEzCall && proposal.meta_cost > 0 && (proposal as any).show_meta_costs !== false && (
                   <>
                     <tr className="border-b border-[#f0f0f0]">
                       <td className="py-3">
@@ -781,25 +788,25 @@ const ProposalPreviewPage = () => {
                   <>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
                       <div>
-                        <p className="text-[#888] text-xs">Msgs excedentes</p>
+                        <p className="text-[#888] text-xs">{isEzCall ? 'Min excedentes' : 'Msgs excedentes'}</p>
                         <p className="font-medium text-[#1a1a2e]">{proposal.excess_messages.toLocaleString('pt-BR')}</p>
                       </div>
                       <div>
-                        <p className="text-[#888] text-xs">Contatos excedentes</p>
+                        <p className="text-[#888] text-xs">{isEzCall ? 'Ramais excedentes' : 'Contatos excedentes'}</p>
                         <p className="font-medium text-[#1a1a2e]">{proposal.excess_contacts.toLocaleString('pt-BR')}</p>
                       </div>
                       <div>
-                        <p className="text-[#888] text-xs">Preço exc./msg</p>
+                        <p className="text-[#888] text-xs">{isEzCall ? 'Preço exc./min' : 'Preço exc./msg'}</p>
                         <p className="font-medium text-[#1a1a2e]">{formatCurrency(exMsgPrice)}</p>
                       </div>
                       <div>
-                        <p className="text-[#888] text-xs">Preço exc./contato</p>
+                        <p className="text-[#888] text-xs">{isEzCall ? 'Preço exc./ramal' : 'Preço exc./contato'}</p>
                         <p className="font-medium text-[#1a1a2e]">{formatCurrency(exContPrice)}</p>
                       </div>
                     </div>
                     <div className="rounded-lg bg-[#f8f6ff] p-3 text-xs text-[#555] leading-relaxed">
                       <p className="font-medium text-[#1a1a2e] mb-1">Regra de Excedente Inteligente</p>
-                      <p>O excedente só é cobrado se <strong>ambos</strong> os limites (mensagens e contatos) forem ultrapassados. Quando isso acontece, cobra-se o <strong>menor</strong> valor entre os dois — você nunca paga os dois ao mesmo tempo.</p>
+                      <p>O excedente só é cobrado se <strong>ambos</strong> os limites ({isEzCall ? 'minutos e ramais' : 'mensagens e contatos'}) forem ultrapassados. Quando isso acontece, cobra-se o <strong>menor</strong> valor entre os dois — você nunca paga os dois ao mesmo tempo.</p>
                     </div>
                   </>
                 ) : (
@@ -848,7 +855,7 @@ const ProposalPreviewPage = () => {
                 {proposal.applied_excess_cost > 0 && (
                   <p className="text-xs text-[#666]">Excedente: {formatCurrency(proposal.applied_excess_cost)}</p>
                 )}
-                {proposal.meta_cost > 0 && (proposal as any).show_meta_costs !== false && (
+                {!isEzCall && proposal.meta_cost > 0 && (proposal as any).show_meta_costs !== false && (
                   <p className="text-xs text-[#666]">Meta WhatsApp: ≈ {formatCurrency(proposal.meta_cost)}</p>
                 )}
               </div>
@@ -860,8 +867,8 @@ const ProposalPreviewPage = () => {
                 if (msgsIncl == null && contsIncl == null) return null;
                 return (
                   <div className="mt-3 pt-3 border-t border-[#e5e0ff] space-y-0.5">
-                    <p className="text-[11px] text-[#888]">Inclusos: {(msgsIncl ?? 0).toLocaleString('pt-BR')} msgs + {(contsIncl ?? 0).toLocaleString('pt-BR')} contatos</p>
-                    <p className="text-[11px] text-[#888]">Excedente: {formatCurrency(exMsgPrice ?? 0)}/msg · {formatCurrency(exContPrice ?? 0)}/contato</p>
+                    <p className="text-[11px] text-[#888]">Inclusos: {(msgsIncl ?? 0).toLocaleString('pt-BR')} {isEzCall ? 'min' : 'msgs'} + {(contsIncl ?? 0).toLocaleString('pt-BR')} {isEzCall ? 'ramais' : 'contatos'}</p>
+                    <p className="text-[11px] text-[#888]">Excedente: {formatCurrency(exMsgPrice ?? 0)}/{isEzCall ? 'min' : 'msg'} · {formatCurrency(exContPrice ?? 0)}/{isEzCall ? 'ramal' : 'contato'}</p>
                   </div>
                 );
               })()}

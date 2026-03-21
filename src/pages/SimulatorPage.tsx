@@ -20,7 +20,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useProducts, Product } from '@/hooks/useProducts';
 import { useExchangeRate } from '@/hooks/useExchangeRate';
-import { calculateSimulation, recommendPlan, simulateGrowth, PlanData, SimulatorInput, MetaCostConfig, DEFAULT_META_CONFIG, AICostConfig, DEFAULT_AI_CONFIG, AI_MODELS } from '@/hooks/useSimulator';
+import { calculateSimulation, recommendPlan, simulateGrowth, PlanData, SimulatorInput, MetaCostConfig, DEFAULT_META_CONFIG, AICostConfig, DEFAULT_AI_CONFIG, AI_MODELS, calculateEZCallSimulation, recommendEZCallPlan, EZCallSimulationResult } from '@/hooks/useSimulator';
 import { MetaCostEditor } from '@/components/MetaCostEditor';
 import { PageHeader } from '@/components/PageHeader';
 import { cn } from '@/lib/utils';
@@ -36,6 +36,11 @@ const toPlanData = (p: Product): PlanData => ({
   contactsIncluded: p.contacts_included,
   excessMessagePrice: p.excess_message_price,
   excessContactPrice: p.excess_contact_price,
+  minExtensions: p.min_extensions ?? undefined,
+  maxExtensions: p.max_extensions ?? undefined,
+  pricePerExtension: p.price_per_extension ?? undefined,
+  customPricing: p.custom_pricing ?? undefined,
+  features: (p.features as string[]) ?? undefined,
 });
 
 const STORAGE_KEY = 'simulator-state';
@@ -52,8 +57,10 @@ const SimulatorPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const opportunityId = searchParams.get('opportunityId');
+  const isEzCall = searchParams.get('type') === 'ez-call';
+  const productType = isEzCall ? 'ez_call' : 'ez_chat';
 
-  const { products: chatPlans, isLoading: loadingChat } = useProducts('ez_chat');
+  const { products: chatPlans, isLoading: loadingChat } = useProducts(productType);
   const { products: setupProducts, isLoading: loadingSetup } = useProducts('setup_integracoes');
   const { products: metaProducts, isLoading: loadingMeta } = useProducts('meta_custos');
   const { data: exchangeRate } = useExchangeRate();
@@ -80,7 +87,7 @@ const SimulatorPage = () => {
 
   const saved = useMemo(() => loadSavedState(), []);
 
-  const [showMetaCosts, setShowMetaCosts] = useState(saved?.showMetaCosts ?? true);
+  const [showMetaCosts, setShowMetaCosts] = useState(isEzCall ? false : (saved?.showMetaCosts ?? true));
   const [localPercentages, setLocalPercentages] = useState<Record<string, number>>(saved?.localPercentages ?? {});
 
   const metaConfig: MetaCostConfig = useMemo(() => {
@@ -138,33 +145,40 @@ const SimulatorPage = () => {
 
   const recommended = useMemo(() => {
     if (!plans.length) return null;
+    if (isEzCall) return recommendEZCallPlan(input.contacts, plans);
     return recommendPlan(input, plans, metaConfig, aiConfig);
-  }, [input, plans, metaConfig, aiConfig]);
+  }, [input, plans, metaConfig, aiConfig, isEzCall]);
+
+  const ezCallSimulation = useMemo((): EZCallSimulationResult | null => {
+    if (!isEzCall || !recommended) return null;
+    return calculateEZCallSimulation(input.contacts, recommended);
+  }, [isEzCall, input.contacts, recommended]);
 
   const simulation = useMemo(() => {
+    if (isEzCall) return null;
     if (!recommended) return null;
     return calculateSimulation(input, recommended, metaConfig, aiConfig);
-  }, [input, recommended, metaConfig, aiConfig]);
+  }, [input, recommended, metaConfig, aiConfig, isEzCall]);
 
   const growthScenarios = useMemo(() => {
-    if (!recommended) return [];
+    if (isEzCall || !recommended) return [];
     const g = input.growthPercent || 30;
     return [
       { label: 'Cenário atual', result: calculateSimulation(input, recommended, metaConfig, aiConfig), growth: 0 },
       { label: `+${g}% de crescimento`, result: simulateGrowth(input, recommended, g, metaConfig, aiConfig), growth: g },
       { label: 'Dobro do volume', result: simulateGrowth(input, recommended, 100, metaConfig, aiConfig), growth: 100 },
     ];
-  }, [input, recommended, metaConfig]);
+  }, [input, recommended, metaConfig, isEzCall]);
 
   const competitors = useMemo(() => {
-    if (!simulation) return [];
-    const base = simulation.totalMonthly;
+    const base = isEzCall ? (ezCallSimulation?.totalMonthly ?? 0) : (simulation?.totalMonthly ?? 0);
+    if (base === 0) return [];
     return [
-      { name: 'EZ Chat', total: base, diff: 0 },
+      { name: isEzCall ? 'EZ Call' : 'EZ Chat', total: base, diff: 0 },
       { name: 'Concorrente A', total: base * 1.35, diff: 35 },
       { name: 'Concorrente B', total: base * 1.55, diff: 55 },
     ];
-  }, [simulation]);
+  }, [simulation, ezCallSimulation, isEzCall]);
 
   const essentialSetupIds = useMemo(() => {
     return setupProducts.filter(p => p.subcategory === 'Setup e Onboarding').map(p => p.id);
@@ -299,17 +313,17 @@ const SimulatorPage = () => {
       sdrName,
       closerName,
       planName: recommended?.name || '',
-      planPrice: recommended?.price || 0,
+      planPrice: isEzCall ? (ezCallSimulation?.totalMonthly || 0) : (recommended?.price || 0),
       estimatedContacts: input.contacts,
       estimatedMessages: input.messages,
-      metaCost: showMetaCosts ? (simulation?.metaCost || 0) : 0,
-      aiCost: simulation?.aiCost || 0,
-      excessMessages: simulation?.excessMessages || 0,
-      excessContacts: simulation?.excessContacts || 0,
-      excessMessageCost: simulation?.excessMessageCost || 0,
-      excessContactCost: simulation?.excessContactCost || 0,
-      appliedExcessCost: simulation?.appliedExcessCost || 0,
-      totalMonthly: showMetaCosts ? (simulation?.totalMonthly || 0) : ((simulation?.totalMonthly || 0) - (simulation?.metaCost || 0)),
+      metaCost: isEzCall ? 0 : (showMetaCosts ? (simulation?.metaCost || 0) : 0),
+      aiCost: isEzCall ? 0 : (simulation?.aiCost || 0),
+      excessMessages: isEzCall ? 0 : (simulation?.excessMessages || 0),
+      excessContacts: isEzCall ? 0 : (simulation?.excessContacts || 0),
+      excessMessageCost: isEzCall ? 0 : (simulation?.excessMessageCost || 0),
+      excessContactCost: isEzCall ? 0 : (simulation?.excessContactCost || 0),
+      appliedExcessCost: isEzCall ? 0 : (simulation?.appliedExcessCost || 0),
+      totalMonthly: isEzCall ? (ezCallSimulation?.totalMonthly || 0) : (showMetaCosts ? (simulation?.totalMonthly || 0) : ((simulation?.totalMonthly || 0) - (simulation?.metaCost || 0))),
       setupTotal,
       setupPaymentMethod: paymentMethod,
       setupInstallments: installments,
@@ -323,7 +337,7 @@ const SimulatorPage = () => {
   };
 
   const handleGenerateProposal = async () => {
-    if (!simulation || !recommended) {
+    if ((!simulation && !ezCallSimulation) || !recommended) {
       toast.error('Execute uma simulação primeiro');
       return;
     }
@@ -373,11 +387,11 @@ const SimulatorPage = () => {
           validity_days: data.validityDays,
           notes: data.notes || null,
           status: 'draft',
-          product_type: 'ez_chat',
-          plan_messages_included: recommended?.messagesIncluded || 0,
-          plan_contacts_included: recommended?.contactsIncluded || 0,
-          plan_excess_message_price: recommended?.excessMessagePrice || 0,
-          plan_excess_contact_price: recommended?.excessContactPrice || 0,
+          product_type: productType,
+          plan_messages_included: isEzCall ? 0 : (recommended?.messagesIncluded || 0),
+          plan_contacts_included: isEzCall ? 0 : (recommended?.contactsIncluded || 0),
+          plan_excess_message_price: isEzCall ? 0 : (recommended?.excessMessagePrice || 0),
+          plan_excess_contact_price: isEzCall ? 0 : (recommended?.excessContactPrice || 0),
           show_meta_costs: showMetaCosts,
           meta_cost_config: Object.keys(localPercentages).length > 0 ? { entries: metaConfig.entries.map(e => ({ name: e.name, percentage: e.percentage })) } : null,
         })
@@ -416,7 +430,7 @@ const SimulatorPage = () => {
             </Button>
             <PageHeader
               icon={<Calculator className="h-5 w-5" strokeWidth={1.5} />}
-              title="Simulador Comercial — EZ Chat"
+              title={`Simulador Comercial — ${isEzCall ? 'EZ Call' : 'EZ Chat'}`}
               subtitle="Simulação baseada no seu cenário atual."
               actions={
                 <div className="flex items-center gap-2">
@@ -449,7 +463,7 @@ const SimulatorPage = () => {
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="space-y-2">
-                <Label>Contatos estimados/mês</Label>
+                <Label>{isEzCall ? 'Ramais estimados' : 'Contatos estimados/mês'}</Label>
                 <Input
                   type="number"
                   value={input.contacts}
@@ -457,7 +471,7 @@ const SimulatorPage = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Mensagens estimadas/mês</Label>
+                <Label>{isEzCall ? 'Minutos estimados/mês' : 'Mensagens estimadas/mês'}</Label>
                 <Input
                   type="number"
                   value={input.messages}
@@ -465,7 +479,7 @@ const SimulatorPage = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Nº de atendentes</Label>
+                <Label>{isEzCall ? 'Nº de operadores' : 'Nº de atendentes'}</Label>
                 <Input
                   type="number"
                   value={input.attendants}
@@ -485,104 +499,182 @@ const SimulatorPage = () => {
           </CardContent>
         </Card>
 
-        {/* Meta Cost Editor */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <MessageSquare className="h-5 w-5 text-primary" />
-              Custos Meta WhatsApp
-            </CardTitle>
-            <CardDescription>Configure as proporções e escolha se deseja incluir na proposta.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <MetaCostEditor
-              metaConfig={baseMetaConfig}
-              showMetaCosts={showMetaCosts}
-              onShowMetaCostsChange={setShowMetaCosts}
-              localPercentages={localPercentages}
-              onPercentageChange={(name, value) => setLocalPercentages(prev => ({ ...prev, [name]: value }))}
-            />
-          </CardContent>
-        </Card>
-
-        {/* BLOCK 1.5 — AI Cost Config */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
+        {/* Meta Cost Editor — only for EZ Chat */}
+        {!isEzCall && (
+          <Card>
+            <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Bot className="h-5 w-5 text-primary" />
-                IA Generativa (OpenAI)
+                <MessageSquare className="h-5 w-5 text-primary" />
+                Custos Meta WhatsApp
               </CardTitle>
-              <Switch
-                checked={aiConfig.enabled}
-                onCheckedChange={(v) => setAIConfig(prev => ({ ...prev, enabled: v }))}
-              />
-            </div>
-            <CardDescription>Estimativa de custo com uso de IA no atendimento.</CardDescription>
-          </CardHeader>
-          {aiConfig.enabled && (
+              <CardDescription>Configure as proporções e escolha se deseja incluir na proposta.</CardDescription>
+            </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="space-y-3">
-                  <Label>Modelo OpenAI</Label>
-                  <Select
-                    value={aiConfig.modelId}
-                    onValueChange={(v) => setAIConfig(prev => ({ ...prev, modelId: v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AI_MODELS.map(m => (
-                        <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <MetaCostEditor
+                metaConfig={baseMetaConfig}
+                showMetaCosts={showMetaCosts}
+                onShowMetaCostsChange={setShowMetaCosts}
+                localPercentages={localPercentages}
+                onPercentageChange={(name, value) => setLocalPercentages(prev => ({ ...prev, [name]: value }))}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* BLOCK 1.5 — AI Cost Config — only for EZ Chat */}
+        {!isEzCall && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Bot className="h-5 w-5 text-primary" />
+                  IA Generativa (OpenAI)
+                </CardTitle>
+                <Switch
+                  checked={aiConfig.enabled}
+                  onCheckedChange={(v) => setAIConfig(prev => ({ ...prev, enabled: v }))}
+                />
+              </div>
+              <CardDescription>Estimativa de custo com uso de IA no atendimento.</CardDescription>
+            </CardHeader>
+            {aiConfig.enabled && (
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-3">
+                    <Label>Modelo OpenAI</Label>
+                    <Select
+                      value={aiConfig.modelId}
+                      onValueChange={(v) => setAIConfig(prev => ({ ...prev, modelId: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {AI_MODELS.map(m => (
+                          <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-3">
+                    <Label>% de contatos que usam IA: <strong>{aiConfig.percentContacts}%</strong></Label>
+                    <Slider
+                      value={[aiConfig.percentContacts]}
+                      onValueChange={([v]) => setAIConfig(prev => ({ ...prev, percentContacts: v }))}
+                      min={5}
+                      max={100}
+                      step={5}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Label>Msgs médias por conversa IA</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={aiConfig.msgsPerConversation}
+                      onChange={e => setAIConfig(prev => ({ ...prev, msgsPerConversation: parseInt(e.target.value) || 1 }))}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-3">
-                  <Label>% de contatos que usam IA: <strong>{aiConfig.percentContacts}%</strong></Label>
-                  <Slider
-                    value={[aiConfig.percentContacts]}
-                    onValueChange={([v]) => setAIConfig(prev => ({ ...prev, percentContacts: v }))}
-                    min={5}
-                    max={100}
-                    step={5}
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div className="space-y-2">
+                    <Label>Tokens médios input/msg</Label>
+                    <Input
+                      type="number"
+                      value={aiConfig.avgInputTokens}
+                      onChange={e => setAIConfig(prev => ({ ...prev, avgInputTokens: parseInt(e.target.value) || 100 }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Markup (%)</Label>
+                    <Input
+                      type="number"
+                      value={Math.round((aiConfig.markup - 1) * 100)}
+                      onChange={e => setAIConfig(prev => ({ ...prev, markup: 1 + (parseInt(e.target.value) || 0) / 100 }))}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-3">
-                  <Label>Msgs médias por conversa IA</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={aiConfig.msgsPerConversation}
-                    onChange={e => setAIConfig(prev => ({ ...prev, msgsPerConversation: parseInt(e.target.value) || 1 }))}
-                  />
+              </CardContent>
+            )}
+          </Card>
+        )}
+
+        {/* EZ Call Recommended Plan */}
+        {isEzCall && ezCallSimulation && recommended && (
+          <Card className="border-primary border-2 relative overflow-hidden">
+            <div className="absolute top-0 right-0">
+              <Badge className="rounded-none rounded-bl-lg text-xs">Recomendado</Badge>
+            </div>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Shield className="h-5 w-5 text-primary" />
+                Plano Recomendado
+              </CardTitle>
+              <CardDescription className="flex items-center gap-1.5">
+                <Shield className="h-3.5 w-3.5" />
+                Plano ideal para o seu volume de ramais
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="text-center p-4 rounded-lg bg-muted/50">
+                  <p className="text-sm text-muted-foreground">Plano</p>
+                  <p className="text-xl font-bold">{recommended.name}</p>
+                </div>
+                <div className="text-center p-4 rounded-lg bg-muted/50">
+                  <p className="text-sm text-muted-foreground">Preço por Ramal</p>
+                  <p className="text-xl font-bold">
+                    {ezCallSimulation.customPricing ? 'Sob consulta' : formatCurrency(ezCallSimulation.pricePerExtension)}
+                    {!ezCallSimulation.customPricing && <span className="text-sm font-normal text-muted-foreground">/mês</span>}
+                  </p>
+                </div>
+                <div className="text-center p-4 rounded-lg bg-muted/50">
+                  <p className="text-sm text-muted-foreground">Ramais</p>
+                  <p className="text-xl font-bold">{input.contacts}</p>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+
+              {/* Extension range info */}
+              <div className="flex items-center justify-center gap-6 text-xs text-muted-foreground bg-muted/30 rounded-lg py-2 px-4">
+                <span>
+                  Faixa do plano: <strong>{recommended.minExtensions ?? 0}</strong> a <strong>{recommended.maxExtensions ?? '∞'}</strong> ramais
+                </span>
+              </div>
+
+              {/* Features */}
+              {recommended.features && recommended.features.length > 0 && (
                 <div className="space-y-2">
-                  <Label>Tokens médios input/msg</Label>
-                  <Input
-                    type="number"
-                    value={aiConfig.avgInputTokens}
-                    onChange={e => setAIConfig(prev => ({ ...prev, avgInputTokens: parseInt(e.target.value) || 100 }))}
-                  />
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Recursos Inclusos</p>
+                  <div className="flex flex-wrap gap-2">
+                    {recommended.features.map((f, i) => (
+                      <Badge key={i} variant="secondary" className="text-xs">{f}</Badge>
+                    ))}
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Markup (%)</Label>
-                  <Input
-                    type="number"
-                    value={Math.round((aiConfig.markup - 1) * 100)}
-                    onChange={e => setAIConfig(prev => ({ ...prev, markup: 1 + (parseInt(e.target.value) || 0) / 100 }))}
-                  />
-                </div>
+              )}
+
+              <div className="text-center p-6 rounded-xl bg-primary/5 border border-primary/20">
+                <p className="text-sm text-muted-foreground mb-1">Total Mensal Aproximado</p>
+                {ezCallSimulation.customPricing ? (
+                  <p className="text-2xl font-extrabold text-primary">Sob consulta</p>
+                ) : (
+                  <p className="text-4xl font-extrabold text-primary">
+                    {formatCurrency(ezCallSimulation.totalMonthly)}
+                  </p>
+                )}
+                {!ezCallSimulation.customPricing && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {formatCurrency(ezCallSimulation.pricePerExtension)} × {input.contacts} ramais
+                  </p>
+                )}
               </div>
             </CardContent>
-          )}
-        </Card>
+          </Card>
+        )}
 
-        {simulation && recommended && (
+        {/* EZ Chat Recommended Plan */}
+        {!isEzCall && simulation && recommended && (
           <Card className="border-primary border-2 relative overflow-hidden">
             <div className="absolute top-0 right-0">
               <Badge className="rounded-none rounded-bl-lg text-xs">Recomendado</Badge>
@@ -598,7 +690,7 @@ const SimulatorPage = () => {
               </CardDescription>
             </CardHeader>
              <CardContent className="space-y-4">
-              <div className={`grid grid-cols-1 gap-4 ${aiConfig.enabled ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+              <div className={`grid grid-cols-1 gap-4 ${!isEzCall && aiConfig.enabled ? 'md:grid-cols-4' : isEzCall ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
                 <div className="text-center p-4 rounded-lg bg-muted/50">
                   <p className="text-sm text-muted-foreground">Plano</p>
                   <p className="text-xl font-bold">{recommended.name}</p>
@@ -607,30 +699,32 @@ const SimulatorPage = () => {
                   <p className="text-sm text-muted-foreground">Valor Mensal Base</p>
                   <p className="text-xl font-bold">{formatCurrency(simulation.basePrice)}</p>
                 </div>
-                <div className="text-center p-4 rounded-lg bg-muted/50">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="cursor-help">
-                          <p className="text-sm text-muted-foreground flex items-center justify-center gap-1">
-                            Custo Estimado Meta
-                            <Info className="h-4 w-4 text-primary" />
-                          </p>
-                          <p className="text-xl font-bold">{formatCurrency(simulation.metaCost)}</p>
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="max-w-xs">
-                        <div className="space-y-1 text-xs">
-                          <p className="font-medium">Estimativa de consumo Meta:</p>
-                          <p>Multiplicador: <strong>{metaConfig.conversationsPerContact}</strong> conversa(s) por contato.</p>
-                          <p>Distribuição: {metaConfig.entries.map(e => `${e.name} ${e.percentage}%`).join(', ')}.</p>
-                          <p>Cada tipo tem preço diferente em USD, convertido para BRL (1 USD = {metaConfig.usdToBrl.toFixed(2)} BRL).</p>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                {aiConfig.enabled && simulation.aiBreakdown && (
+                {!isEzCall && (
+                  <div className="text-center p-4 rounded-lg bg-muted/50">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="cursor-help">
+                            <p className="text-sm text-muted-foreground flex items-center justify-center gap-1">
+                              Custo Estimado Meta
+                              <Info className="h-4 w-4 text-primary" />
+                            </p>
+                            <p className="text-xl font-bold">{formatCurrency(simulation.metaCost)}</p>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-xs">
+                          <div className="space-y-1 text-xs">
+                            <p className="font-medium">Estimativa de consumo Meta:</p>
+                            <p>Multiplicador: <strong>{metaConfig.conversationsPerContact}</strong> conversa(s) por contato.</p>
+                            <p>Distribuição: {metaConfig.entries.map(e => `${e.name} ${e.percentage}%`).join(', ')}.</p>
+                            <p>Cada tipo tem preço diferente em USD, convertido para BRL (1 USD = {metaConfig.usdToBrl.toFixed(2)} BRL).</p>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                )}
+                {!isEzCall && aiConfig.enabled && simulation.aiBreakdown && (
                   <div className="text-center p-4 rounded-lg bg-muted/50">
                     <TooltipProvider>
                       <Tooltip>
@@ -664,11 +758,11 @@ const SimulatorPage = () => {
               {/* Plan limits & excess unit prices */}
               <div className="flex items-center justify-center gap-6 text-xs text-muted-foreground bg-muted/30 rounded-lg py-2 px-4">
                 <span>
-                  Inclusos: <strong>{recommended.messagesIncluded.toLocaleString('pt-BR')}</strong> msgs + <strong>{recommended.contactsIncluded.toLocaleString('pt-BR')}</strong> contatos
+                  Inclusos: <strong>{recommended.messagesIncluded.toLocaleString('pt-BR')}</strong> {isEzCall ? 'min' : 'msgs'} + <strong>{recommended.contactsIncluded.toLocaleString('pt-BR')}</strong> {isEzCall ? 'ramais' : 'contatos'}
                 </span>
                 <span className="text-border">|</span>
                 <span>
-                  Excedente: <strong>{formatCurrency(recommended.excessMessagePrice)}</strong>/msg · <strong>{formatCurrency(recommended.excessContactPrice)}</strong>/contato
+                  Excedente: <strong>{formatCurrency(recommended.excessMessagePrice)}</strong>/{isEzCall ? 'min' : 'msg'} · <strong>{formatCurrency(recommended.excessContactPrice)}</strong>/{isEzCall ? 'ramal' : 'contato'}
                 </span>
               </div>
 
@@ -710,10 +804,10 @@ const SimulatorPage = () => {
                                 Cobrado
                               </Badge>
                             )}
-                            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Mensagens</p>
+                            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">{isEzCall ? 'Minutos' : 'Mensagens'}</p>
                             <p className="text-2xl font-bold mt-1">{formatCurrency(simulation.excessMessageCost)}</p>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              +{simulation.excessMessages.toLocaleString('pt-BR')} msgs excedentes
+                              +{simulation.excessMessages.toLocaleString('pt-BR')} {isEzCall ? 'min' : 'msgs'} excedentes
                             </p>
                           </div>
                         );
@@ -735,10 +829,10 @@ const SimulatorPage = () => {
                                 Cobrado
                               </Badge>
                             )}
-                            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Contatos</p>
+                            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">{isEzCall ? 'Ramais' : 'Contatos'}</p>
                             <p className="text-2xl font-bold mt-1">{formatCurrency(simulation.excessContactCost)}</p>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              +{simulation.excessContacts.toLocaleString('pt-BR')} contatos excedentes
+                              +{simulation.excessContacts.toLocaleString('pt-BR')} {isEzCall ? 'ramais' : 'contatos'} excedentes
                             </p>
                           </div>
                         );
@@ -1124,8 +1218,8 @@ const SimulatorPage = () => {
           </CardContent>
         </Card>
 
-        {/* Excess detail — always visible */}
-        {simulation && recommended && (
+        {/* Excess detail — always visible (EZ Chat only) */}
+        {!isEzCall && simulation && recommended && (
           <Card>
             <CardContent className="pt-6 space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm bg-muted/30 rounded-lg p-4">
@@ -1170,8 +1264,8 @@ const SimulatorPage = () => {
           </Card>
         )}
 
-        {/* TECHNICAL MODE */}
-        {showTechnical && simulation && recommended && (
+        {/* TECHNICAL MODE (EZ Chat only) */}
+        {showTechnical && !isEzCall && simulation && recommended && (
           <Card className="border-dashed">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -1260,13 +1354,18 @@ const SimulatorPage = () => {
         )}
 
         {/* Sticky total */}
-        {simulation && (
+        {(simulation || ezCallSimulation) && (
           <div className="sticky bottom-4 z-10">
             <Card className="bg-primary text-primary-foreground shadow-lg">
               <CardContent className="py-4 flex items-center justify-between">
                 <div>
                   <p className="text-sm opacity-80">Total Mensal Estimado — {recommended?.name}</p>
-                  <p className="text-3xl font-extrabold">{formatCurrency(simulation.totalMonthly)}</p>
+                  <p className="text-3xl font-extrabold">
+                    {isEzCall
+                      ? (ezCallSimulation?.customPricing ? 'Sob consulta' : formatCurrency(ezCallSimulation?.totalMonthly ?? 0))
+                      : formatCurrency(simulation?.totalMonthly ?? 0)
+                    }
+                  </p>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="text-right">

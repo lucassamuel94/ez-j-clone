@@ -22,6 +22,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { TrendingUp, Users, Loader2, CalendarDays } from 'lucide-react';
+import { DealsAtRiskPanel } from '@/components/closer/DealsAtRiskPanel';
+import { RevenueForecastPanel } from '@/components/closer/RevenueForecastPanel';
 import { format, endOfDay, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
@@ -175,6 +177,12 @@ const CloserIndicadoresPage = () => {
             onOpenLead={handleOpenLeadModal}
             selectedCloserId={selectedCloserId !== 'all' ? selectedCloserId : undefined}
           />
+
+          {/* AI-Powered Sections */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <DealsAtRiskPanel />
+            <RevenueForecastPanel />
+          </div>
         </main>
       </div>
 

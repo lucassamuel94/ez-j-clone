@@ -338,7 +338,7 @@ export interface SlaEntry {
   compliancePercent: number;
 }
 
-const SLA_BENCHMARKS: Record<string, number> = {
+export const SLA_BENCHMARKS: Record<string, number> = {
   validacao: 3,
   ux_po: 10,
   dev_chatbot: 15,

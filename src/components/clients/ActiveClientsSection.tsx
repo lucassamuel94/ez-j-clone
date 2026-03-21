@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -191,7 +191,24 @@ export function ActiveClientsSection() {
   const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
 
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: clients = [], isLoading, importClients, deleteClient, updateOwner, refetch } = useActiveClients(search);
+
+  // Auto-open client detail from URL param ?account=ID
+  useEffect(() => {
+    const accountId = searchParams.get('account');
+    if (accountId && clients.length > 0 && !detailClient) {
+      const found = clients.find((c: any) => c.id === accountId);
+      if (found) {
+        setDetailClient(found);
+      } else {
+        // Fetch directly if not in current page
+        supabase.from('active_clients').select('*').eq('id', accountId).maybeSingle().then(({ data }) => {
+          if (data) setDetailClient(data);
+        });
+      }
+    }
+  }, [searchParams, clients, detailClient]);
   const { data: systemUsers = [] } = useSystemUsers();
   const { hasPermission } = usePermissions();
   const canAccessBoth = hasPermission('access_admin');
@@ -1179,7 +1196,7 @@ export function ActiveClientsSection() {
       <ClientDetailModal
         client={detailClient}
         open={!!detailClient}
-        onOpenChange={(open) => { if (!open) setDetailClient(null); }}
+        onOpenChange={(open) => { if (!open) { setDetailClient(null); if (searchParams.has('account')) { searchParams.delete('account'); setSearchParams(searchParams, { replace: true }); } } }}
         onUpdated={refetch}
       />
       <ClientImportDialog open={importOpen} onOpenChange={setImportOpen} onImport={handleImport} />
